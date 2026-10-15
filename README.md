@@ -26,7 +26,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - 真实大模型与Agent工具调用；
 - 工单、备件、权限、审计和生产部署。
 
-完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+完整产品方案见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)，四人分工、模块边界和PR审查关系见 [docs/TEAM_ROLES.md](docs/TEAM_ROLES.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 本地运行
 

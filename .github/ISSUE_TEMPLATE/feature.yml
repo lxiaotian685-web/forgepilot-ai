@@ -1,0 +1,31 @@
+name: 功能任务
+description: 规划一项可独立开发和验收的功能
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 业务问题
+      description: 描述谁在什么场景遇到了什么问题。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 功能范围
+      description: 说明包含和不包含的内容。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      placeholder: "- [ ] ..."
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: 数据与安全风险
+

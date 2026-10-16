@@ -14,9 +14,9 @@
 
 | 成员 | 选择任务包 | 第一个短分支 | 第一份 PR |
 |---|---|---|---|
-| 项目发起人 | A B C 待选 | 待填写 | 待填写 |
-| `Fabric-devc` | A B C 待选 | 待填写 | 待填写 |
-| `Fabric-creat` | A B C 待选 | 待填写 | 待填写 |
+| 梁同学（`lxiaotian685-web`） | A 产品设计与 Web 前端 | `task/issue-2-stitch-design-system` | 待提交 |
+| `Fabric-devc` | B 数据库与业务后端 | `task/issue-1-er-model` | 待提交 |
+| `Fabric-creat` | C RAG Agent 与系统集成 | `task/issue-3-document-ingestion` | 待提交 |
 
 ## 2 分支结构
 
@@ -197,4 +197,4 @@ main
 | B 数据库与业务后端 | ER 图和字段字典 | 迁移、设备模型和种子数据 | 设备 API 与测试 | 空库可迁移，API 可调用 |
 | C RAG Agent 与系统集成 | 文档样例和工具清单 | 最小检索和 Agent 契约 | 接口评审与首次集成 | Agent 能调用 Mock 工具和检索 |
 
-三名成员选定任务包后，把姓名和 GitHub 账号填入第 1 节，并将对应 Issue 指派给主责成员。指导老师仅作为指导人，不进入开发任务、分支和 PR 责任表。
+三名成员已确认任务包：梁同学（`lxiaotian685-web`）负责 A，`Fabric-devc` 负责 B，`Fabric-creat` 负责 C。对应 Issue 已按主责关系指派；Issue #4 为三包协作任务，由 C 主责集成，A、B 配合。指导老师仅作为指导人，不进入开发任务、分支和 PR 责任表。

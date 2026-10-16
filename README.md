@@ -20,11 +20,13 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 尚未实现：
 
-- Web前端；
+- Web前端业务接口接入；
 - PostgreSQL设备数据库；
 - 说明书RAG知识库；
 - 真实大模型与Agent工具调用；
 - 工单、备件、权限、审计和生产部署。
+
+前端 UI 基础位于 [`frontend`](frontend)，已经包含维护总览、设备中心、告警中心、诊断工作台、知识证据、维护工单和审计记录的可交互演示版本。
 
 完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -37,7 +37,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { alerts, auditRows, devices, evidence, trendData, workOrders } from "./data";
+import * as demoData from "./data";
+import { loadWorkspaceData } from "./services/api";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -80,11 +81,11 @@ function Toolbar({ placeholder = "搜索设备、工单或记录", children }) {
   );
 }
 
-function TrendChart({ compact = false }) {
+function TrendChart({ data, compact = false }) {
   return (
     <div className={compact ? "chart chart-compact" : "chart"} aria-label="AC-07 振动与温度趋势图">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={trendData} margin={{ top: 12, right: 18, left: compact ? -18 : 0, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 12, right: 18, left: compact ? -18 : 0, bottom: 0 }}>
           <CartesianGrid stroke="#dbe4ef" strokeDasharray="3 4" vertical={false} />
           <XAxis dataKey="time" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} />
           <YAxis yAxisId="left" domain={[2, 9]} tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} />
@@ -100,7 +101,7 @@ function TrendChart({ compact = false }) {
   );
 }
 
-function OverviewPage({ navigate, notify }) {
+function OverviewPage({ navigate, workOrders, trendData }) {
   return (
     <>
       <PageHeader title="维护总览" description="一号装配厂设备健康、告警与工单处置概况" action="发起诊断" onAction={() => navigate("diagnosis")} />
@@ -138,7 +139,7 @@ function OverviewPage({ navigate, notify }) {
         <section className="panel trend-panel">
           <div className="panel-title"><div><Board24Regular /><h2>AC-07 设备健康趋势</h2></div><div className="segmented"><button className="active">近 2 小时</button><button>近 7 天</button><button>近 30 天</button></div></div>
           <p className="panel-note">08:58 开始持续超限，振动峰值 7.82 mm/s</p>
-          <TrendChart />
+          <TrendChart data={trendData} />
         </section>
         <section className="panel recent-panel">
           <div className="panel-title"><div><Bot24Regular /><h2>最近诊断</h2></div></div>
@@ -159,7 +160,7 @@ function OverviewPage({ navigate, notify }) {
   );
 }
 
-function DevicePage({ navigate }) {
+function DevicePage({ navigate, devices, trendData }) {
   const [selected, setSelected] = useState(devices[0]);
   return (
     <>
@@ -191,7 +192,7 @@ function DevicePage({ navigate }) {
             <div><span>排气温度</span><strong>88.5 °C</strong><small>预警 85.0 °C</small></div>
             <div><span>润滑油压差</span><strong>0.28 MPa</strong><small>正常范围</small></div>
           </div>
-          <TrendChart compact />
+          <TrendChart data={trendData} compact />
           <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis")}>发起诊断</Button>
         </aside>
       </div>
@@ -199,7 +200,7 @@ function DevicePage({ navigate }) {
   );
 }
 
-function AlertsPage({ navigate, notify }) {
+function AlertsPage({ navigate, notify, alerts, trendData }) {
   const [selected, setSelected] = useState(alerts[0]);
   return (
     <>
@@ -225,7 +226,7 @@ function AlertsPage({ navigate, notify }) {
             <Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" />
           </div>
           <div className="reading-grid"><div><span>当前值</span><strong className="text-danger">7.82 mm/s</strong></div><div><span>告警阈值</span><strong>4.50 mm/s</strong></div><div><span>采样频率</span><strong>1,000 Hz</strong></div><div><span>特征频率</span><strong>148.5 Hz</strong></div></div>
-          <TrendChart compact />
+          <TrendChart data={trendData} compact />
           <div className="context-note"><strong>规则来源</strong><span>Rule #VIB-RMS-004，连续 3 个采样周期超过 ISO 4.5 mm/s 阈值。</span></div>
           <Button appearance="primary" icon={<Bot24Regular />} onClick={() => navigate("diagnosis")}>进入诊断工作台</Button>
         </section>
@@ -234,7 +235,7 @@ function AlertsPage({ navigate, notify }) {
   );
 }
 
-function DiagnosisPage({ notify, navigate }) {
+function DiagnosisPage({ notify, navigate, evidence }) {
   const [running, setRunning] = useState(false);
   return (
     <>
@@ -274,7 +275,7 @@ function DiagnosisPage({ notify, navigate }) {
   );
 }
 
-function KnowledgePage({ notify }) {
+function KnowledgePage({ notify, evidence }) {
   const [selected, setSelected] = useState(evidence[0]);
   return <><PageHeader title="知识证据" description="管理说明书、检修规程、行业标准和诊断引用" action="上传文档" onAction={() => notify("上传入口将在文档接口完成后接入")} /><Toolbar placeholder="搜索文档标题、章节或适用设备"><select><option>全部文档类型</option></select><select><option>全部解析状态</option></select></Toolbar><div className="split-layout"><section className="panel table-panel grow"><table className="data-table"><thead><tr><th>文档标题</th><th>类型</th><th>版本</th><th>适用设备</th><th>来源</th><th>解析状态</th></tr></thead><tbody>{evidence.map((item) => <tr key={item.name} className={selected.name === item.name ? "selected" : ""} onClick={() => setSelected(item)}><td><strong>{item.name}</strong><small>{item.chunks} 个切片</small></td><td>{item.type}</td><td>{item.version}</td><td>{item.device}</td><td>{item.source}</td><td><ToneBadge tone={item.state === "可用" ? "success" : "warning"}>{item.state}</ToneBadge></td></tr>)}</tbody></table></section><aside className="panel document-preview"><div className="drawer-heading"><div><small>当前文档</small><h2>{selected.name}</h2></div><ToneBadge tone="success">ACTIVE</ToneBadge></div><div className="document-meta"><div><span>版本</span><strong>{selected.version}</strong></div><div><span>切片数量</span><strong>{selected.chunks}</strong></div><div><span>适用设备</span><strong>{selected.device}</strong></div></div><h3>命中证据预览</h3><blockquote>当驱动端轴承实测振动速度有效值超过 4.5 mm/s，或检测到 BPFO 特征频率出现周期性谱线尖峰时，应在 48 小时内执行降载或停机检查。</blockquote><div className="action-row"><Button appearance="primary">打开原文</Button><Button>查看引用记录</Button></div></aside></div></>;
 }
@@ -283,12 +284,12 @@ function OrderTable({ rows, onSelect }) {
   return <table className="data-table"><thead><tr><th>工单号</th><th>标题</th><th>优先级</th><th>负责人</th><th>状态</th><th>更新</th></tr></thead><tbody>{rows.map((order) => <tr key={order.id} onClick={() => onSelect?.(order)}><td><strong>{order.id}</strong></td><td>{order.title}</td><td><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></td><td>{order.owner}</td><td>{order.status}</td><td>{order.updated}</td></tr>)}</tbody></table>;
 }
 
-function OrdersPage({ notify }) {
+function OrdersPage({ notify, workOrders }) {
   const [selected, setSelected] = useState(workOrders[0]);
   return <><PageHeader title="维护工单" description="管理诊断转单、现场执行、计时与验收闭环" action="创建工单" onAction={() => notify("工单草稿已创建")} /><div className="status-tabs"><button className="active">列表视图</button><button>看板视图</button><button>日历排程</button></div><Toolbar placeholder="搜索工单号、标题、设备或负责人"><select><option>全部状态</option></select><select><option>全部优先级</option></select></Toolbar><div className="split-layout orders-layout"><section className="panel order-list">{workOrders.map((order) => <button key={order.id} className={`order-card ${selected.id === order.id ? "selected" : ""}`} onClick={() => setSelected(order)}><span><strong>{order.id}</strong><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></span><h3>{order.title}</h3><small>{order.owner} · {order.status} · {order.updated}</small></button>)}</section><section className="panel order-detail"><div className="drawer-heading"><div><small>{selected.id}</small><h2>{selected.title}</h2></div><Button appearance="primary" onClick={() => notify("工单已提交验收")}>提交验收</Button></div><div className="order-meta"><div><span>负责人</span><strong>{selected.owner}</strong></div><div><span>目标设备</span><strong>AC-07 · Bay03</strong></div><div><span>计划窗口</span><strong>今日 09:30 至 12:00</strong></div></div><div className="timer"><span>现场维保执行计时中</span><strong>01:42:21</strong><ProgressBar value={0.68} /></div><h3>标准化现场检修规程</h3><div className="checklist">{["停机电气闭锁挂牌", "拆卸防护罩并检查轴承", "提取废润滑脂样本", "更换 SKF-6312 轴承", "加注润滑脂并复核振动"].map((step, index) => <label key={step} className={index < 3 ? "checked" : ""}><input type="checkbox" defaultChecked={index < 3} /> <span><strong>步骤 {index + 1}：{step}</strong><small>{index < 3 ? "已由张工确认" : "等待执行"}</small></span></label>)}</div></section></div></>;
 }
 
-function AuditPage() {
+function AuditPage({ auditRows }) {
   const [selected, setSelected] = useState(auditRows[0]);
   return <><PageHeader title="审计记录" description="只读、可验证的业务操作与人工决策轨迹" /><div className="metric-strip audit-metrics"><div><span>今日入库记录</span><strong>1,842</strong><small>条</small></div><div><span>签名校验通过率</span><strong className="text-success">100%</strong></div><div><span>被拦截越权操作</span><strong className="text-danger">1</strong><small>起</small></div></div><Toolbar placeholder="搜索请求号、业务对象或操作者"><select><option>全部操作者</option></select><select><option>全部动作</option></select></Toolbar><div className="split-layout"><section className="panel table-panel grow"><table className="data-table"><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>业务对象</th><th>结果</th></tr></thead><tbody>{auditRows.map((row) => <tr key={`${row.time}-${row.action}`} className={selected.time === row.time ? "selected" : ""} onClick={() => setSelected(row)}><td>{row.time}</td><td>{row.user}</td><td><ToneBadge>{row.action}</ToneBadge></td><td>{row.object}</td><td><ToneBadge tone="success">{row.result}</ToneBadge></td></tr>)}</tbody></table></section><aside className="panel audit-detail"><div className="panel-title"><div><ShieldLock24Regular /><h2>审计凭证详情</h2></div><ToneBadge tone="success">签名有效</ToneBadge></div><div className="audit-section"><span>操作人</span><strong>{selected.user}</strong><small>维护主管 · ENG-0819</small></div><div className="audit-section"><span>动作说明</span><strong>{selected.action}</strong><p>操作已写入只读审计流水，并关联业务对象 {selected.object}。</p></div><div className="before-after"><div><span>变更前</span><strong>待人工确认</strong></div><div><span>变更后</span><strong>处理中</strong></div></div><code>REQ-20250518-0944-8812<br />SHA-256: e3b0c44298fc1c149afbf4c8996fb924</code></aside></div></>;
 }
@@ -296,16 +297,31 @@ function AuditPage() {
 function App() {
   const [activePage, setActivePage] = useState("overview");
   const [toast, setToast] = useState("");
+  const [workspaceData, setWorkspaceData] = useState(demoData);
+  const [dataSource, setDataSource] = useState("mock");
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage), [activePage]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
+
+  useEffect(() => {
+    let active = true;
+    loadWorkspaceData().then(({ data, source }) => {
+      if (!active) return;
+      setWorkspaceData(data);
+      setDataSource(source);
+      if (source === "fallback") notify("业务接口暂不可用，已切换为演示数据");
+    });
+    return () => { active = false; };
+  }, []);
+
+  const { alerts, auditRows, devices, evidence, trendData, workOrders } = workspaceData;
   const pages = {
-    overview: <OverviewPage navigate={setActivePage} notify={notify} />,
-    devices: <DevicePage navigate={setActivePage} />,
-    alerts: <AlertsPage navigate={setActivePage} notify={notify} />,
-    diagnosis: <DiagnosisPage navigate={setActivePage} notify={notify} />,
-    knowledge: <KnowledgePage notify={notify} />,
-    orders: <OrdersPage notify={notify} />,
-    audit: <AuditPage />,
+    overview: <OverviewPage navigate={setActivePage} workOrders={workOrders} trendData={trendData} />,
+    devices: <DevicePage navigate={setActivePage} devices={devices} trendData={trendData} />,
+    alerts: <AlertsPage navigate={setActivePage} notify={notify} alerts={alerts} trendData={trendData} />,
+    diagnosis: <DiagnosisPage navigate={setActivePage} notify={notify} evidence={evidence} />,
+    knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
+    orders: <OrdersPage notify={notify} workOrders={workOrders} />,
+    audit: <AuditPage auditRows={auditRows} />,
   };
   return (
     <div className="app-shell">
@@ -318,7 +334,7 @@ function App() {
         <header className="topbar">
           <button className="plant-select"><Building24Regular /><span>一号装配厂</span><small>Plant #1</small></button>
           <div className="breadcrumb">运行中心 / <strong>{activeNav?.label}</strong></div>
-          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint">演示环境</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name="李振华" color="colorful" /><span className="user-name"><strong>李振华</strong><small>维护主管</small></span></div>
+          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint">{dataSource === "api" ? "API 数据" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name="李振华" color="colorful" /><span className="user-name"><strong>李振华</strong><small>维护主管</small></span></div>
         </header>
         <main className="page-content">{pages[activePage]}</main>
         <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>数据延迟 12ms · 自动刷新</span></footer>

@@ -8,12 +8,17 @@ version = "0.1.0"
 description = "工业设备知识库与诊断助手"
 requires-python = ">=3.10"
 dependencies = [
+    "alembic>=1.13,<2.0",
     "fastapi>=0.141,<1.0",
     "pydantic>=2.13,<3.0",
+    "sqlalchemy>=2.0,<2.2",
     "uvicorn[standard]>=0.52,<1.0",
 ]
 
 [project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.2,<4.0",
+]
 dev = [
     "httpx>=0.28,<1.0",
     "pytest>=9,<10",

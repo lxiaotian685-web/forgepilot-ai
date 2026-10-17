@@ -12,19 +12,18 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 已实现：
 
-- FastAPI应用骨架；
-- 健康检查接口；
-- 设备问答请求与响应数据模型；
-- 明确标记为mock的模拟诊断接口；
-- 6项API自动化测试。
+- FastAPI应用骨架与健康检查；
+- 设备问答请求与响应数据模型，以及明确标记为 mock 的诊断接口；
+- 设备、告警、工单业务 API（分页、筛选、权限、组织隔离、审计）；
+- PostgreSQL 第一版 Alembic 迁移与虚构种子数据；
+- API 自动化测试（pytest）覆盖 CRUD、权限、隔离和状态机。
 
 尚未实现：
 
 - Web前端；
-- PostgreSQL设备数据库；
 - 说明书RAG知识库；
 - 真实大模型与Agent工具调用；
-- 工单、备件、权限、审计和生产部署。
+- 备件、生产部署与完整权限体系。
 
 完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -50,12 +49,42 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m ruff check .
 ```
 
+### 数据库
+
+本地演示默认使用 SQLite（`forgepilot.db`，已加入 `.gitignore`）：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.seed
+```
+
+使用 PostgreSQL（团队集成 / 部署）：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,postgres]"
+$env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forgepilot"
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.seed
+```
+
+回退：`.\.venv\Scripts\python.exe -m alembic downgrade base`
+
+注意：PostgreSQL 必须先执行迁移再 seed；SQLite 演示由 `app.seed` 自动建表。环境变量参考 `.env.example`。
+
+数据模型见 [docs/data-model/README.md](docs/data-model/README.md)，接口契约见 [docs/api-contracts/business-api.yaml](docs/api-contracts/business-api.yaml)。
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |
 |---|---|---|---|
 | GET | `/health` | 已实现 | 服务健康检查 |
 | POST | `/api/v1/chat` | Mock | 接收设备ID和问题，返回模拟诊断结果 |
+| GET | `/api/v1/devices` | 已实现 | 设备分页列表（筛选/分页） |
+| GET | `/api/v1/devices/{device_id}` | 已实现 | 设备详情 |
+| GET | `/api/v1/alerts` | 已实现 | 告警分页列表（筛选） |
+| POST | `/api/v1/alerts/{alert_id}/acknowledge` | 已实现 | 确认告警 |
+| GET | `/api/v1/work-orders` | 已实现 | 工单分页列表（筛选） |
+| POST | `/api/v1/work-orders` | 已实现 | 创建工单 |
+| PATCH | `/api/v1/work-orders/{work_order_id}` | 已实现 | 更新工单状态/负责人 |
 
 ## 目标业务闭环
 

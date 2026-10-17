@@ -1,0 +1,581 @@
+﻿openapi: 3.0.3
+info:
+  title: ForgePilot 业务后端 API
+  version: 0.1.0
+  description: |
+    制造领航 ForgePilot 第一版业务接口契约（设备、告警、工单）。
+    - 所有业务接口按登录组织隔离；跨组织资源统一返回 404。
+    - 列表接口统一分页，返回 `items/page/pageSize/total/totalPages`。
+    - 资源对外标识使用业务编码（设备编号、告警号、工单号），与前端 `frontend/src/data.js` 字段对齐。
+    - 错误统一为 `{"error": {"code", "message", "details", "requestId"}}`。
+servers:
+  - url: http://127.0.0.1:8000
+    description: 本地开发
+tags:
+  - name: devices
+    description: 设备
+  - name: alerts
+    description: 告警
+  - name: work-orders
+    description: 维护工单
+security:
+  - organizationId: []
+    userId: []
+paths:
+  /api/v1/devices:
+    get:
+      tags: [devices]
+      operationId: listDevices
+      summary: 设备列表
+      description: |
+        权限：组织内任意有效成员（viewer 及以上）。
+        支持分页、按工厂/状态/类型筛选和关键字搜索。已软删除设备不返回。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: plantId
+          in: query
+          required: false
+          description: 工厂编码（plants.code）
+          schema: { type: string, example: PLANT-SH-01 }
+        - name: state
+          in: query
+          required: false
+          description: 设备状态（中文枚举，与前端 data.js 一致）
+          schema: { $ref: '#/components/schemas/DeviceState' }
+        - name: type
+          in: query
+          required: false
+          schema: { type: string, example: 动力与流体机械 }
+        - name: q
+          in: query
+          required: false
+          description: 按设备编号或名称模糊搜索
+          schema: { type: string, example: AC-07 }
+        - name: sort
+          in: query
+          required: false
+          description: 排序字段，前缀 - 表示倒序
+          schema: { type: string, enum: [code, -code, health, -health, updatedAt, -updatedAt], default: -updatedAt }
+      responses:
+        '200':
+          description: 设备分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DevicePage' }
+              example:
+                items:
+                  - id: AC-07
+                    name: 螺杆空气压缩机
+                    type: 动力与流体机械
+                    location: 压缩站 Bay03
+                    health: 72.4
+                    state: 需关注
+                    alert: 1
+                  - id: CNC-04
+                    name: 数控龙门铣床
+                    type: 精密加工单元
+                    location: 重载加工岛 #3
+                    health: 41
+                    state: 告警异常
+                    alert: 2
+                page: 1
+                pageSize: 20
+                total: 5
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/devices/{device_id}:
+    get:
+      tags: [devices]
+      operationId: getDevice
+      summary: 设备详情
+      description: 权限：组织内任意有效成员。跨组织设备返回 404。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          description: 设备编号（devices.code）
+          schema: { type: string, example: AC-07 }
+      responses:
+        '200':
+          description: 设备详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceDetail' }
+              example:
+                id: AC-07
+                name: 螺杆空气压缩机
+                type: 动力与流体机械
+                location: 压缩站 Bay03
+                health: 72.4
+                state: 需关注
+                alert: 1
+                plantId: PLANT-SH-01
+                model: GX11
+                serialNumber: SN-DEMO-0007
+                createdAt: '2026-10-17T09:44:16+08:00'
+                updatedAt: '2026-10-17T09:44:16+08:00'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/alerts:
+    get:
+      tags: [alerts]
+      operationId: listAlerts
+      summary: 告警列表
+      description: 权限：组织内任意有效成员。默认按发生时间倒序。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/AlertStatus' }
+        - name: level
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/AlertLevel' }
+        - name: deviceId
+          in: query
+          required: false
+          description: 设备编号
+          schema: { type: string, example: AC-07 }
+        - name: q
+          in: query
+          required: false
+          description: 按告警编号或标题搜索
+          schema: { type: string, example: 轴承 }
+      responses:
+        '200':
+          description: 告警分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertPage' }
+              example:
+                items:
+                  - id: ALT-0941
+                    level: 一级紧急
+                    title: 驱动端轴承高频振动 RMS 严重突破警戒上限
+                    device: AC-07 螺杆空气压缩机
+                    time: '2026-10-17T09:00:00+08:00'
+                    owner: 张工
+                    status: 待确认
+                  - id: ALT-0938
+                    level: 二级警告
+                    title: 排气温度连续接近预警阈值
+                    device: P-102 高压离心注水泵
+                    time: '2026-10-17T08:44:00+08:00'
+                    owner: 王强
+                    status: 处理中
+                page: 1
+                pageSize: 20
+                total: 4
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/alerts/{alert_id}/acknowledge:
+    post:
+      tags: [alerts]
+      operationId: acknowledgeAlert
+      summary: 确认告警
+      description: |
+        权限：technician 及以上（technician/manager/admin/owner）。
+        幂等：重复确认已确认告警返回 200，不重复写审计。
+        已关闭告警返回 409。
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: 告警编号（alerts.code）
+          schema: { type: string, example: ALT-0941 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertAcknowledgeRequest' }
+            example: { note: 已到现场核实，准备停机检查。 }
+      responses:
+        '200':
+          description: 确认后的告警
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+              example:
+                id: ALT-0941
+                level: 一级紧急
+                title: 驱动端轴承高频振动 RMS 严重突破警戒上限
+                device: AC-07 螺杆空气压缩机
+                time: '2026-10-17T09:00:00+08:00'
+                owner: 张工
+                status: 已确认
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 告警已关闭，不能确认
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error:
+                  code: INVALID_STATE
+                  message: 告警已关闭，不能再次确认
+                  details: { alertId: ALT-0911, status: 已关闭 }
+                  requestId: 0f7a2c1e
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/work-orders:
+    get:
+      tags: [work-orders]
+      operationId: listWorkOrders
+      summary: 工单列表
+      description: 权限：组织内任意有效成员。默认按更新时间倒序。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/WorkOrderStatus' }
+        - name: priority
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/WorkOrderPriority' }
+        - name: ownerId
+          in: query
+          required: false
+          description: 负责人用户 ID（users.id）
+          schema: { type: string, format: uuid }
+        - name: deviceId
+          in: query
+          required: false
+          description: 设备编号
+          schema: { type: string, example: AC-07 }
+        - name: q
+          in: query
+          required: false
+          description: 按工单号或标题搜索
+          schema: { type: string, example: 轴承 }
+      responses:
+        '200':
+          description: 工单分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrderPage' }
+              example:
+                items:
+                  - id: WO-20250518-01
+                    title: AC-07 驱动端深沟球轴承紧急更换与润滑脂加注
+                    priority: P1 紧急
+                    owner: 张工
+                    status: 处理中
+                    updated: '2026-10-17T09:36:00+08:00'
+                  - id: WO-20250518-02
+                    title: P-102 机械密封泄漏检查
+                    priority: P2 高
+                    owner: 王强
+                    status: 待验收
+                    updated: '2026-10-17T09:19:00+08:00'
+                page: 1
+                pageSize: 20
+                total: 4
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [work-orders]
+      operationId: createWorkOrder
+      summary: 创建工单
+      description: 权限：manager 及以上（manager/admin/owner）。设备必须属于当前组织且未删除，否则 404。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderCreate' }
+            example:
+              title: AC-07 驱动端轴承检查
+              deviceId: AC-07
+              priority: P1 紧急
+              description: 振动 RMS 超限，需停机检查轴承。
+              ownerId: 00000000-0000-4000-8000-000000000102
+              dueAt: '2026-10-17T18:00:00+08:00'
+      responses:
+        '201':
+          description: 创建成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+              example:
+                id: WO-20261017-01
+                title: AC-07 驱动端轴承检查
+                priority: P1 紧急
+                owner: 张工
+                status: 待处理
+                updated: '2026-10-17T10:02:00+08:00'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 工单号冲突
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error:
+                  code: CONFLICT
+                  message: 工单号已存在
+                  details: { code: WO-20261017-01 }
+                  requestId: 7b2e9d10
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/work-orders/{work_order_id}:
+    patch:
+      tags: [work-orders]
+      operationId: updateWorkOrder
+      summary: 更新工单
+      description: |
+        权限：technician 及以上。
+        合法状态流转：待处理→处理中/已取消；处理中→待验收/已取消；待验收→已完成/处理中；已完成、已取消为终态。
+        非法流转返回 409。
+      parameters:
+        - name: work_order_id
+          in: path
+          required: true
+          description: 工单号（work_orders.code）
+          schema: { type: string, example: WO-20250518-01 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkOrderUpdate' }
+            example:
+              status: 待验收
+              ownerId: 00000000-0000-4000-8000-000000000102
+              description: 已完成轴承更换与润滑脂加注，等待验收。
+      responses:
+        '200':
+          description: 更新后的工单
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+              example:
+                id: WO-20250518-01
+                title: AC-07 驱动端深沟球轴承紧急更换与润滑脂加注
+                priority: P1 紧急
+                owner: 张工
+                status: 待验收
+                updated: '2026-10-17T10:15:00+08:00'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 非法状态流转
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error:
+                  code: INVALID_TRANSITION
+                  message: 工单状态不能从 已完成 流转到 处理中
+                  details: { from: 已完成, to: 处理中 }
+                  requestId: c1d2e3f4
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  securitySchemes:
+    organizationId:
+      type: apiKey
+      in: header
+      name: X-Organization-Id
+      description: 当前组织 ID/代码。v0.1 演示阶段使用；生产替换为登录会话，禁止由客户端任意切换。
+    userId:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: 当前用户 ID/邮箱。v0.1 演示阶段使用；生产替换为登录会话。
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  schemas:
+    DeviceState:
+      type: string
+      enum: [运行正常, 需关注, 告警异常, 离线]
+    AlertLevel:
+      type: string
+      enum: [一级紧急, 二级警告, 三级提示]
+    AlertStatus:
+      type: string
+      enum: [待确认, 处理中, 已确认, 已关闭]
+    WorkOrderPriority:
+      type: string
+      enum: [P1 紧急, P2 高, P3 中, P4 低]
+    WorkOrderStatus:
+      type: string
+      enum: [待处理, 处理中, 待验收, 已完成, 已取消]
+    Device:
+      type: object
+      required: [id, name, health, state, alert]
+      properties:
+        id: { type: string, description: 设备编号, example: AC-07 }
+        name: { type: string, example: 螺杆空气压缩机 }
+        type: { type: string, nullable: true, example: 动力与流体机械 }
+        location: { type: string, nullable: true, example: 压缩站 Bay03 }
+        health: { type: number, format: float, minimum: 0, maximum: 100, example: 72.4 }
+        state: { $ref: '#/components/schemas/DeviceState' }
+        alert: { type: integer, minimum: 0, description: 未关闭告警数, example: 1 }
+    DeviceDetail:
+      allOf:
+        - $ref: '#/components/schemas/Device'
+        - type: object
+          properties:
+            plantId: { type: string, nullable: true, example: PLANT-SH-01 }
+            model: { type: string, nullable: true, example: GX11 }
+            serialNumber: { type: string, nullable: true, example: SN-DEMO-0007 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    Alert:
+      type: object
+      required: [id, level, title, device, time, status]
+      properties:
+        id: { type: string, example: ALT-0941 }
+        level: { $ref: '#/components/schemas/AlertLevel' }
+        title: { type: string, example: 驱动端轴承高频振动 RMS 严重突破警戒上限 }
+        device: { type: string, description: 设备编号 + 名称, example: AC-07 螺杆空气压缩机 }
+        time: { type: string, format: date-time, description: 告警发生时间 }
+        owner: { type: string, nullable: true, description: 处理人显示名，未指派为 null, example: 张工 }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+    AlertAcknowledgeRequest:
+      type: object
+      properties:
+        note: { type: string, maxLength: 500, description: 确认备注（写入审计） }
+    WorkOrder:
+      type: object
+      required: [id, title, priority, status, updated]
+      properties:
+        id: { type: string, example: WO-20250518-01 }
+        title: { type: string }
+        priority: { $ref: '#/components/schemas/WorkOrderPriority' }
+        owner: { type: string, nullable: true, description: 负责人显示名, example: 张工 }
+        status: { $ref: '#/components/schemas/WorkOrderStatus' }
+        updated: { type: string, format: date-time, description: 更新时间 }
+    WorkOrderCreate:
+      type: object
+      required: [title, deviceId]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        deviceId: { type: string, description: 设备编号, example: AC-07 }
+        priority:
+          allOf:
+            - $ref: '#/components/schemas/WorkOrderPriority'
+          default: P3 中
+        description: { type: string, maxLength: 2000, nullable: true }
+        ownerId: { type: string, format: uuid, nullable: true }
+        dueAt: { type: string, format: date-time, nullable: true }
+        alertId: { type: string, nullable: true, description: 来源告警编号 }
+        diagnosisId: { type: string, nullable: true, description: 来源诊断编号 }
+    WorkOrderUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        priority: { $ref: '#/components/schemas/WorkOrderPriority' }
+        status: { $ref: '#/components/schemas/WorkOrderStatus' }
+        ownerId: { type: string, format: uuid, nullable: true }
+        description: { type: string, maxLength: 2000, nullable: true }
+        dueAt: { type: string, format: date-time, nullable: true }
+    DevicePage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Device' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    AlertPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    WorkOrderPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/WorkOrder' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INVALID_STATE, INVALID_TRANSITION, INTERNAL_ERROR]
+            message: { type: string }
+            details: { type: object, nullable: true, additionalProperties: true }
+            requestId: { type: string, nullable: true }
+  responses:
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: UNAUTHORIZED, message: 缺少或无效的登录凭证, requestId: a1b2c3d4 }
+    Forbidden:
+      description: 无权限
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: FORBIDDEN, message: 当前角色无权执行该操作, details: { requiredRole: manager }, requestId: b2c3d4e5 }
+    NotFound:
+      description: 资源不存在或不属于当前组织
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: NOT_FOUND, message: 资源不存在, requestId: c3d4e5f6 }
+    ValidationError:
+      description: 参数校验失败
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: 请求参数不合法
+              details: { field: pageSize, reason: must be <= 100 }
+              requestId: d4e5f6a7
+    InternalError:
+      description: 服务器内部错误
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: INTERNAL_ERROR, message: 服务器内部错误, requestId: e5f6a7b8 }

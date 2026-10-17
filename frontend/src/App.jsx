@@ -22,6 +22,7 @@ import {
   Filter24Regular,
   MoreHorizontal24Regular,
   Play24Regular,
+  Pulse24Regular,
   Search24Regular,
   ShieldLock24Regular,
   Wrench24Regular,
@@ -44,7 +45,7 @@ const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
   { id: "devices", label: "设备中心", icon: Database24Regular },
   { id: "alerts", label: "告警中心", icon: Alert24Regular, count: 3 },
-  { id: "diagnosis", label: "诊断工作台", icon: Bot24Regular },
+  { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
@@ -142,7 +143,7 @@ function OverviewPage({ navigate, workOrders, trendData }) {
           <TrendChart data={trendData} />
         </section>
         <section className="panel recent-panel">
-          <div className="panel-title"><div><Bot24Regular /><h2>最近诊断</h2></div></div>
+          <div className="panel-title"><div><Pulse24Regular /><h2>最近诊断</h2></div></div>
           {["AC-07 轴承早期疲劳剥落", "P-102 动静环轻度气蚀", "R-03 润滑油黏度劣化"].map((item, index) => (
             <button className="recent-item" key={item} onClick={() => navigate("diagnosis")}>
               <span className={`severity severity-${index + 1}`} />
@@ -228,7 +229,7 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
           <div className="reading-grid"><div><span>当前值</span><strong className="text-danger">7.82 mm/s</strong></div><div><span>告警阈值</span><strong>4.50 mm/s</strong></div><div><span>采样频率</span><strong>1,000 Hz</strong></div><div><span>特征频率</span><strong>148.5 Hz</strong></div></div>
           <TrendChart data={trendData} compact />
           <div className="context-note"><strong>规则来源</strong><span>Rule #VIB-RMS-004，连续 3 个采样周期超过 ISO 4.5 mm/s 阈值。</span></div>
-          <Button appearance="primary" icon={<Bot24Regular />} onClick={() => navigate("diagnosis")}>进入诊断工作台</Button>
+          <Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis")}>进入诊断工作台</Button>
         </section>
       </div>
     </>

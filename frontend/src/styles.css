@@ -234,3 +234,64 @@ body {
   .app-shell { grid-template-columns: 188px minmax(0, 1fr); }
   .page-content { padding: 20px; }
 }
+
+/* Industrial geometry: hard edges for data surfaces, clipped corners for
+   primary work areas. Controls remain rectangular so the hierarchy is clear. */
+.panel,
+.metric-strip,
+.toolbar,
+.plant-select,
+.sync-state,
+.tone-badge,
+.segmented,
+.segmented button,
+.toolbar select,
+.diagnosis-input input,
+.diagnosis-input textarea,
+.health-callout,
+.sensor-list > div,
+.conflict-banner,
+.checklist label,
+.toast,
+.fui-Button {
+  border-radius: 0;
+}
+
+.dashboard-grid > .panel,
+.table-panel,
+.detail-drawer,
+.alert-list,
+.alert-detail,
+.diagnosis-input,
+.diagnosis-main > .panel,
+.evidence-rail,
+.document-preview,
+.order-list,
+.order-detail,
+.audit-detail,
+.metric-strip {
+  clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%);
+}
+
+.panel-title {
+  position: relative;
+  background: #f7f9fa;
+}
+.panel-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #6d8496;
+}
+.dashboard-grid .panel-title::before,
+.diagnosis-main .panel-title::before { background: var(--blue); }
+
+.sidebar nav button.active {
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%);
+}
+.metric-strip { clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
+.tone-badge { border-left-width: 3px; }
+.status-tabs button { border-bottom-width: 2px; }

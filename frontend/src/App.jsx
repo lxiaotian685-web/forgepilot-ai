@@ -310,16 +310,19 @@ function App() {
   const [toast, setToast] = useState("");
   const [workspaceData, setWorkspaceData] = useState(demoData);
   const [dataSource, setDataSource] = useState("mock");
+  const [connectedResources, setConnectedResources] = useState([]);
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage), [activePage]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
 
   useEffect(() => {
     let active = true;
-    loadWorkspaceData().then(({ data, source }) => {
+    loadWorkspaceData().then(({ data, source, connectedResources: connected }) => {
       if (!active) return;
       setWorkspaceData(data);
       setDataSource(source);
+      setConnectedResources(connected);
       if (source === "fallback") notify("业务接口暂不可用，已切换为演示数据");
+      if (source === "hybrid") notify("设备、告警和工单已按可用接口接入，其他模块保留演示数据");
     });
     return () => { active = false; };
   }, []);
@@ -345,7 +348,7 @@ function App() {
         <header className="topbar">
           <button className="plant-select"><Building24Regular /><span>一号装配厂</span><small>Plant #1</small></button>
           <div className="breadcrumb">运行中心 / <strong>{activeNav?.label}</strong></div>
-          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint">{dataSource === "api" ? "API 数据" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name="李振华" color="colorful" /><span className="user-name"><strong>李振华</strong><small>维护主管</small></span></div>
+          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint" title={connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "当前使用内置演示数据"}>{dataSource === "hybrid" ? "业务 API + 演示" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name="李振华" color="colorful" /><span className="user-name"><strong>李振华</strong><small>维护主管</small></span></div>
         </header>
         <main className="page-content">{pages[activePage]}</main>
         <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>数据延迟 12ms · 自动刷新</span></footer>

@@ -40,9 +40,11 @@ npm run dev
 ```env
 VITE_DATA_MODE=api
 VITE_API_BASE_URL=http://localhost:8000
+VITE_API_ORGANIZATION_ID=demo-org
+VITE_API_USER_ID=demo@example.com
 ```
 
-临时 API 路径集中定义在 `src/services/api.js`。B、C 任务包确认 OpenAPI 后，只需在该适配器中调整路径和响应映射。API 不可用时，页面自动回退到演示数据并显示提示。
+API 路径和响应转换集中定义在 `src/services/api.js`。当前已按 B 包 OpenAPI 接入设备、告警和工单分页接口；知识证据、审计记录和趋势数据等待 C/B 后续接口，继续明确使用演示数据。某个业务接口不可用时，只回退对应模块，不会让已经可用的接口一起失效。
 
 ## 构建
 
@@ -57,5 +59,5 @@ npm run build
 
 - 页面默认使用虚构演示数据，不包含真实企业信息。
 - 按钮、导航、筛选和状态反馈可用于演示，已具备统一 API 适配入口。
-- 当前 API 路径是等待 B、C 契约评审的临时约定，不能视为最终接口。
+- 设备、告警和工单路径已对齐 B 包第一版 OpenAPI；知识证据、审计记录和趋势路径仍待后续契约。
 

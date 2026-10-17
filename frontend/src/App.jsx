@@ -263,7 +263,17 @@ function DiagnosisPage({ notify, navigate, evidence }) {
           <section className="panel diagnosis-result">
             <div className="result-heading"><div><ToneBadge tone="danger">高风险</ToneBadge><h2>轴承外圈早期疲劳剥落</h2></div><strong>91.4%</strong></div>
             <p>振动包络谱出现 148.5 Hz 特征频率，结合 SKF-6312 外圈故障频率与温升趋势，建议安排降载并在 48 小时内停机检查。</p>
+            <section className="evidence-chain" aria-label="诊断证据链">
+              <div className="evidence-chain-heading"><div><Pulse24Regular /><h3>可验证诊断链</h3></div><small>演示数据 · 4 个可追溯节点</small></div>
+              <ol>
+                <li><span>01</span><div><small>设备事实</small><strong>AC-07 · SKF-6312 驱动端轴承</strong><em>设备台账</em></div></li>
+                <li><span>02</span><div><small>异常信号</small><strong>148.5 Hz BPFO 谱线稳定出现</strong><em>振动采样 #S-0941</em></div></li>
+                <li><span>03</span><div><small>规则与文档</small><strong>振动 7.82 mm/s，超过 4.5 阈值</strong><em>RevC 第 42 页</em></div></li>
+                <li><span>04</span><div><small>人工决策</small><strong>待确认诊断并创建维护工单</strong><em>尚未写入审计</em></div></li>
+              </ol>
+            </section>
             <div className="evidence-columns"><div><h3>支持证据</h3><ul><li>BPFO 特征频率稳定出现</li><li>振动峰值超过阈值 73.7%</li><li>驱动端温度持续上升</li></ul></div><div><h3>排除项</h3><ul><li>排气压力仍在正常范围</li><li>电机电流无显著波动</li></ul></div></div>
+            <section className="counterfactual-check"><div><strong>如何推翻当前结论？</strong><span>补采水平振动与负载电流，可把不确定性从 8.6% 继续收窄。</span></div><ul><li>若 BPFO 谱线消失，轴承故障概率预计降至 43%</li><li>若电机电流同步升高，需优先复核转子不平衡</li></ul><Button onClick={() => notify("补采任务已加入诊断草稿")}>加入补采任务</Button></section>
             <div className="confirm-box"><strong>人工确认</strong><label><input type="radio" name="decision" defaultChecked /> 确认当前结论并生成维护工单</label><label><input type="radio" name="decision" /> 退回补充现场信息</label><Button appearance="primary" onClick={() => navigate("orders")}>生成维护工单</Button></div>
           </section>
         </main>

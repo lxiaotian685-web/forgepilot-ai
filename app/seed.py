@@ -592,16 +592,16 @@ def seed_demo(db: Session) -> dict:
                 actor_user_id=owner.id,
                 action="alert.acknowledge",
                 entity_type="alert",
-                entity_id=alerts["ALT-0941"].id,
-                after={"status": "acknowledged"},
+                entity_id=alerts["ALT-0911"].id,
+                after={"status": "closed"},
             ),
             AuditLog(
                 organization_id=demo_org.id,
                 actor_user_id=tech.id,
                 action="work_order.create",
                 entity_type="work_order",
-                entity_id=work_orders[0].id,
-                after={"code": "WO-20250518-01", "status": "pending"},
+                entity_id=work_orders[2].id,
+                after={"code": "WO-20250517-03", "status": "pending"},
             ),
         ]
     )

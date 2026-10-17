@@ -19,8 +19,8 @@ tags:
   - name: work-orders
     description: 维护工单
 security:
-  - bearerAuth: []
-    organizationId: []
+  - organizationId: []
+    userId: []
 paths:
   /api/v1/devices:
     get:
@@ -390,15 +390,16 @@ paths:
         '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
     organizationId:
       type: apiKey
       in: header
       name: X-Organization-Id
-      description: 当前组织 ID。v0.1 演示阶段可与登录会话绑定，禁止由客户端任意切换。
+      description: 当前组织 ID/代码。v0.1 演示阶段使用；生产替换为登录会话，禁止由客户端任意切换。
+    userId:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: 当前用户 ID/邮箱。v0.1 演示阶段使用；生产替换为登录会话。
   parameters:
     Page:
       name: page

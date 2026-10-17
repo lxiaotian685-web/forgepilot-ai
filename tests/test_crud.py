@@ -259,6 +259,22 @@ def test_create_work_order_rejects_diagnosis_from_other_device(api):
     assert error["details"]["deviceId"] == "AC-07"
 
 
+def test_create_work_order_links_matching_alert_and_diagnosis(api):
+    client, ids, _ = api
+    response = client.post(
+        "/api/v1/work-orders",
+        json={
+            "title": "AC-07 关联告警与诊断",
+            "deviceId": "AC-07",
+            "alertId": "ALT-0941",
+            "diagnosisId": "DIAG-20250518-0941",
+        },
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert response.status_code == 201
+    assert response.json()["deviceId"] == "AC-07"
+
+
 def test_work_order_patch_transitions(api):
     client, ids, _ = api
     headers = auth(ids, user="tech@example.com")

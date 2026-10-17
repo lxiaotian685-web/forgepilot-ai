@@ -47,11 +47,11 @@ def _validate_owner(
         )
     )
     user = db.get(User, user_id)
-    if membership is None or user is None:
+    if membership is None or user is None or user.status != "active":
         raise api_error(
             422,
             "VALIDATION_ERROR",
-            "负责人不属于当前组织",
+            "负责人不存在、已停用或不属于当前组织",
             {"ownerId": str(user_id)},
         )
     return user
@@ -344,7 +344,7 @@ def update_work_order(
                 order.closed_at = None
                 if order.started_at is None:
                     order.started_at = utcnow()
-            elif new_status == "completed":
+            elif new_status in {"completed", "cancelled"}:
                 order.closed_at = utcnow()
 
     if "owner_id" in fields:

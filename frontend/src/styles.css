@@ -98,3 +98,139 @@ button { white-space: nowrap; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 @media (max-width: 1250px) { .app-shell { grid-template-columns: 190px minmax(0, 1fr); }.sidebar nav button { padding-inline: 9px; }.diagnosis-layout { grid-template-columns: 230px minmax(500px, 1fr); }.evidence-rail { display: none; }.topbar { padding-inline: 16px; }.user-name { display: none; }.page-content { padding: 18px; } }
+
+/* 2026-10 industrial-console visual pass
+   Flat hierarchy, denser rhythm and restrained status color replace the
+   generic rounded-card dashboard treatment while preserving Fluent controls. */
+:root {
+  --navy: #0b3557;
+  --blue: #176a9d;
+  --blue-strong: #0b527f;
+  --blue-soft: #eaf2f7;
+  --surface-soft: #f4f6f8;
+  --border: #cdd6df;
+  --muted: #5f6c78;
+  --radius: 3px;
+}
+
+body {
+  color: #172534;
+  background-color: #e9edf1;
+  background-image: linear-gradient(rgb(41 67 89 / .025) 1px, transparent 1px), linear-gradient(90deg, rgb(41 67 89 / .025) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.app-shell { grid-template-columns: 216px minmax(0, 1fr); }
+.sidebar { background: #092f4d; border-right-color: #082841; }
+.brand { height: 68px; padding-inline: 18px; }
+.brand-mark { width: 32px; height: 32px; border-radius: 2px; }
+.brand strong { letter-spacing: 0; }
+.sidebar nav { padding: 18px 0; gap: 1px; }
+.sidebar nav button {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 0;
+  border-left: 3px solid transparent;
+  color: #bfd0de;
+}
+.sidebar nav button:hover { background: rgb(255 255 255 / .055); }
+.sidebar nav button.active {
+  color: #fff;
+  background: #124365;
+  border-left-color: #65b7e6;
+  box-shadow: none;
+}
+.sidebar nav em { border-radius: 2px; }
+.sidebar-foot { background: rgb(0 0 0 / .08); }
+
+.topbar {
+  height: 58px;
+  padding-inline: 26px;
+  background: rgb(248 250 251 / .97);
+  backdrop-filter: blur(8px);
+}
+.plant-select { padding: 6px 10px; background: transparent; border-color: transparent; border-radius: 2px; }
+.plant-select:hover { background: #edf2f5; border-color: var(--border); }
+.sync-state { padding: 5px 8px; border-radius: 2px; background: transparent; }
+.top-actions .fui-Avatar { border-radius: 2px; }
+
+.page-content { max-width: 1540px; padding: 26px 28px 32px; }
+.page-header { min-height: 52px; margin-bottom: 14px; align-items: flex-start; }
+.page-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -.025em; }
+.page-header p { max-width: 68ch; margin-top: 4px; }
+.page-header .fui-Button { border-radius: 2px; box-shadow: none; }
+
+.panel {
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+.panel-title { min-height: 46px; padding-inline: 16px; background: #fbfcfd; }
+.panel-title h2 { font-size: 14px; letter-spacing: .005em; }
+.panel-title svg { color: #42576a; }
+
+.metric-strip {
+  position: relative;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  border-top: 3px solid var(--navy);
+  background: #f9fafb;
+}
+.metric-strip > div { min-height: 76px; padding: 12px 18px 10px; }
+.metric-strip span { color: #526171; font-size: 11px; }
+.metric-strip strong {
+  margin-top: 5px;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.045em;
+}
+.metric-strip small { font-size: 11px; }
+
+.dashboard-grid { gap: 12px; }
+.task-row { min-height: 60px; padding: 10px 14px; grid-template-columns: 92px 1fr auto; }
+.task-copy strong, .data-table td strong, .order-card > span > strong { font-family: "Cascadia Mono", Consolas, monospace; letter-spacing: -.02em; }
+.health-score { padding-top: 16px; }
+.health-score strong { font-family: "Cascadia Mono", Consolas, monospace; font-size: 38px; letter-spacing: -.05em; }
+.health-legend { justify-content: flex-start; gap: 22px; }
+.health-legend i, .severity, .sync-state i { border-radius: 1px; }
+.chart { padding-inline: 2px; }
+.recent-item { min-height: 78px; }
+
+.tone-badge {
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: transparent;
+  font-weight: 600;
+}
+.tone-danger { background: #fff6f5; }
+.tone-warning { background: #fff9f0; }
+.tone-success { background: #f1f9f3; }
+.segmented, .segmented button, .toolbar, .toolbar select, .status-tabs button,
+.diagnosis-input input, .diagnosis-input textarea, .health-callout,
+.sensor-list > div, .conflict-banner, .checklist label, .toast { border-radius: 2px; }
+
+.table-panel { margin-top: 12px; }
+.data-table { font-variant-numeric: tabular-nums; }
+.data-table th { padding: 9px 12px; background: #e7edf2; color: #364a5d; font-size: 11px; }
+.data-table td { padding: 10px 12px; }
+.toolbar { min-height: 52px; margin-bottom: 12px; background: #f9fafb; }
+.status-tabs { border-bottom: 1px solid var(--border); gap: 0; }
+.status-tabs button { border-radius: 0; background: transparent; }
+.status-tabs button.active { color: var(--navy); background: transparent; border-bottom-color: var(--navy); font-weight: 700; }
+
+.equipment-identity, .reading-grid, .evidence-columns > div, .document-meta,
+.order-meta, .audit-section, .before-after > div { background: #edf2f5; }
+.result-heading { background: #0b3557; }
+.timer { background: #eaf2f7; border-left: 3px solid var(--blue); }
+.audit-detail code { font-family: "Cascadia Mono", Consolas, monospace; }
+
+.fui-Button { border-radius: 2px; }
+.fui-ProgressBar__bar { border-radius: 1px; }
+.app-footer { background: #e2e8ed; }
+
+@media (max-width: 1250px) {
+  .app-shell { grid-template-columns: 188px minmax(0, 1fr); }
+  .page-content { padding: 20px; }
+}

@@ -223,6 +223,42 @@ def test_create_work_order_unknown_device(api):
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
+def test_create_work_order_rejects_alert_from_other_device(api):
+    client, ids, _ = api
+    response = client.post(
+        "/api/v1/work-orders",
+        json={
+            "title": "跨设备告警工单",
+            "deviceId": "AC-07",
+            "alertId": "ALT-0938",
+        },
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["details"]["alertId"] == "ALT-0938"
+    assert error["details"]["deviceId"] == "AC-07"
+
+
+def test_create_work_order_rejects_diagnosis_from_other_device(api):
+    client, ids, _ = api
+    response = client.post(
+        "/api/v1/work-orders",
+        json={
+            "title": "跨设备诊断工单",
+            "deviceId": "AC-07",
+            "diagnosisId": "DIAG-20250518-0938",
+        },
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["details"]["diagnosisId"] == "DIAG-20250518-0938"
+    assert error["details"]["deviceId"] == "AC-07"
+
+
 def test_work_order_patch_transitions(api):
     client, ids, _ = api
     headers = auth(ids, user="tech@example.com")

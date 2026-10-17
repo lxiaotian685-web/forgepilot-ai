@@ -455,6 +455,30 @@ def seed_demo(db: Session) -> dict:
         updated_by=tech.id,
     )
     db.add(diagnosis)
+    pump_diagnosis = Diagnosis(
+        organization_id=demo_org.id,
+        device_id=devices["P-102"].id,
+        alert_id=alerts["ALT-0938"].id,
+        code="DIAG-20250518-0938",
+        question="P-102 排气温度持续升高，可能是什么原因？",
+        conclusion="疑似机械密封磨损导致温升，建议检查密封与冷却水路。",
+        risk_level="medium",
+        confidence=88.0,
+        evidence={
+            "documents": [
+                {
+                    "name": "Pump_P102_Cavitation_Troubleshooting.pdf",
+                    "version": "v1.0",
+                    "page": 11,
+                    "score": 0.88,
+                }
+            ]
+        },
+        status="draft",
+        created_by=tech.id,
+        updated_by=tech.id,
+    )
+    db.add(pump_diagnosis)
     db.flush()
 
     work_order_specs = [

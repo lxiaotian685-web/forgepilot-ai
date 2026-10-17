@@ -237,6 +237,20 @@ def create_work_order(
         if payload.diagnosis_id
         else None
     )
+    if alert is not None and alert.device_id != device.id:
+        raise api_error(
+            422,
+            "VALIDATION_ERROR",
+            "来源告警不属于目标设备",
+            {"alertId": alert.code, "deviceId": device.code},
+        )
+    if diagnosis is not None and diagnosis.device_id != device.id:
+        raise api_error(
+            422,
+            "VALIDATION_ERROR",
+            "来源诊断不属于目标设备",
+            {"diagnosisId": diagnosis.code, "deviceId": device.code},
+        )
 
     now = utcnow()
     order = WorkOrder(

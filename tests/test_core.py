@@ -9,8 +9,18 @@ def test_resolve_equipment_model_maps_known_device():
     assert devices.resolve_equipment_model("CNC-04") == ("cnc-003", "ok")
 
 
-def test_resolve_equipment_model_prefers_explicit_model():
-    assert devices.resolve_equipment_model("AC-07", "cnc-003") == ("cnc-003", "ok")
+def test_resolve_equipment_model_matching_explicit_model():
+    assert devices.resolve_equipment_model("AC-07", "compressor-002") == (
+        "compressor-002",
+        "ok",
+    )
+
+
+def test_resolve_equipment_model_mismatched_explicit_model():
+    assert devices.resolve_equipment_model("AC-07", "cnc-003") == (
+        None,
+        "model_mismatch",
+    )
 
 
 def test_resolve_equipment_model_unknown_device():

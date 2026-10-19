@@ -73,6 +73,23 @@ def test_chat_returns_answer_with_sources():
     assert any(s["type"] == "fact" and s["source"] for s in body["statements"])
 
 
+def test_chat_rejects_mismatched_equipment_model():
+    _ingest_air_compressor()
+    response = client.post(
+        "/api/v1/chat",
+        json={
+            "device_id": "AC-07",
+            "equipment_model": "cnc-003",
+            "question": "如何检查设备？",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "model_mismatch"
+    assert body["sources"] == []
+
+
 def test_chat_unknown_device_returns_not_found():
     _ingest_air_compressor()
     response = client.post(

@@ -23,8 +23,10 @@ class RAGService:
         if model is None:
             if status == "device_not_found":
                 answer = f"未找到设备 {device_id} 对应的设备型号，无法检索知识库。"
-            else:
+            elif status == "no_knowledge":
                 answer = f"设备 {device_id} 暂无适用的知识库文档。"
+            else:
+                answer = f"设备 {device_id} 的型号与传入的型号不一致，已拒绝检索。"
             return ChatResponse(
                 device_id=device_id,
                 answer=answer,

@@ -18,12 +18,12 @@ CATEGORY_DOC_MODEL = {category: model for model, category in DOC_CATEGORY.items(
 def resolve_equipment_model(
     device_id: str, equipment_model: str | None = None
 ) -> tuple[str | None, str]:
-    if equipment_model:
-        return equipment_model, "ok"
     info = DEVICE_CATALOG.get(device_id)
     if info is None:
         return None, "device_not_found"
     model = CATEGORY_DOC_MODEL.get(info["category"])
     if model is None:
         return None, "no_knowledge"
+    if equipment_model is not None and equipment_model != model:
+        return None, "model_mismatch"
     return model, "ok"

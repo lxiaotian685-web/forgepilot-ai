@@ -19,6 +19,12 @@ dev = [
     "pytest>=9,<10",
     "ruff>=0.16,<1.0",
 ]
+rag = [
+    "pypdf>=4,<6",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

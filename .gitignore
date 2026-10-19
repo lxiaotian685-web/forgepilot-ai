@@ -21,7 +21,8 @@ venv/
 *.key
 
 # Runtime and business data
-data/
+data/*
+!data/demo_docs/
 uploads/
 storage/
 *.db

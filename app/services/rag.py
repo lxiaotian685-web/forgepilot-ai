@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.core.devices import resolve_equipment_model
 from app.core.store import KnowledgeBase
 from app.llm.base import BaseLLM
 from app.schemas.chat import ChatResponse, Statement
@@ -18,7 +19,17 @@ class RAGService:
         question: str,
         equipment_model: str | None = None,
     ) -> ChatResponse:
-        model = equipment_model or device_id
+        model = resolve_equipment_model(device_id, equipment_model)
+        if model is None:
+            return ChatResponse(
+                device_id=device_id,
+                answer=f"未找到设备 {device_id} 对应的设备型号，无法检索知识库。",
+                statements=[],
+                sources=[],
+                is_mock=True,
+                status="device_not_found",
+            )
+
         evidences = self.kb.search(question, equipment_model=model, top_k=self.top_k)
 
         if not evidences:

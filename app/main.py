@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config import STORAGE_PATH
+from app.core.demo import ensure_demo_documents
 from app.core.store import KnowledgeBase
 from app.llm.mock import MockLLM
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -21,7 +22,7 @@ rag = RAGService(kb, MockLLM())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    kb.load()
+    ensure_demo_documents(kb)
     yield
 
 

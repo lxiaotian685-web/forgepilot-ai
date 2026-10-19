@@ -3,24 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.config import DEMO_DOCS_DIR
+from app.core.demo import ingest_demo_docs
 from app.core.store import KnowledgeBase
 
 ROOT = Path(__file__).resolve().parent.parent
 
-DOCS = [
-    ("motor_maintenance.txt", "电机维护手册", "motor-001"),
-    ("air_compressor.txt", "空压机维修规范", "compressor-002"),
-    ("cnc_safety.txt", "数控机床安全操作规范", "cnc-003"),
-]
-
 
 def build_kb() -> KnowledgeBase:
     kb = KnowledgeBase()
-    for filename, title, model in DOCS:
-        path = DEMO_DOCS_DIR / filename
-        content = path.read_text(encoding="utf-8")
-        kb.ingest(title=title, equipment_model=model, content=content, source=filename)
+    ingest_demo_docs(kb)
     return kb
 
 

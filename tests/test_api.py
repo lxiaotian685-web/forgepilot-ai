@@ -57,7 +57,7 @@ def test_chat_returns_answer_with_sources():
     _ingest_motor()
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "motor-001", "question": "温度过高应该检查什么？"},
+        json={"device_id": "AC-07", "question": "温度过高应该检查什么？"},
     )
 
     assert response.status_code == 200
@@ -65,7 +65,7 @@ def test_chat_returns_answer_with_sources():
     assert body["status"] == "ok"
     assert body["is_mock"] is True
     assert body["sources"]
-    assert body["sources"][0]["page"] >= 1
+    assert body["sources"][0]["title"] == "电机维护手册"
     types = {s["type"] for s in body["statements"]}
     assert "fact" in types
     assert "inference" in types
@@ -73,10 +73,23 @@ def test_chat_returns_answer_with_sources():
     assert any(s["type"] == "fact" and s["source"] for s in body["statements"])
 
 
+def test_chat_unknown_device_returns_not_found():
+    _ingest_motor()
+    response = client.post(
+        "/api/v1/chat",
+        json={"device_id": "UNKNOWN-99", "question": "温度过高应该检查什么？"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "device_not_found"
+    assert body["sources"] == []
+
+
 def test_chat_no_answer_when_kb_empty():
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "motor-001", "question": "锅炉水位怎么处理？"},
+        json={"device_id": "AC-07", "question": "锅炉水位怎么处理？"},
     )
 
     assert response.status_code == 200
@@ -90,7 +103,7 @@ def test_chat_model_unavailable_returns_evidence():
     rag.llm = UnavailableLLM()
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "motor-001", "question": "温度过高应该检查什么？"},
+        json={"device_id": "AC-07", "question": "温度过高应该检查什么？"},
     )
 
     assert response.status_code == 200
@@ -102,7 +115,7 @@ def test_chat_model_unavailable_returns_evidence():
 
 
 def test_chat_rejects_missing_question():
-    response = client.post("/api/v1/chat", json={"device_id": "motor-001"})
+    response = client.post("/api/v1/chat", json={"device_id": "AC-07"})
 
     assert response.status_code == 422
 
@@ -115,7 +128,7 @@ def test_chat_rejects_missing_device_id():
 
 def test_chat_rejects_empty_question():
     response = client.post(
-        "/api/v1/chat", json={"device_id": "motor-001", "question": ""}
+        "/api/v1/chat", json={"device_id": "AC-07", "question": ""}
     )
 
     assert response.status_code == 422

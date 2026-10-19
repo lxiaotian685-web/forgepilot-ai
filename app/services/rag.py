@@ -19,15 +19,19 @@ class RAGService:
         question: str,
         equipment_model: str | None = None,
     ) -> ChatResponse:
-        model = resolve_equipment_model(device_id, equipment_model)
+        model, status = resolve_equipment_model(device_id, equipment_model)
         if model is None:
+            if status == "device_not_found":
+                answer = f"未找到设备 {device_id} 对应的设备型号，无法检索知识库。"
+            else:
+                answer = f"设备 {device_id} 暂无适用的知识库文档。"
             return ChatResponse(
                 device_id=device_id,
-                answer=f"未找到设备 {device_id} 对应的设备型号，无法检索知识库。",
+                answer=answer,
                 statements=[],
                 sources=[],
                 is_mock=True,
-                status="device_not_found",
+                status=status,
             )
 
         evidences = self.kb.search(question, equipment_model=model, top_k=self.top_k)

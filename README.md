@@ -15,14 +15,16 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - FastAPI应用骨架；
 - 健康检查接口；
 - 设备问答请求与响应数据模型；
-- 明确标记为mock的模拟诊断接口；
-- 6项API自动化测试。
+- 说明书RAG知识库：文档入库、BM25检索、带页码证据引用；
+- 诊断接口：区分事实/推断/待确认，处理无答案与模型不可用；
+- 设备编号到型号的映射（AC-07、P-102、CNC-04）；
+- 3 份虚构演示手册与 20 条评测集；
+- API自动化测试。
 
 尚未实现：
 
 - Web前端；
 - PostgreSQL设备数据库；
-- 说明书RAG知识库；
 - 真实大模型与Agent工具调用；
 - 工单、备件、权限、审计和生产部署。
 
@@ -50,12 +52,22 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m ruff check .
 ```
 
+导入演示文档并运行检索评测：
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.ingest_demo
+.\.venv\Scripts\python.exe -m scripts.evaluate
+```
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |
 |---|---|---|---|
 | GET | `/health` | 已实现 | 服务健康检查 |
-| POST | `/api/v1/chat` | Mock | 接收设备ID和问题，返回模拟诊断结果 |
+| POST | `/api/v1/chat` | 已实现 | 接收设备ID和问题，返回带证据的诊断结果 |
+| POST | `/api/v1/search` | 已实现 | 检索文档，返回带页码的证据 |
+| POST | `/api/v1/documents/ingest` | 已实现 | 文档入库 |
+| GET | `/api/v1/documents` | 已实现 | 列出已入库文档 |
 
 ## 目标业务闭环
 

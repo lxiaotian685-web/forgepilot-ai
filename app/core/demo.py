@@ -4,8 +4,8 @@ from app.config import DEMO_DOCS_DIR
 from app.core.store import KnowledgeBase
 
 DEMO_DOCS = [
-    ("motor_maintenance.txt", "电机维护手册", "motor-001"),
     ("air_compressor.txt", "空压机维修规范", "compressor-002"),
+    ("centrifugal_pump.txt", "离心泵维护手册", "pump-004"),
     ("cnc_safety.txt", "数控机床安全操作规范", "cnc-003"),
 ]
 

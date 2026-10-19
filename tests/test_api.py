@@ -5,16 +5,16 @@ from app.main import app, rag
 
 client = TestClient(app)
 
-MOTOR_CONTENT = "概述\n\n---PAGE---\n\n温度过高检查：散热风扇、通风道。"
+AIR_COMPRESSOR_CONTENT = "概述\n\n---PAGE---\n\n排气温度过高排查：冷却器、油位。"
 
 
-def _ingest_motor():
+def _ingest_air_compressor():
     return client.post(
         "/api/v1/documents/ingest",
         json={
-            "title": "电机维护手册",
-            "equipment_model": "motor-001",
-            "content": MOTOR_CONTENT,
+            "title": "空压机维修规范",
+            "equipment_model": "compressor-002",
+            "content": AIR_COMPRESSOR_CONTENT,
         },
     )
 
@@ -27,37 +27,37 @@ def test_health_returns_ok():
 
 
 def test_ingest_document():
-    response = _ingest_motor()
+    response = _ingest_air_compressor()
 
     assert response.status_code == 200
     body = response.json()
-    assert body["title"] == "电机维护手册"
+    assert body["title"] == "空压机维修规范"
     assert body["page_count"] == 2
     assert body["chunk_count"] >= 2
 
 
 def test_search_returns_evidence():
-    _ingest_motor()
+    _ingest_air_compressor()
     response = client.post(
         "/api/v1/search",
-        json={"query": "温度过高", "equipment_model": "motor-001"},
+        json={"query": "排气温度过高", "equipment_model": "compressor-002"},
     )
 
     assert response.status_code == 200
     body = response.json()
     assert body["count"] >= 1
     result = body["results"][0]
-    assert result["title"] == "电机维护手册"
+    assert result["title"] == "空压机维修规范"
     assert result["page"] >= 1
     assert result["snippet"]
     assert result["score"] > 0
 
 
 def test_chat_returns_answer_with_sources():
-    _ingest_motor()
+    _ingest_air_compressor()
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "AC-07", "question": "温度过高应该检查什么？"},
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
     )
 
     assert response.status_code == 200
@@ -65,7 +65,7 @@ def test_chat_returns_answer_with_sources():
     assert body["status"] == "ok"
     assert body["is_mock"] is True
     assert body["sources"]
-    assert body["sources"][0]["title"] == "电机维护手册"
+    assert body["sources"][0]["title"] == "空压机维修规范"
     types = {s["type"] for s in body["statements"]}
     assert "fact" in types
     assert "inference" in types
@@ -74,10 +74,10 @@ def test_chat_returns_answer_with_sources():
 
 
 def test_chat_unknown_device_returns_not_found():
-    _ingest_motor()
+    _ingest_air_compressor()
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "UNKNOWN-99", "question": "温度过高应该检查什么？"},
+        json={"device_id": "UNKNOWN-99", "question": "排气温度过高怎么排查？"},
     )
 
     assert response.status_code == 200
@@ -89,7 +89,7 @@ def test_chat_unknown_device_returns_not_found():
 def test_chat_no_answer_when_kb_empty():
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "AC-07", "question": "锅炉水位怎么处理？"},
+        json={"device_id": "AC-07", "question": "锅炉汽包水位如何调节？"},
     )
 
     assert response.status_code == 200
@@ -99,11 +99,11 @@ def test_chat_no_answer_when_kb_empty():
 
 
 def test_chat_model_unavailable_returns_evidence():
-    _ingest_motor()
+    _ingest_air_compressor()
     rag.llm = UnavailableLLM()
     response = client.post(
         "/api/v1/chat",
-        json={"device_id": "AC-07", "question": "温度过高应该检查什么？"},
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
     )
 
     assert response.status_code == 200
@@ -121,7 +121,7 @@ def test_chat_rejects_missing_question():
 
 
 def test_chat_rejects_missing_device_id():
-    response = client.post("/api/v1/chat", json={"question": "电机温度过高应该检查什么？"})
+    response = client.post("/api/v1/chat", json={"question": "空压机排气温度过高怎么排查？"})
 
     assert response.status_code == 422
 
@@ -136,7 +136,7 @@ def test_chat_rejects_empty_question():
 
 def test_chat_rejects_empty_device_id():
     response = client.post(
-        "/api/v1/chat", json={"device_id": "", "question": "电机温度过高怎么办？"}
+        "/api/v1/chat", json={"device_id": "", "question": "空压机排气温度过高怎么办？"}
     )
 
     assert response.status_code == 422

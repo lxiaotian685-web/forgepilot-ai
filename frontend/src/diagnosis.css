@@ -1,0 +1,47 @@
+.diagnostic-origin { display: flex; align-items: center; gap: 10px; padding: 12px 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); color: var(--navy); font-size: 12px; }
+.diagnostic-origin span:last-child { margin-left: auto; color: #526173; }
+.grounded-layout { display: grid; grid-template-columns: 250px minmax(320px, 1fr) 290px; gap: 16px; align-items: start; }
+.grounded-layout .panel { min-width: 0; }
+.grounded-input { padding: 18px; }
+.grounded-input h2 { margin: 0 0 20px; font-size: 15px; }
+.grounded-input form { display: grid; gap: 12px; }
+.grounded-input label { font-size: 12px; font-weight: 600; }
+.grounded-input select, .grounded-input textarea { width: 100%; min-width: 0; padding: 10px; border: 1px solid #8a9aac; background: white; border-radius: 2px; color: #152033; font-size: 12px; }
+.grounded-input textarea { resize: vertical; line-height: 1.7; }
+.grounded-input small, .grounded-note { font-size: 11px; color: #526173; line-height: 1.8; }
+.grounded-note { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
+.grounded-result > .panel-title, .grounded-sources > .panel-title { flex-wrap: wrap; gap: 8px; }
+.grounded-result > .panel-title > span, .grounded-sources > .panel-title > span { color: #526173; font-size: 11px; }
+.grounded-empty { padding: 24px 20px; color: #526173; font-size: 13px; line-height: 1.8; }
+.grounded-empty h3 { color: #243c52; font-size: 16px; }
+.diagnostic-error { padding: 15px; margin: 16px; background: #fff0ef; border-left: 3px solid #b42318; color: #8d211a; font-size: 13px; line-height: 1.7; }
+.diagnostic-answer { padding: 0 20px; font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.statement-list { padding: 0 20px; }
+.statement { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; padding: 18px 0; border-top: 1px solid var(--border); }
+.statement-index { font-family: Consolas, monospace; color: var(--blue); font-size: 13px; }
+.statement strong { font-size: 12px; color: #234762; }
+.statement-pending strong { color: #8a480b; }
+.statement p { font-size: 13px; line-height: 1.8; margin: 8px 0; overflow-wrap: anywhere; }
+.statement small { color: #74512d; font-size: 11px; }
+.statement button { white-space: normal; text-align: left; font-size: 11px; max-width: 100%; }
+.verification-next { margin: 10px 20px 20px; padding: 16px; background: #fff9ef; border-left: 3px solid #b77322; }
+.verification-next h3 { margin: 0 0 10px; font-size: 14px; }
+.verification-next p, .verification-next li { font-size: 12px; line-height: 1.8; }
+.verification-next ul { padding-left: 18px; }
+.verification-next small { font-size: 11px; color: #705539; }
+.grounded-confirm { padding: 16px 20px; border-top: 1px solid var(--border); }
+.grounded-confirm p { font-size: 11px; color: #526173; line-height: 1.7; }
+.source-picker { display: grid; gap: 0; padding: 8px 12px; }
+.source-picker button { text-align: left; padding: 12px; background: white; border: 1px solid transparent; cursor: pointer; white-space: normal; }
+.source-picker button[aria-pressed=true] { background: #edf4fa; border-color: #0f5a91; }
+.source-picker span, .source-picker small { display: block; color: #526173; font-size: 11px; }
+.source-picker strong { display: block; margin: 6px 0; font-size: 13px; overflow-wrap: anywhere; }
+.source-reading { padding: 4px 20px 20px; }
+.source-reading h3 { font-size: 14px; line-height: 1.6; }
+.source-reading dl { display: grid; grid-template-columns: 65px minmax(0, 1fr); gap: 8px; font-size: 11px; }
+.source-reading dt { color: #526173; }
+.source-reading dd { margin: 0; overflow-wrap: anywhere; }
+.source-reading blockquote { margin: 20px 0; padding-left: 12px; border-left: 2px solid var(--blue); font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.source-reading p { font-size: 11px; color: #526173; line-height: 1.8; }
+.grounded-layout :is(select, textarea, button):focus-visible { outline: 2px solid #0f5a91; outline-offset: 3px; }
+@media (max-width: 1350px) { .grounded-layout { grid-template-columns: 230px minmax(300px, 1fr); } .grounded-sources { grid-column: 1 / -1; } .source-picker { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

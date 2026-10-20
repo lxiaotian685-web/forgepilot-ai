@@ -40,6 +40,7 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
+import DiagnosisPage from "./DiagnosisPage";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -236,55 +237,6 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
   );
 }
 
-function DiagnosisPage({ notify, navigate, evidence }) {
-  const [running, setRunning] = useState(false);
-  return (
-    <>
-      <PageHeader title="诊断工作台" description="DIAG-20250518-0941 · AC-07 驱动端振动异常" />
-      <div className="diagnosis-layout">
-        <aside className="panel diagnosis-input">
-          <div className="panel-title"><div><Database24Regular /><h2>诊断输入</h2></div></div>
-          <label>目标设备<input value="AC-07 螺杆空气压缩机" readOnly /></label>
-          <label>关联告警<input value="ALT-0941 振动持续超限" readOnly /></label>
-          <label>现场现象<textarea defaultValue="现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。" /></label>
-          <div className="tag-list"><ToneBadge>高频振动</ToneBadge><ToneBadge>轴承异响</ToneBadge><ToneBadge>温升</ToneBadge></div>
-          <Button onClick={() => notify("诊断草稿已保存")}>保存草稿</Button>
-        </aside>
-        <main className="diagnosis-main">
-          <section className="conflict-banner"><Alert24Regular /><div><strong>参数版本冲突，需人工核验</strong><span>设备数据库为 0.80 MPa，说明书 RevC 为 0.75 MPa。</span></div><Button onClick={() => notify("已记录采用设备铭牌数据")}>核对来源</Button></section>
-          <section className="panel">
-            <div className="panel-title"><div><Bot24Regular /><h2>Agent 执行步骤</h2></div><Button appearance="primary" icon={<Play24Regular />} onClick={() => { setRunning(true); notify("诊断流程已启动"); }}>{running ? "诊断运行中" : "开始诊断"}</Button></div>
-            <div className="stepper">
-              {["读取设备事实与告警事件", "检索技术说明书与行业标准", "核对数据库参数和文档版本", "生成候选故障原因", "推荐现场检查步骤"].map((step, index) => (
-                <div className="step" key={step}><span className={index < 2 || running ? "done" : ""}>{index < 2 || running ? "✓" : index + 1}</span><div><strong>{step}</strong><small>{index < 2 ? "已完成，工具结果可展开查看" : running ? "处理中" : "等待执行"}</small></div></div>
-              ))}
-            </div>
-          </section>
-          <section className="panel diagnosis-result">
-            <div className="result-heading"><div><ToneBadge tone="danger">高风险</ToneBadge><h2>轴承外圈早期疲劳剥落</h2></div><strong>91.4%</strong></div>
-            <p>振动包络谱出现 148.5 Hz 特征频率，结合 SKF-6312 外圈故障频率与温升趋势，建议安排降载并在 48 小时内停机检查。</p>
-            <section className="evidence-chain" aria-label="诊断证据链">
-              <div className="evidence-chain-heading"><div><Pulse24Regular /><h3>可验证诊断链</h3></div><small>演示数据 · 4 个可追溯节点</small></div>
-              <ol>
-                <li><span>01</span><div><small>设备事实</small><strong>AC-07 · SKF-6312 驱动端轴承</strong><em>设备台账</em></div></li>
-                <li><span>02</span><div><small>异常信号</small><strong>148.5 Hz BPFO 谱线稳定出现</strong><em>振动采样 #S-0941</em></div></li>
-                <li><span>03</span><div><small>规则与文档</small><strong>振动 7.82 mm/s，超过 4.5 阈值</strong><em>RevC 第 42 页</em></div></li>
-                <li><span>04</span><div><small>人工决策</small><strong>待确认诊断并创建维护工单</strong><em>尚未写入审计</em></div></li>
-              </ol>
-            </section>
-            <div className="evidence-columns"><div><h3>支持证据</h3><ul><li>BPFO 特征频率稳定出现</li><li>振动峰值超过阈值 73.7%</li><li>驱动端温度持续上升</li></ul></div><div><h3>排除项</h3><ul><li>排气压力仍在正常范围</li><li>电机电流无显著波动</li></ul></div></div>
-            <section className="counterfactual-check"><div><strong>如何推翻当前结论？</strong><span>补采水平振动与负载电流，可把不确定性从 8.6% 继续收窄。</span></div><ul><li>若 BPFO 谱线消失，轴承故障概率预计降至 43%</li><li>若电机电流同步升高，需优先复核转子不平衡</li></ul><Button onClick={() => notify("补采任务已加入诊断草稿")}>加入补采任务</Button></section>
-            <div className="confirm-box"><strong>人工确认</strong><label><input type="radio" name="decision" defaultChecked /> 确认当前结论并生成维护工单</label><label><input type="radio" name="decision" /> 退回补充现场信息</label><Button appearance="primary" onClick={() => navigate("orders")}>生成维护工单</Button></div>
-          </section>
-        </main>
-        <aside className="panel evidence-rail">
-          <div className="panel-title"><div><BookOpen24Regular /><h2>证据与引用</h2></div><Badge appearance="filled">3</Badge></div>
-          {evidence.slice(0, 3).map((item, index) => <div className="evidence-card" key={item.name}><div><ToneBadge tone={index === 0 ? "success" : "neutral"}>{index === 0 ? "已采纳" : "候选"}</ToneBadge><strong>{94.6 - index * 5.4}%</strong></div><h3>{item.name}</h3><p>{index === 0 ? "第 6.3 节，第 42 页：轴承振动评定与停机检查限值。" : "与当前设备和告警参数相关的标准片段。"}</p><Button appearance="subtle">查看原文</Button></div>)}
-        </aside>
-      </div>
-    </>
-  );
-}
 
 function KnowledgePage({ notify, evidence }) {
   const [selected, setSelected] = useState(evidence[0]);
@@ -332,7 +284,7 @@ function App() {
     overview: <OverviewPage navigate={setActivePage} workOrders={workOrders} trendData={trendData} />,
     devices: <DevicePage navigate={setActivePage} devices={devices} trendData={trendData} />,
     alerts: <AlertsPage navigate={setActivePage} notify={notify} alerts={alerts} trendData={trendData} />,
-    diagnosis: <DiagnosisPage navigate={setActivePage} notify={notify} evidence={evidence} />,
+    diagnosis: <DiagnosisPage devices={devices} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
     orders: <OrdersPage notify={notify} workOrders={workOrders} />,
     audit: <AuditPage auditRows={auditRows} />,

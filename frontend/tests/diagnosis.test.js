@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeDiagnosis, requestDiagnosis, diagnosisStatuses } from "../src/services/diagnosis.js";
+import { normalizeDiagnosis, requestDiagnosis, diagnosisStatuses, summarizeDiagnosis } from "../src/services/diagnosis.js";
 
 const payload = () => ({ device_id: "AC-07", answer: "需核验", is_mock: true, status: "ok", statements: [
   { type: "fact", text: "文档片段", source: "《演示手册》第2页" },
@@ -12,6 +12,12 @@ test("links a unique exact reference, keeps retrieval score unscaled", () => {
   const result = normalizeDiagnosis(payload(), "AC-07");
   assert.equal(result.statements[0].sourceKey, "source-0");
   assert.equal(result.sources[0].score, 1.5);
+});
+test("summarizes only real statement and source counts", () => {
+  const value = payload();
+  value.statements.push({ type: "inference", text: "可能原因" }, { type: "pending", text: "待现场核对" });
+  assert.deepEqual(summarizeDiagnosis(value), { fact: 1, inference: 1, pending: 1, sources: 1 });
+  assert.deepEqual(summarizeDiagnosis(null), { fact: 0, inference: 0, pending: 0, sources: 0 });
 });
 test("does not guess ambiguous or unknown references", () => {
   const value = payload(); value.sources.push({ ...value.sources[0], document_id: "other-version" });

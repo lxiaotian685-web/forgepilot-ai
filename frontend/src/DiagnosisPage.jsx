@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
-import { diagnosisStatuses, requestDiagnosis } from "./services/diagnosis";
+import { diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
 import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
@@ -13,6 +13,8 @@ export default function DiagnosisPage({ devices }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeSource, setActiveSource] = useState(null);
+  const [contextChecks, setContextChecks] = useState({ sampledAt: false, measuringPoint: false, operatingMode: false });
+  const [verifiedItems, setVerifiedItems] = useState({});
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
 
@@ -20,6 +22,7 @@ export default function DiagnosisPage({ devices }) {
     setResult(null);
     setError("");
     setActiveSource(null);
+    setVerifiedItems({});
   }
 
   async function diagnose(event) {
@@ -46,6 +49,15 @@ export default function DiagnosisPage({ devices }) {
   const origin = !result ? "尚未生成结果" : result.transport === "local-demo"
     ? "本地固定样例 · 未调用模型" : result.is_mock ? "服务端模拟或降级结果 · 非真实模型诊断" : "服务端标记为真实模型 · 仍需人工核验";
   const pending = result?.statements.filter((item) => item.type === "pending") || [];
+  const selectedDevice = devices.find((item) => item.id === deviceId);
+  const contextLabels = {
+    sampledAt: "已记录采样时间",
+    measuringPoint: "已注明测点与单位",
+    operatingMode: "已确认当前工况",
+  };
+  const preparedCount = Object.values(contextChecks).filter(Boolean).length;
+  const resultSummary = summarizeDiagnosis(result);
+  const verifiedCount = pending.filter((_, index) => verifiedItems[index]).length;
 
   return <>
     <header className="page-header"><div><h1>诊断工作台</h1><p>先核对证据，再形成判断。诊断建议不能替代现场专业确认。</p></div></header>
@@ -59,9 +71,22 @@ export default function DiagnosisPage({ devices }) {
             {!devices.some((item) => item.id === "AC-07") && <option value="AC-07">AC-07 · 演示设备</option>}
             {devices.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.name}</option>)}
           </select>
+          {selectedDevice && <section className="device-context" aria-label="当前设备上下文">
+            <div><span>设备位置</span><strong>{selectedDevice.location}</strong></div>
+            <div><span>设备类型</span><strong>{selectedDevice.type}</strong></div>
+            <div><span>演示状态</span><strong>{selectedDevice.state} · 健康值 {selectedDevice.health}</strong></div>
+          </section>}
           <label htmlFor="diagnosis-question">现场现象与问题</label>
           <textarea id="diagnosis-question" rows={7} maxLength={2000} required disabled={busy} value={question} onChange={(event) => { setQuestion(event.target.value); clearResult(); }} />
           <small>请写明时间、测点和单位。不要输入企业敏感信息。</small>
+          <fieldset className="context-checks">
+            <legend><span>诊断准备度</span><strong>{preparedCount}/3 已补充</strong></legend>
+            {Object.entries(contextLabels).map(([key, label]) => <label key={key}>
+              <input type="checkbox" checked={contextChecks[key]} onChange={(event) => setContextChecks((current) => ({ ...current, [key]: event.target.checked }))} />
+              <span>{label}</span>
+            </label>)}
+            <small>勾选项仅保存在本页，用于提醒资料是否齐全，不会传给诊断接口。</small>
+          </fieldset>
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
           {busy && <Button type="button" onClick={() => { request.current?.abort(); setBusy(false); setError("已取消本次诊断，未生成结论。"); }}>取消请求</Button>}
         </form>
@@ -73,6 +98,13 @@ export default function DiagnosisPage({ devices }) {
         {busy && <p role="status" className="grounded-empty">正在请求服务端。尚未确认检索或模型步骤完成。</p>}
         {!result && !busy && <div className="grounded-empty"><h3>从一个明确的现场问题开始</h3><p>结果会区分文档陈述、模型推断与待验证项。没有证据时会明确显示，不预填诊断结论。</p></div>}
         {result && <>
+          <section className="diagnosis-summary" aria-label="诊断结果摘要">
+            <div><span>文档陈述</span><strong>{resultSummary.fact}</strong></div>
+            <div><span>模型推断</span><strong>{resultSummary.inference}</strong></div>
+            <div><span>待验证</span><strong>{resultSummary.pending}</strong></div>
+            <div><span>原文证据</span><strong>{resultSummary.sources}</strong></div>
+            <p>{resultSummary.pending > 0 ? "当前状态：证据待补齐" : "当前状态：仍需人工复核"}</p>
+          </section>
           <p className="diagnostic-answer">{result.answer}</p>
           <div className="statement-list">{result.statements.map((item, index) => <article key={index} className={`statement statement-${item.type}`}>
             <span className="statement-index">{String(index + 1).padStart(2, "0")}</span>
@@ -81,10 +113,10 @@ export default function DiagnosisPage({ devices }) {
                 : <small>{item.source ? `引用未唯一匹配：${item.source}` : "未提供直接引用，需人工核对"}</small>}
             </div>
           </article>)}</div>
-          <section className="verification-next"><h3>下一步需要验证什么</h3>{pending.length
-            ? <ul>{pending.map((item, index) => <li key={index}>{item.text}</li>)}</ul>
+          <section className="verification-next"><div className="verification-heading"><h3>证据补采清单</h3>{pending.length > 0 && <strong>{verifiedCount}/{pending.length} 已现场核对</strong>}</div>{pending.length
+            ? <div className="verification-list">{pending.map((item, index) => <label key={index} className={verifiedItems[index] ? "checked" : ""}><input type="checkbox" checked={Boolean(verifiedItems[index])} onChange={(event) => setVerifiedItems((current) => ({ ...current, [index]: event.target.checked }))} /><span>{item.text}</span></label>)}</div>
             : <p>服务端未提供待验证项，不能据此认为已经验证充分。请补充现场记录并由维护人员复核。</p>}
-            <small>尚未建立校准模型，不展示诊断置信度或预测概率。</small>
+            <small>勾选记录不会保存，也不会生成任务。尚未建立校准模型，不展示诊断置信度或预测概率。</small>
           </section>
           <div className="grounded-confirm"><Button disabled>人工确认并生成工单</Button><p>等待 B 包持久化与确认接口，当前结果未保存到业务数据库。</p></div>
         </>}

@@ -8,6 +8,16 @@ export const diagnosisStatuses = {
   model_unavailable: "模型不可用，仅供人工阅读证据",
 };
 
+export function summarizeDiagnosis(result) {
+  const summary = { fact: 0, inference: 0, pending: 0, sources: 0 };
+  if (!result) return summary;
+  for (const statement of result.statements || []) {
+    if (Object.hasOwn(summary, statement.type)) summary[statement.type] += 1;
+  }
+  summary.sources = Array.isArray(result.sources) ? result.sources.length : 0;
+  return summary;
+}
+
 export function normalizeDiagnosis(payload, deviceId) {
   if (!payload || payload.device_id !== deviceId ||
       typeof payload.answer !== "string" || typeof payload.is_mock !== "boolean" ||

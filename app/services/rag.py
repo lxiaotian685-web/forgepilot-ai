@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from app.core.devices import resolve_equipment_model
 from app.core.store import KnowledgeBase
-from app.llm.base import BaseLLM
-from app.schemas.chat import ChatResponse, Statement
+from app.llm.base import BaseLLM, LLMError
+from app.schemas.chat import ChatResponse, Statement, VerificationSuggestion
 from app.schemas.document import Evidence
 
 
@@ -32,7 +32,7 @@ class RAGService:
                 answer=answer,
                 statements=[],
                 sources=[],
-                is_mock=True,
+                is_mock=self.llm.is_mock,
                 status=status,
             )
 
@@ -44,47 +44,76 @@ class RAGService:
                 answer="未在知识库中找到相关文档，无法给出有证据的诊断建议。",
                 statements=[],
                 sources=[],
-                is_mock=True,
+                is_mock=self.llm.is_mock,
                 status="no_answer",
             )
 
-        if not self.llm.available:
-            statements = [self._to_fact(ev) for ev in evidences]
-            statements.append(
-                Statement(
-                    type="pending",
-                    text="模型服务不可用，以上为检索到的文档证据，诊断结论需人工确认。",
-                    source=None,
-                )
-            )
-            lines = [
-                "模型服务当前不可用，无法生成诊断结论。以下为检索到的相关文档片段，仅供人工参考：",
-                "",
-            ]
-            for i, ev in enumerate(evidences, start=1):
-                lines.append(f"{i}. {self._ref(ev)}：{ev.snippet}")
-            return ChatResponse(
-                device_id=device_id,
-                answer="\n".join(lines),
-                statements=statements,
-                sources=evidences,
-                is_mock=True,
-                status="model_unavailable",
-            )
+        try:
+            result = self.llm.answer(question, evidences)
+        except LLMError:
+            return self._degraded(device_id, evidences)
 
-        answer, statements = self.llm.answer(question, evidences)
+        statements = self._validate_sources(result.statements, evidences)
         return ChatResponse(
             device_id=device_id,
-            answer=answer,
+            answer=result.answer,
             statements=statements,
             sources=evidences,
-            is_mock=True,
+            conflicts=result.conflicts,
+            verification_suggestions=result.verification_suggestions,
+            is_mock=self.llm.is_mock,
             status="ok",
         )
 
+    def _degraded(self, device_id: str, evidences: list[Evidence]) -> ChatResponse:
+        statements = [self._to_fact(ev) for ev in evidences]
+        statements.append(
+            Statement(
+                type="pending",
+                text="模型服务不可用，以上为检索到的文档证据，诊断结论需人工确认。",
+                source=None,
+                source_ids=[],
+            )
+        )
+        lines = [
+            "模型服务当前不可用，无法生成诊断结论。以下为检索到的相关文档片段，仅供人工参考：",
+            "",
+        ]
+        for i, ev in enumerate(evidences, start=1):
+            lines.append(f"{i}. {self._ref(ev)}：{ev.snippet}")
+        return ChatResponse(
+            device_id=device_id,
+            answer="\n".join(lines),
+            statements=statements,
+            sources=evidences,
+            verification_suggestions=[
+                VerificationSuggestion(
+                    missing_evidence="可用模型服务或人工复核",
+                    to_verify="确认以上文档证据是否足以支撑人工诊断结论",
+                )
+            ],
+            is_mock=self.llm.is_mock,
+            status="model_unavailable",
+        )
+
+    @staticmethod
+    def _validate_sources(
+        statements: list[Statement], evidences: list[Evidence]
+    ) -> list[Statement]:
+        valid = {ev.id for ev in evidences}
+        for statement in statements:
+            if statement.source_ids:
+                statement.source_ids = [
+                    sid for sid in statement.source_ids if sid in valid
+                ]
+                if not statement.source_ids and statement.type == "fact":
+                    statement.type = "pending"
+        return statements
+
     @staticmethod
     def _ref(ev: Evidence) -> str:
-        return f"《{ev.title}》第{ev.page}页"
+        page = ev.page if ev.page is not None else "未知"
+        return f"《{ev.title}》第{page}页"
 
     @staticmethod
     def _to_fact(ev: Evidence) -> Statement:
@@ -92,4 +121,5 @@ class RAGService:
             type="fact",
             text=ev.snippet,
             source=RAGService._ref(ev),
+            source_ids=[ev.id],
         )

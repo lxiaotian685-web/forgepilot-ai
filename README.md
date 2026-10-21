@@ -59,6 +59,19 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m scripts.evaluate
 ```
 
+### 模型配置（可选）
+
+默认使用 `MockLLM`（`is_mock=true`）。接入真实模型时设置环境变量：
+
+```powershell
+$env:LLM_PROVIDER = "openai"
+$env:LLM_API_KEY  = "你的密钥"
+$env:LLM_BASE_URL = "https://api.example.com/v1"
+$env:LLM_MODEL    = "模型名"
+```
+
+密钥只放后端环境变量，不提交到仓库。真实调用成功才 `is_mock=false`；未配置或调用失败时降级为返回检索证据（`status=model_unavailable`），不伪造结论。
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |

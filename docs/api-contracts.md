@@ -1,4 +1,4 @@
-# 诊断与确认建单 API 契约（v1.1，已对齐 B 实现）
+﻿# 诊断与确认建单 API 契约（v1.1，已对齐 B 实现）
 
 > 状态：C 侧契约，已对齐 B 的 `docs/api-contracts/business-api.yaml`（PR #16 实际实现）。
 > 关联：Issue #12（C 有据诊断）、Issue #11（B 诊断持久化）、Issue #4（端到端闭环）。
@@ -35,7 +35,9 @@
 
 - `POST /api/v1/search`、`POST /api/v1/documents/ingest`、`GET /api/v1/documents`。
 
-## 4. C 侧证据引用扩展（待实现，本轮补）
+## 4. C 侧证据引用扩展（已实现）
+
+> 稳定引用 ID 与 `source_ids` 已落地；`conflicts` / `verification_suggestions` 已定义字段（默认空数组），真实模型产出接入后填充。
 
 ### 4.1 稳定引用 ID（含分块维度）
 
@@ -61,10 +63,10 @@
 
 每条 `statement` 增加 `source_ids`，指向本次返回 `sources` 的稳定 ID；模型引用不在本次 `sources` 中视为错误引用。
 
-### 4.3 `conflicts` 与 `verificationSuggestions`
+### 4.3 `conflicts` 与 `verification_suggestions`
 
 - `conflicts`：设备事实与文档结论不一致时，同时展示双方来源，禁止静默覆盖。
-- `verificationSuggestions`：说明缺什么证据、用于核验什么判断。
+- `verification_suggestions`：说明缺什么证据、用于核验什么判断。
 - 禁止编造置信度、概率变化或自动修改设备参数。
 
 ## 5. 诊断保存与查询（B，已实现）

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass
 
@@ -8,11 +9,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import api_error
+from app.auth import verify_token
 from app.db import get_db
 from app.models import Membership, Organization, User
 
 DEMO_ORG_CODE = "demo-org"
 DEMO_USER_EMAIL = "demo@example.com"
+AUTH_MODE = os.getenv("AUTH_MODE", "demo")
 
 ROLE_LEVELS = {
     "viewer": 0,
@@ -69,13 +72,28 @@ def _resolve_user(db: Session, value: str | None) -> User:
     return user
 
 
+def _identity_from_token(authorization: str | None) -> tuple[str, str]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise api_error(401, "UNAUTHORIZED", "缺少 Bearer 令牌")
+    token = authorization.split(" ", 1)[1].strip()
+    payload = verify_token(token)
+    if payload is None:
+        raise api_error(401, "UNAUTHORIZED", "令牌无效或已过期")
+    return payload["org"], payload["user"]
+
+
 def get_context(
+    authorization: str | None = Header(default=None, alias="Authorization"),
     x_organization_id: str | None = Header(default=None, alias="X-Organization-Id"),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
 ) -> RequestContext:
-    org = _resolve_organization(db, x_organization_id)
-    user = _resolve_user(db, x_user_id)
+    if AUTH_MODE == "token":
+        org_value, user_value = _identity_from_token(authorization)
+    else:
+        org_value, user_value = x_organization_id, x_user_id
+    org = _resolve_organization(db, org_value)
+    user = _resolve_user(db, user_value)
     membership = db.scalar(
         select(Membership).where(
             Membership.organization_id == org.id,

@@ -138,8 +138,17 @@ class Diagnosis(AuditMixin, SoftDeleteMixin, Base):
     )
     confidence: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     evidence: Mapped[dict | None] = mapped_column(JsonType, nullable=True)
+    model_source: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="draft", server_default="draft"
+    )
+    confirmed_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 
@@ -157,6 +166,15 @@ class WorkOrder(AuditMixin, SoftDeleteMixin, Base):
         Index("ix_work_orders_organization_status", "organization_id", "status"),
         Index("ix_work_orders_device_id", "device_id"),
         Index("ix_work_orders_owner_user_id", "owner_user_id"),
+        Index(
+            "uq_work_orders_diagnosis_active",
+            "diagnosis_id",
+            unique=True,
+            postgresql_where=text(
+                "diagnosis_id IS NOT NULL AND deleted_at IS NULL"
+            ),
+            sqlite_where=text("diagnosis_id IS NOT NULL AND deleted_at IS NULL"),
+        ),
         CheckConstraint(
             "priority IN ('p1', 'p2', 'p3', 'p4')", name="ck_work_orders_priority"
         ),

@@ -8,6 +8,8 @@ info:
     - 列表接口统一分页，返回 `items/page/pageSize/total/totalPages`。
     - 资源对外标识使用业务编码（设备编号、告警号、工单号），与前端 `frontend/src/data.js` 字段对齐。
     - 错误统一为 `{"error": {"code", "message", "details", "requestId"}}`。
+    - 契约状态：诊断、审计与工单来源字段为本轮 v0.1 **待确认契约**，需与 C 联调确认后冻结。
+    - `/api/v1/chat` 仍是 mock，不代表已持久化；持久化诊断请使用 `/api/v1/diagnoses`。
 servers:
   - url: http://127.0.0.1:8000
     description: 本地开发
@@ -18,6 +20,10 @@ tags:
     description: 告警
   - name: work-orders
     description: 维护工单
+  - name: diagnoses
+    description: 诊断结果与人工确认
+  - name: audit
+    description: 审计事件查询
 security:
   - organizationId: []
     userId: []
@@ -388,6 +394,242 @@ paths:
                   requestId: c1d2e3f4
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/diagnoses:
+    get:
+      tags: [diagnoses]
+      operationId: listDiagnoses
+      summary: 诊断列表
+      description: 权限：组织内任意有效成员。按更新时间倒序，支持按状态/设备/关键字筛选。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          required: false
+          description: 诊断状态（代码或中文标签）
+          schema: { type: string, enum: [draft, confirmed, rejected, 草稿, 已确认, 已拒绝] }
+        - name: deviceId
+          in: query
+          required: false
+          description: 设备编号
+          schema: { type: string, example: AC-07 }
+        - name: q
+          in: query
+          required: false
+          description: 按诊断编号、问题或结论搜索
+          schema: { type: string, example: 轴承 }
+      responses:
+        '200':
+          description: 诊断分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiagnosisPage' }
+              example:
+                items:
+                  - id: DIAG-20261017-01
+                    deviceId: AC-07
+                    question: AC-07 振动突然升高，可能是什么原因？
+                    conclusion: 疑似驱动端轴承磨损，建议停机检查。
+                    riskLevel: 高
+                    status: draft
+                    statusLabel: 草稿
+                    modelSource: demo-model-v1
+                    confirmedBy: null
+                    confirmedAt: null
+                    workOrderId: null
+                page: 1
+                pageSize: 20
+                total: 1
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [diagnoses]
+      operationId: createDiagnosis
+      summary: 保存诊断结果
+      description: |
+        权限：technician 及以上。
+        保存设备、组织、输入问题、诊断结论、证据引用快照、模型来源和状态（draft）。
+        保存后可通过 GET 接口刷新查询。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiagnosisCreate' }
+            example:
+              deviceId: AC-07
+              question: AC-07 振动突然升高，可能是什么原因？
+              conclusion: 疑似驱动端深沟球轴承磨损，建议停机检查并更换。
+              riskLevel: high
+              confidence: 94.6
+              modelSource: demo-model-v1
+              evidence:
+                documents:
+                  - name: Atlas_Copco_GX11_UserManual_RevC.pdf
+                    version: RevC
+                    page: 42
+                    score: 0.946
+      responses:
+        '201':
+          description: 已保存的诊断（draft）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Diagnosis' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/diagnoses/{diagnosis_id}:
+    get:
+      tags: [diagnoses]
+      operationId: getDiagnosis
+      summary: 诊断详情
+      description: 权限：组织内任意有效成员。跨组织诊断返回 404；刷新后可查询已持久化字段。
+      parameters:
+        - name: diagnosis_id
+          in: path
+          required: true
+          schema: { type: string, example: DIAG-20261017-01 }
+      responses:
+        '200':
+          description: 诊断详情
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Diagnosis' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/diagnoses/{diagnosis_id}/confirm:
+    post:
+      tags: [diagnoses]
+      operationId: confirmDiagnosis
+      summary: 人工确认并生成工单
+      description: |
+        权限：technician 及以上。
+        必须由登录用户显式确认，记录 confirmedBy / confirmedAt 和审计轨迹。
+        确认后在同一事务中创建并关联一条工单；重复确认幂等，不会重复建单。
+        任一步失败整体回滚，不会留下半条诊断或孤立工单；未确认诊断不能通过工单接口建单。
+      parameters:
+        - name: diagnosis_id
+          in: path
+          required: true
+          schema: { type: string, example: DIAG-20261017-01 }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiagnosisConfirm' }
+            example:
+              title: AC-07 驱动端轴承检查
+              priority: P1 紧急
+              note: 已现场确认，同意建单
+      responses:
+        '200':
+          description: 确认后的诊断与关联工单（重复调用返回同一工单）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DiagnosisConfirmation' }
+              example:
+                diagnosis:
+                  id: DIAG-20261017-01
+                  deviceId: AC-07
+                  status: confirmed
+                  statusLabel: 已确认
+                  confirmedBy: 张工
+                  confirmedAt: '2026-10-17T10:30:00+08:00'
+                  workOrderId: WO-20261017-01
+                workOrder:
+                  id: WO-20261017-01
+                  title: AC-07 驱动端轴承检查
+                  priority: P1 紧急
+                  owner: null
+                  status: 待处理
+                  updated: '2026-10-17T10:30:00+08:00'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 诊断已拒绝或状态不允许确认
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error:
+                  code: INVALID_STATE
+                  message: 诊断已拒绝，不能确认
+                  details: { diagnosisId: DIAG-20261017-01, status: rejected }
+                  requestId: f1a2b3c4
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/audit-events:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: 审计事件查询
+      description: |
+        权限：manager 及以上。
+        按登录组织隔离，返回操作人、动作、实体、时间和结果。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: action
+          in: query
+          required: false
+          schema: { type: string, example: diagnosis.confirm }
+        - name: entityType
+          in: query
+          required: false
+          schema: { type: string, example: diagnosis }
+        - name: entityId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: actorId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          required: false
+          description: 按 action 或 entityType 搜索
+          schema: { type: string }
+      responses:
+        '200':
+          description: 审计事件分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+              example:
+                items:
+                  - id: 6f1c2a9e-0000-4000-8000-000000000001
+                    time: '2026-10-17T10:30:00+08:00'
+                    user: 张工
+                    action: diagnosis.confirm
+                    entityType: diagnosis
+                    entityId: 0b7c2a9e-0000-4000-8000-000000000001
+                    object: diagnosis:0b7c2a9e-0000-4000-8000-000000000001
+                    result: 成功
+                page: 1
+                pageSize: 20
+                total: 1
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     organizationId:
@@ -473,6 +715,9 @@ components:
         owner: { type: string, nullable: true, description: 负责人显示名, example: 张工 }
         status: { $ref: '#/components/schemas/WorkOrderStatus' }
         updated: { type: string, format: date-time, description: 更新时间 }
+        deviceId: { type: string, nullable: true, example: AC-07 }
+        alertId: { type: string, nullable: true, description: 来源告警编号 }
+        diagnosisId: { type: string, nullable: true, description: 来源诊断编号 }
     WorkOrderCreate:
       type: object
       required: [title, deviceId]
@@ -521,6 +766,99 @@ components:
       required: [items, page, pageSize, total, totalPages]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/WorkOrder' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    Diagnosis:
+      type: object
+      required: [id, deviceId, question, conclusion, riskLevel, status, statusLabel]
+      properties:
+        id: { type: string, example: DIAG-20261017-01 }
+        deviceId: { type: string, example: AC-07 }
+        alertId: { type: string, nullable: true }
+        question: { type: string }
+        conclusion: { type: string }
+        riskLevel: { type: string, enum: [低, 中, 高] }
+        riskLevelCode: { type: string, enum: [low, medium, high] }
+        confidence: { type: number, nullable: true }
+        modelSource: { type: string, nullable: true }
+        evidence:
+          nullable: true
+          description: 证据引用快照（JSON 对象或数组）
+        status: { type: string, enum: [draft, confirmed, rejected] }
+        statusLabel: { type: string, enum: [草稿, 已确认, 已拒绝] }
+        confirmedBy: { type: string, nullable: true }
+        confirmedById: { type: string, nullable: true }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        workOrderId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    DiagnosisCreate:
+      type: object
+      required: [deviceId, question, conclusion]
+      properties:
+        deviceId: { type: string }
+        question: { type: string, minLength: 1, maxLength: 2000 }
+        conclusion: { type: string, minLength: 1, maxLength: 5000 }
+        riskLevel:
+          type: string
+          enum: [low, medium, high, 低, 中, 高]
+          default: low
+        confidence: { type: number, minimum: 0, maximum: 100, nullable: true }
+        modelSource: { type: string, maxLength: 120, nullable: true }
+        evidence:
+          nullable: true
+          description: 证据引用快照（JSON 对象或数组）
+        alertId: { type: string, nullable: true }
+    DiagnosisConfirm:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 255 }
+        description: { type: string, maxLength: 2000, nullable: true }
+        priority: { type: string, description: P1 紧急/P2 高/P3 中/P4 低，或 p1..p4 }
+        ownerId: { type: string, format: uuid, nullable: true }
+        dueAt: { type: string, format: date-time, nullable: true }
+        note: { type: string, maxLength: 500, nullable: true }
+    DiagnosisPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Diagnosis' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    DiagnosisConfirmation:
+      type: object
+      required: [diagnosis, workOrder]
+      properties:
+        diagnosis: { $ref: '#/components/schemas/Diagnosis' }
+        workOrder: { $ref: '#/components/schemas/WorkOrder' }
+    AuditEvent:
+      type: object
+      required: [id, time, action, entityType, result]
+      properties:
+        id: { type: string, format: uuid }
+        time: { type: string, format: date-time }
+        user: { type: string, nullable: true, description: 操作人显示名 }
+        userId: { type: string, format: uuid, nullable: true }
+        action: { type: string, example: diagnosis.confirm }
+        entityType: { type: string, example: diagnosis }
+        entityId: { type: string, format: uuid, nullable: true }
+        object: { type: string, description: 实体展示，例如 diagnosis:<uuid> }
+        result: { type: string, example: 成功 }
+        before:
+          nullable: true
+          description: 变更前快照（JSON）
+        after:
+          nullable: true
+          description: 变更后快照（JSON）
+    AuditEventPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
         page: { type: integer }
         pageSize: { type: integer }
         total: { type: integer }

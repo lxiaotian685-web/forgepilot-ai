@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
+from app.api.codes import next_work_order_code
 from app.api.deps import RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import (
@@ -91,43 +91,23 @@ def _get_diagnosis(
     return diagnosis
 
 
-def _next_code(
-    db: Session, organization_id: uuid.UUID, now: datetime
-) -> str:
-    prefix = f"WO-{now:%Y%m%d}-"
-    existing = db.scalar(
-        select(func.count())
-        .select_from(WorkOrder)
-        .where(
-            WorkOrder.organization_id == organization_id,
-            WorkOrder.code.like(f"{prefix}%"),
-        )
-    ) or 0
-    sequence = existing + 1
-    for _ in range(100):
-        code = f"{prefix}{sequence:02d}"
-        found = db.scalar(
-            select(WorkOrder.id).where(
-                WorkOrder.organization_id == organization_id,
-                WorkOrder.code == code,
-            )
-        )
-        if found is None:
-            return code
-        sequence += 1
-    raise api_error(409, "CONFLICT", "无法生成唯一工单号")
-
-
-def _load_related(db: Session, orders: list[WorkOrder]):
+def _load_related(db: Session, organization_id, orders: list[WorkOrder]):
     device_ids = {order.device_id for order in orders}
     owner_ids = {
         order.owner_user_id for order in orders if order.owner_user_id
+    }
+    alert_ids = {order.alert_id for order in orders if order.alert_id}
+    diagnosis_ids = {
+        order.diagnosis_id for order in orders if order.diagnosis_id
     }
     devices = (
         {
             device.id: device
             for device in db.scalars(
-                select(Device).where(Device.id.in_(device_ids))
+                select(Device).where(
+                    Device.id.in_(device_ids),
+                    Device.organization_id == organization_id,
+                )
             ).all()
         }
         if device_ids
@@ -143,7 +123,33 @@ def _load_related(db: Session, orders: list[WorkOrder]):
         if owner_ids
         else {}
     )
-    return devices, owners
+    alerts = (
+        {
+            alert.id: alert
+            for alert in db.scalars(
+                select(Alert).where(
+                    Alert.id.in_(alert_ids),
+                    Alert.organization_id == organization_id,
+                )
+            ).all()
+        }
+        if alert_ids
+        else {}
+    )
+    diagnoses = (
+        {
+            diagnosis.id: diagnosis
+            for diagnosis in db.scalars(
+                select(Diagnosis).where(
+                    Diagnosis.id.in_(diagnosis_ids),
+                    Diagnosis.organization_id == organization_id,
+                )
+            ).all()
+        }
+        if diagnosis_ids
+        else {}
+    )
+    return devices, owners, alerts, diagnoses
 
 
 @router.get("")
@@ -196,12 +202,18 @@ def list_work_orders(
     orders = db.scalars(
         stmt.offset((page - 1) * page_size).limit(page_size)
     ).all()
-    devices, owners = _load_related(db, orders)
+    devices, owners, alerts, diagnoses = _load_related(
+        db, context.organization_id, orders
+    )
     items = [
         work_order_to_dict(
             order,
             devices.get(order.device_id),
             owners.get(order.owner_user_id) if order.owner_user_id else None,
+            alerts.get(order.alert_id) if order.alert_id else None,
+            diagnoses.get(order.diagnosis_id)
+            if order.diagnosis_id
+            else None,
         )
         for order in orders
     ]
@@ -251,6 +263,31 @@ def create_work_order(
             "来源诊断不属于目标设备",
             {"diagnosisId": diagnosis.code, "deviceId": device.code},
         )
+    if diagnosis is not None:
+        if diagnosis.status != "confirmed":
+            raise api_error(
+                409,
+                "INVALID_STATE",
+                "诊断尚未确认，不能创建工单",
+                {"diagnosisId": diagnosis.code, "status": diagnosis.status},
+            )
+        existing_order = db.scalar(
+            select(WorkOrder).where(
+                WorkOrder.organization_id == context.organization_id,
+                WorkOrder.diagnosis_id == diagnosis.id,
+                WorkOrder.deleted_at.is_(None),
+            )
+        )
+        if existing_order is not None:
+            raise api_error(
+                409,
+                "CONFLICT",
+                "该诊断已生成工单",
+                {
+                    "diagnosisId": diagnosis.code,
+                    "workOrderId": existing_order.code,
+                },
+            )
 
     now = utcnow()
     order = WorkOrder(
@@ -258,7 +295,7 @@ def create_work_order(
         device_id=device.id,
         alert_id=alert.id if alert else None,
         diagnosis_id=diagnosis.id if diagnosis else None,
-        code=_next_code(db, context.organization_id, now),
+        code=next_work_order_code(db, context.organization_id, now),
         title=payload.title,
         description=payload.description,
         priority=priority,
@@ -286,7 +323,7 @@ def create_work_order(
     )
     db.commit()
     db.refresh(order)
-    return work_order_to_dict(order, device, owner)
+    return work_order_to_dict(order, device, owner, alert, diagnosis)
 
 
 @router.patch("/{work_order_id}")
@@ -387,4 +424,8 @@ def update_work_order(
 
     device = db.get(Device, order.device_id)
     owner = db.get(User, order.owner_user_id) if order.owner_user_id else None
-    return work_order_to_dict(order, device, owner)
+    alert = db.get(Alert, order.alert_id) if order.alert_id else None
+    diagnosis = (
+        db.get(Diagnosis, order.diagnosis_id) if order.diagnosis_id else None
+    )
+    return work_order_to_dict(order, device, owner, alert, diagnosis)

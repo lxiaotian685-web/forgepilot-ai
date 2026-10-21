@@ -304,12 +304,16 @@ erDiagram
 | `conclusion` | `text` | NULL | 诊断结论 |
 | `risk_level` | `varchar(20)` | NOT NULL, CHECK | `low`/`medium`/`high` |
 | `confidence` | `numeric(5,2)` | NULL | 置信度 |
-| `evidence` | `jsonb` | NULL | 证据（文档/版本/页码/片段/分数） |
+| `model_source` | `varchar(120)` | NULL | 模型来源/版本（如 provider/model） |
+| `evidence` | `jsonb` | NULL | 证据（文档/版本/页码/片段/分数）快照 |
 | `status` | `varchar(20)` | NOT NULL, DEFAULT `draft`, CHECK | `draft`/`confirmed`/`rejected` |
+| `confirmed_by` | `uuid` | NULL, FK → `users.id` ON DELETE SET NULL | 确认人 |
+| `confirmed_at` | `timestamptz` | NULL | 确认时间 |
 | `deleted_at` | `timestamptz` | NULL | 软删除时间 |
 | 审计字段 | | | 四列 |
 
 约束：`UNIQUE (organization_id, code) WHERE deleted_at IS NULL`。
+确认语义：只有 `status = confirmed` 且 `confirmed_by/confirmed_at` 有值的诊断才能创建工单。
 
 ### 4.10 work_orders（维护工单）
 
@@ -332,7 +336,7 @@ erDiagram
 | `deleted_at` | `timestamptz` | NULL | 软删除时间 |
 | 审计字段 | | | 四列 |
 
-约束：`UNIQUE (organization_id, code) WHERE deleted_at IS NULL`；索引 `(organization_id, status)`、`(device_id)`、`(owner_user_id)`。
+约束：`UNIQUE (organization_id, code) WHERE deleted_at IS NULL`；`UNIQUE (diagnosis_id) WHERE diagnosis_id IS NOT NULL AND deleted_at IS NULL`（一个诊断最多一条有效工单）；索引 `(organization_id, status)`、`(device_id)`、`(owner_user_id)`。
 
 状态流转：`pending → processing → verifying → completed`；`pending/processing → cancelled`；`verifying → processing`（返工）。其余流转拒绝。
 

@@ -14,7 +14,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 - FastAPI应用骨架与健康检查；
 - 设备问答请求与响应数据模型，以及明确标记为 mock 的诊断接口；
-- 设备、告警、工单业务 API（分页、筛选、权限、组织隔离、审计）；
+- 设备、告警、工单、诊断与人工确认业务 API（分页、筛选、权限、组织隔离、审计、幂等与事务）；
 - PostgreSQL 第一版 Alembic 迁移与虚构种子数据；
 - API 自动化测试（pytest）覆盖 CRUD、权限、隔离和状态机。
 
@@ -72,6 +72,8 @@ $env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forg
 
 数据模型见 [docs/data-model/README.md](docs/data-model/README.md)，接口契约见 [docs/api-contracts/business-api.yaml](docs/api-contracts/business-api.yaml)。
 
+PostgreSQL 实测记录见 [docs/postgres-verification.md](docs/postgres-verification.md)，认证与写入保护见 [docs/security.md](docs/security.md)。
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |
@@ -85,6 +87,11 @@ $env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forg
 | GET | `/api/v1/work-orders` | 已实现 | 工单分页列表（筛选） |
 | POST | `/api/v1/work-orders` | 已实现 | 创建工单 |
 | PATCH | `/api/v1/work-orders/{work_order_id}` | 已实现 | 更新工单状态/负责人 |
+| GET | `/api/v1/diagnoses` | 已实现 | 诊断分页列表（筛选） |
+| POST | `/api/v1/diagnoses` | 已实现 | 保存诊断结果（draft） |
+| GET | `/api/v1/diagnoses/{diagnosis_id}` | 已实现 | 诊断详情 |
+| POST | `/api/v1/diagnoses/{diagnosis_id}/confirm` | 已实现 | 人工确认并生成工单 |
+| GET | `/api/v1/audit-events` | 已实现 | 审计事件查询（manager+） |
 
 ## 目标业务闭环
 

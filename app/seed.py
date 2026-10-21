@@ -75,6 +75,7 @@ def seed_demo(db: Session) -> dict:
         name="虚构北方机械企业",
     )
     db.add_all([demo_org, north_org])
+    db.flush()
 
     owner = User(
         id=USER_OWNER_ID,
@@ -113,6 +114,7 @@ def seed_demo(db: Session) -> dict:
         password_hash="demo-not-a-real-hash",
     )
     db.add_all([owner, tech, manager, viewer, other, zhao])
+    db.flush()
 
     db.add_all(
         [
@@ -154,6 +156,7 @@ def seed_demo(db: Session) -> dict:
             ),
         ]
     )
+    db.flush()
 
     demo_plant = Plant(
         organization_id=demo_org.id,
@@ -295,17 +298,18 @@ def seed_demo(db: Session) -> dict:
         updated_by=owner.id,
     )
     db.add(bearing)
+    db.flush()
 
-    for code, name, unit in (
-        ("rated_power", "额定功率", "kW"),
-        ("rated_pressure", "额定排气压力", "MPa"),
+    for name, unit in (
+        ("rated_power", "kW"),
+        ("rated_pressure", "MPa"),
     ):
         db.add(
             DeviceParameter(
                 organization_id=demo_org.id,
                 device_id=devices["AC-07"].id,
                 name=name,
-                value=55 if code == "rated_power" else 0.8,
+                value=55 if name == "rated_power" else 0.8,
                 unit=unit,
                 source="nameplate",
                 source_ref="铭牌照片 DEMO-NAMEPLATE",
@@ -440,6 +444,7 @@ def seed_demo(db: Session) -> dict:
         conclusion="疑似驱动端深沟球轴承磨损，建议停机检查并更换轴承。",
         risk_level="high",
         confidence=94.6,
+        model_source="demo-model-v1",
         evidence={
             "documents": [
                 {
@@ -451,6 +456,8 @@ def seed_demo(db: Session) -> dict:
             ]
         },
         status="confirmed",
+        confirmed_by=tech.id,
+        confirmed_at=BASE - timedelta(minutes=40),
         created_by=tech.id,
         updated_by=tech.id,
     )
@@ -464,6 +471,7 @@ def seed_demo(db: Session) -> dict:
         conclusion="疑似机械密封磨损导致温升，建议检查密封与冷却水路。",
         risk_level="medium",
         confidence=88.0,
+        model_source="demo-model-v1",
         evidence={
             "documents": [
                 {

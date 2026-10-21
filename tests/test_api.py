@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 
+from app.deps import rag
 from app.llm.mock import UnavailableLLM
-from app.main import app, rag
+from app.main import app
 
 client = TestClient(app)
 

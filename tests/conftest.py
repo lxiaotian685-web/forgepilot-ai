@@ -1,7 +1,7 @@
 import pytest
 
+from app.deps import kb, rag
 from app.llm.mock import MockLLM
-from app.main import kb, rag
 
 
 @pytest.fixture(autouse=True)

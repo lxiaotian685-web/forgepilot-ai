@@ -1,43 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db import Base, get_db
-from app.main import app
 from app.models import AuditLog, Device, utcnow
-from app.seed import USER_OTHER_ID, seed_demo
-
-
-@pytest.fixture()
-def api():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-    Base.metadata.create_all(engine)
-    testing_session = sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
-    with testing_session() as session:
-        ids = seed_demo(session)
-
-    def override_get_db():
-        db = testing_session()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
-        yield client, ids, testing_session
-    app.dependency_overrides.clear()
+from app.seed import USER_OTHER_ID
 
 
 def auth(ids: dict, org: str = "demo-org", user: str = "demo@example.com") -> dict:

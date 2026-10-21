@@ -2,42 +2,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from app.db import Base, get_db
-from app.main import app
 from app.models import AuditLog, Diagnosis, WorkOrder
-from app.seed import seed_demo
-
-
-@pytest.fixture()
-def api():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-    Base.metadata.create_all(engine)
-    testing_session = sessionmaker(
-        bind=engine, autoflush=False, expire_on_commit=False
-    )
-    with testing_session() as session:
-        ids = seed_demo(session)
-
-    def override_get_db():
-        db = testing_session()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as client:
-        yield client, ids, testing_session
-    app.dependency_overrides.clear()
 
 
 def auth(
@@ -142,6 +109,7 @@ def test_confirm_creates_linked_work_order(api):
     assert body["diagnosis"]["confirmedAt"] is not None
     assert body["diagnosis"]["workOrderId"] == body["workOrder"]["id"]
     assert body["workOrder"]["deviceId"] == "AC-07"
+    assert body["workOrder"]["diagnosisId"] == diagnosis_code
     assert body["workOrder"]["status"] == "待处理"
 
     with session_factory() as session:
@@ -295,3 +263,179 @@ def test_confirm_rolls_back_on_failure(api, monkeypatch):
         assert diagnosis.confirmed_at is None
         assert diagnosis.confirmed_by is None
         assert orders == []
+
+
+def test_diagnosis_write_requires_technician(api):
+    client, ids, _ = api
+    denied_create = create_diagnosis(
+        client, ids, device="AC-07", user="viewer@example.com"
+    )
+    assert denied_create.status_code == 403
+
+    denied_confirm = client.post(
+        "/api/v1/diagnoses/DIAG-20250518-0938/confirm",
+        headers=auth(ids, user="viewer@example.com"),
+    )
+    assert denied_confirm.status_code == 403
+
+
+def test_audit_events_requires_manager(api):
+    client, ids, _ = api
+    for user in ("viewer@example.com", "tech@example.com"):
+        response = client.get(
+            "/api/v1/audit-events", headers=auth(ids, user=user)
+        )
+        assert response.status_code == 403
+    allowed = client.get(
+        "/api/v1/audit-events", headers=auth(ids, user="manager@example.com")
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["total"] >= 2
+
+
+def test_audit_events_org_isolation(api):
+    client, ids, _ = api
+    demo = client.get(
+        "/api/v1/audit-events", headers=auth(ids, user="manager@example.com")
+    )
+    assert demo.json()["total"] >= 2
+    north = client.get(
+        "/api/v1/audit-events",
+        headers=auth(ids, org="northwind-org", user="other@example.com"),
+    )
+    assert north.status_code == 200
+    assert north.json()["total"] == 0
+
+
+def test_audit_events_records_confirmation_and_work_order(api):
+    client, ids, _ = api
+    created = create_diagnosis(client, ids, device="AC-07")
+    diagnosis_code = created.json()["id"]
+    client.post(
+        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+        headers=auth(ids, user="tech@example.com"),
+    )
+
+    confirmations = client.get(
+        "/api/v1/audit-events",
+        params={"action": "diagnosis.confirm"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert confirmations.status_code == 200
+    items = confirmations.json()["items"]
+    assert len(items) >= 1
+    entry = items[0]
+    assert entry["action"] == "diagnosis.confirm"
+    assert entry["entityType"] == "diagnosis"
+    assert entry["user"] == "张工"
+    assert entry["result"] == "成功"
+
+    orders = client.get(
+        "/api/v1/work-orders",
+        params={"deviceId": "AC-07"},
+        headers=auth(ids),
+    )
+    work_order = next(
+        item
+        for item in orders.json()["items"]
+        if item["diagnosisId"] == diagnosis_code
+    )
+    assert work_order["deviceId"] == "AC-07"
+    assert work_order["diagnosisId"] == diagnosis_code
+    assert work_order["alertId"] is None
+
+
+def test_token_mode_requires_bearer_and_ignores_headers(api, monkeypatch):
+    client, ids, _ = api
+    monkeypatch.setenv("AUTH_SECRET", "test-secret-value-32-characters-long")
+    monkeypatch.setattr("app.api.deps.AUTH_MODE", "token")
+
+    denied = client.get("/api/v1/devices", headers=auth(ids))
+    assert denied.status_code == 401
+
+    from app.auth import issue_token
+
+    token = issue_token("demo-org", "demo@example.com")
+    allowed = client.get(
+        "/api/v1/devices",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert allowed.status_code == 200
+
+    forged = client.get(
+        "/api/v1/devices",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(ids["organizations"]["northwind-org"]),
+            "X-User-Id": str(ids["users"]["other@example.com"]),
+        },
+    )
+    assert forged.status_code == 200
+    assert "AC-07" in {item["id"] for item in forged.json()["items"]}
+
+
+def test_write_protection_requires_key(api, monkeypatch):
+    client, ids, _ = api
+    monkeypatch.setattr("app.main.WRITE_API_KEY", "write-secret")
+    payload = {"title": "写入保护测试", "deviceId": "AC-07"}
+
+    denied = client.post(
+        "/api/v1/work-orders",
+        json=payload,
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert denied.status_code == 403
+
+    allowed = client.post(
+        "/api/v1/work-orders",
+        json=payload,
+        headers={
+            **auth(ids, user="manager@example.com"),
+            "X-Write-Key": "write-secret",
+        },
+    )
+    assert allowed.status_code == 201
+
+
+def test_token_round_trip_and_expiry(monkeypatch):
+    monkeypatch.setenv("AUTH_SECRET", "test-secret-value-32-characters-long")
+    from app.auth import issue_token, verify_token
+
+    token = issue_token("demo-org", "demo@example.com")
+    payload = verify_token(token)
+    assert payload is not None
+    assert payload["org"] == "demo-org"
+    assert payload["user"] == "demo@example.com"
+
+    expired = issue_token("demo-org", "demo@example.com", ttl_seconds=-1)
+    assert verify_token(expired) is None
+
+    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    assert verify_token(tampered) is None
+
+
+def test_device_query_adapter_is_authoritative(api):
+    _, ids, session_factory = api
+    from app.services.device_query import get_device_facts, list_device_facts
+
+    with session_factory() as session:
+        facts = get_device_facts(
+            session, ids["organizations"]["demo-org"], "AC-07"
+        )
+        assert facts is not None
+        assert facts["model"] == "GX11"
+        parameters = {item["name"]: item for item in facts["parameters"]}
+        assert parameters["rated_power"]["source"] == "nameplate"
+        assert parameters["vibration"]["unit"] == "mm/s"
+        assert parameters["vibration"]["source"] == "sensor"
+
+        assert (
+            get_device_facts(
+                session, ids["organizations"]["northwind-org"], "AC-07"
+            )
+            is None
+        )
+        listed = list_device_facts(
+            session, ids["organizations"]["demo-org"]
+        )
+        assert "AC-07" in [device["id"] for device in listed]

@@ -8,6 +8,8 @@ info:
     - 列表接口统一分页，返回 `items/page/pageSize/total/totalPages`。
     - 资源对外标识使用业务编码（设备编号、告警号、工单号），与前端 `frontend/src/data.js` 字段对齐。
     - 错误统一为 `{"error": {"code", "message", "details", "requestId"}}`。
+    - 契约状态：诊断、审计与工单来源字段为本轮 v0.1 **待确认契约**，需与 C 联调确认后冻结。
+    - `/api/v1/chat` 仍是 mock，不代表已持久化；持久化诊断请使用 `/api/v1/diagnoses`。
 servers:
   - url: http://127.0.0.1:8000
     description: 本地开发
@@ -20,6 +22,8 @@ tags:
     description: 维护工单
   - name: diagnoses
     description: 诊断结果与人工确认
+  - name: audit
+    description: 审计事件查询
 security:
   - organizationId: []
     userId: []
@@ -561,6 +565,71 @@ paths:
                   requestId: f1a2b3c4
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/audit-events:
+    get:
+      tags: [audit]
+      operationId: listAuditEvents
+      summary: 审计事件查询
+      description: |
+        权限：manager 及以上。
+        按登录组织隔离，返回操作人、动作、实体、时间和结果。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: action
+          in: query
+          required: false
+          schema: { type: string, example: diagnosis.confirm }
+        - name: entityType
+          in: query
+          required: false
+          schema: { type: string, example: diagnosis }
+        - name: entityId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: actorId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: q
+          in: query
+          required: false
+          description: 按 action 或 entityType 搜索
+          schema: { type: string }
+      responses:
+        '200':
+          description: 审计事件分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+              example:
+                items:
+                  - id: 6f1c2a9e-0000-4000-8000-000000000001
+                    time: '2026-10-17T10:30:00+08:00'
+                    user: 张工
+                    action: diagnosis.confirm
+                    entityType: diagnosis
+                    entityId: 0b7c2a9e-0000-4000-8000-000000000001
+                    object: diagnosis:0b7c2a9e-0000-4000-8000-000000000001
+                    result: 成功
+                page: 1
+                pageSize: 20
+                total: 1
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     organizationId:
@@ -646,6 +715,9 @@ components:
         owner: { type: string, nullable: true, description: 负责人显示名, example: 张工 }
         status: { $ref: '#/components/schemas/WorkOrderStatus' }
         updated: { type: string, format: date-time, description: 更新时间 }
+        deviceId: { type: string, nullable: true, example: AC-07 }
+        alertId: { type: string, nullable: true, description: 来源告警编号 }
+        diagnosisId: { type: string, nullable: true, description: 来源诊断编号 }
     WorkOrderCreate:
       type: object
       required: [title, deviceId]
@@ -763,6 +835,34 @@ components:
       properties:
         diagnosis: { $ref: '#/components/schemas/Diagnosis' }
         workOrder: { $ref: '#/components/schemas/WorkOrder' }
+    AuditEvent:
+      type: object
+      required: [id, time, action, entityType, result]
+      properties:
+        id: { type: string, format: uuid }
+        time: { type: string, format: date-time }
+        user: { type: string, nullable: true, description: 操作人显示名 }
+        userId: { type: string, format: uuid, nullable: true }
+        action: { type: string, example: diagnosis.confirm }
+        entityType: { type: string, example: diagnosis }
+        entityId: { type: string, format: uuid, nullable: true }
+        object: { type: string, description: 实体展示，例如 diagnosis:<uuid> }
+        result: { type: string, example: 成功 }
+        before:
+          nullable: true
+          description: 变更前快照（JSON）
+        after:
+          nullable: true
+          description: 变更后快照（JSON）
+    AuditEventPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
     ErrorResponse:
       type: object
       required: [error]

@@ -72,6 +72,8 @@ $env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forg
 
 数据模型见 [docs/data-model/README.md](docs/data-model/README.md)，接口契约见 [docs/api-contracts/business-api.yaml](docs/api-contracts/business-api.yaml)。
 
+PostgreSQL 实测记录见 [docs/postgres-verification.md](docs/postgres-verification.md)，认证与写入保护见 [docs/security.md](docs/security.md)。
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |
@@ -89,6 +91,7 @@ $env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forg
 | POST | `/api/v1/diagnoses` | 已实现 | 保存诊断结果（draft） |
 | GET | `/api/v1/diagnoses/{diagnosis_id}` | 已实现 | 诊断详情 |
 | POST | `/api/v1/diagnoses/{diagnosis_id}/confirm` | 已实现 | 人工确认并生成工单 |
+| GET | `/api/v1/audit-events` | 已实现 | 审计事件查询（manager+） |
 
 ## 目标业务闭环
 

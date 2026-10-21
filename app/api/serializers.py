@@ -6,10 +6,12 @@ from app.api.labels import (
     ALERT_LEVEL_LABELS,
     ALERT_STATUS_LABELS,
     DEVICE_STATE_LABELS,
+    DIAGNOSIS_STATUS_LABELS,
+    RISK_LEVEL_LABELS,
     WORK_ORDER_PRIORITY_LABELS,
     WORK_ORDER_STATUS_LABELS,
 )
-from app.models import Alert, Device, Plant, User, WorkOrder
+from app.models import Alert, Device, Diagnosis, Plant, User, WorkOrder
 
 
 def iso(value: datetime | None) -> str | None:
@@ -63,6 +65,45 @@ def alert_to_dict(
         "status": ALERT_STATUS_LABELS.get(alert.status, alert.status),
         "description": alert.description,
         "acknowledgedAt": iso(alert.acknowledged_at),
+    }
+
+
+def diagnosis_to_dict(
+    diagnosis: Diagnosis,
+    device: Device | None,
+    alert: Alert | None,
+    confirmer: User | None,
+    work_order: WorkOrder | None,
+) -> dict:
+    return {
+        "id": diagnosis.code,
+        "deviceId": device.code if device else None,
+        "alertId": alert.code if alert else None,
+        "question": diagnosis.question,
+        "conclusion": diagnosis.conclusion,
+        "riskLevel": RISK_LEVEL_LABELS.get(
+            diagnosis.risk_level, diagnosis.risk_level
+        ),
+        "riskLevelCode": diagnosis.risk_level,
+        "confidence": (
+            float(diagnosis.confidence)
+            if diagnosis.confidence is not None
+            else None
+        ),
+        "modelSource": diagnosis.model_source,
+        "evidence": diagnosis.evidence,
+        "status": diagnosis.status,
+        "statusLabel": DIAGNOSIS_STATUS_LABELS.get(
+            diagnosis.status, diagnosis.status
+        ),
+        "confirmedBy": confirmer.display_name if confirmer else None,
+        "confirmedById": (
+            str(diagnosis.confirmed_by) if diagnosis.confirmed_by else None
+        ),
+        "confirmedAt": iso(diagnosis.confirmed_at),
+        "workOrderId": work_order.code if work_order else None,
+        "createdAt": iso(diagnosis.created_at),
+        "updatedAt": iso(diagnosis.updated_at),
     }
 
 

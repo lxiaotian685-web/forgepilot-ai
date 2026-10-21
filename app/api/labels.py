@@ -37,6 +37,18 @@ WORK_ORDER_STATUS_LABELS = {
     "cancelled": "已取消",
 }
 
+RISK_LEVEL_LABELS = {
+    "low": "低",
+    "medium": "中",
+    "high": "高",
+}
+
+DIAGNOSIS_STATUS_LABELS = {
+    "draft": "草稿",
+    "confirmed": "已确认",
+    "rejected": "已拒绝",
+}
+
 WORK_ORDER_TRANSITIONS = {
     "pending": {"processing", "cancelled"},
     "processing": {"verifying", "cancelled"},

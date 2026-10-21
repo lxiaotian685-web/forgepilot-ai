@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api import alerts, devices, work_orders
+from app.api import alerts, devices, diagnoses, work_orders
 from app.api.errors import ERROR_CODES
 from app.schemas.chat import ChatRequest, ChatResponse
 
@@ -88,3 +88,4 @@ def chat(request: ChatRequest):
 app.include_router(devices.router)
 app.include_router(alerts.router)
 app.include_router(work_orders.router)
+app.include_router(diagnoses.router)

@@ -19,6 +19,26 @@ class AlertAcknowledgeRequest(RequestModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class DiagnosisCreate(RequestModel):
+    device_id: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=2000)
+    conclusion: str = Field(min_length=1, max_length=5000)
+    risk_level: str = Field(default="low")
+    confidence: float | None = Field(default=None, ge=0, le=100)
+    model_source: str | None = Field(default=None, max_length=120)
+    evidence: dict | list | None = None
+    alert_id: str | None = None
+
+
+class DiagnosisConfirm(RequestModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = Field(default=None, max_length=2000)
+    priority: str | None = None
+    owner_id: UUID | None = None
+    due_at: datetime | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
 class WorkOrderCreate(RequestModel):
     title: str = Field(min_length=1, max_length=255)
     device_id: str = Field(min_length=1)

@@ -440,6 +440,7 @@ def seed_demo(db: Session) -> dict:
         conclusion="疑似驱动端深沟球轴承磨损，建议停机检查并更换轴承。",
         risk_level="high",
         confidence=94.6,
+        model_source="demo-model-v1",
         evidence={
             "documents": [
                 {
@@ -451,6 +452,8 @@ def seed_demo(db: Session) -> dict:
             ]
         },
         status="confirmed",
+        confirmed_by=tech.id,
+        confirmed_at=BASE - timedelta(minutes=40),
         created_by=tech.id,
         updated_by=tech.id,
     )
@@ -464,6 +467,7 @@ def seed_demo(db: Session) -> dict:
         conclusion="疑似机械密封磨损导致温升，建议检查密封与冷却水路。",
         risk_level="medium",
         confidence=88.0,
+        model_source="demo-model-v1",
         evidence={
             "documents": [
                 {

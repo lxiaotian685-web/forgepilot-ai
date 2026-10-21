@@ -91,16 +91,23 @@ def _get_diagnosis(
     return diagnosis
 
 
-def _load_related(db: Session, orders: list[WorkOrder]):
+def _load_related(db: Session, organization_id, orders: list[WorkOrder]):
     device_ids = {order.device_id for order in orders}
     owner_ids = {
         order.owner_user_id for order in orders if order.owner_user_id
+    }
+    alert_ids = {order.alert_id for order in orders if order.alert_id}
+    diagnosis_ids = {
+        order.diagnosis_id for order in orders if order.diagnosis_id
     }
     devices = (
         {
             device.id: device
             for device in db.scalars(
-                select(Device).where(Device.id.in_(device_ids))
+                select(Device).where(
+                    Device.id.in_(device_ids),
+                    Device.organization_id == organization_id,
+                )
             ).all()
         }
         if device_ids
@@ -116,7 +123,33 @@ def _load_related(db: Session, orders: list[WorkOrder]):
         if owner_ids
         else {}
     )
-    return devices, owners
+    alerts = (
+        {
+            alert.id: alert
+            for alert in db.scalars(
+                select(Alert).where(
+                    Alert.id.in_(alert_ids),
+                    Alert.organization_id == organization_id,
+                )
+            ).all()
+        }
+        if alert_ids
+        else {}
+    )
+    diagnoses = (
+        {
+            diagnosis.id: diagnosis
+            for diagnosis in db.scalars(
+                select(Diagnosis).where(
+                    Diagnosis.id.in_(diagnosis_ids),
+                    Diagnosis.organization_id == organization_id,
+                )
+            ).all()
+        }
+        if diagnosis_ids
+        else {}
+    )
+    return devices, owners, alerts, diagnoses
 
 
 @router.get("")
@@ -169,12 +202,18 @@ def list_work_orders(
     orders = db.scalars(
         stmt.offset((page - 1) * page_size).limit(page_size)
     ).all()
-    devices, owners = _load_related(db, orders)
+    devices, owners, alerts, diagnoses = _load_related(
+        db, context.organization_id, orders
+    )
     items = [
         work_order_to_dict(
             order,
             devices.get(order.device_id),
             owners.get(order.owner_user_id) if order.owner_user_id else None,
+            alerts.get(order.alert_id) if order.alert_id else None,
+            diagnoses.get(order.diagnosis_id)
+            if order.diagnosis_id
+            else None,
         )
         for order in orders
     ]
@@ -284,7 +323,7 @@ def create_work_order(
     )
     db.commit()
     db.refresh(order)
-    return work_order_to_dict(order, device, owner)
+    return work_order_to_dict(order, device, owner, alert, diagnosis)
 
 
 @router.patch("/{work_order_id}")
@@ -385,4 +424,8 @@ def update_work_order(
 
     device = db.get(Device, order.device_id)
     owner = db.get(User, order.owner_user_id) if order.owner_user_id else None
-    return work_order_to_dict(order, device, owner)
+    alert = db.get(Alert, order.alert_id) if order.alert_id else None
+    diagnosis = (
+        db.get(Diagnosis, order.diagnosis_id) if order.diagnosis_id else None
+    )
+    return work_order_to_dict(order, device, owner, alert, diagnosis)

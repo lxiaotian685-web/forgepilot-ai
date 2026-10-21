@@ -11,7 +11,7 @@ from app.api.labels import (
     WORK_ORDER_PRIORITY_LABELS,
     WORK_ORDER_STATUS_LABELS,
 )
-from app.models import Alert, Device, Diagnosis, Plant, User, WorkOrder
+from app.models import Alert, AuditLog, Device, Diagnosis, Plant, User, WorkOrder
 
 
 def iso(value: datetime | None) -> str | None:
@@ -108,7 +108,11 @@ def diagnosis_to_dict(
 
 
 def work_order_to_dict(
-    order: WorkOrder, device: Device | None, owner: User | None
+    order: WorkOrder,
+    device: Device | None,
+    owner: User | None,
+    alert: Alert | None = None,
+    diagnosis: Diagnosis | None = None,
 ) -> dict:
     return {
         "id": order.code,
@@ -121,9 +125,32 @@ def work_order_to_dict(
         "status": WORK_ORDER_STATUS_LABELS.get(order.status, order.status),
         "updated": iso(order.updated_at),
         "deviceId": device.code if device else None,
+        "alertId": alert.code if alert else None,
+        "diagnosisId": diagnosis.code if diagnosis else None,
         "createdAt": iso(order.created_at),
         "description": order.description,
         "dueAt": iso(order.due_at),
+    }
+
+
+def audit_event_to_dict(entry: AuditLog, actor: User | None) -> dict:
+    entity_id = str(entry.entity_id) if entry.entity_id else None
+    return {
+        "id": str(entry.id),
+        "time": iso(entry.created_at),
+        "user": actor.display_name if actor else "系统",
+        "userId": str(entry.actor_user_id) if entry.actor_user_id else None,
+        "action": entry.action,
+        "entityType": entry.entity_type,
+        "entityId": entity_id,
+        "object": (
+            f"{entry.entity_type}:{entity_id}"
+            if entity_id
+            else entry.entity_type
+        ),
+        "result": "成功",
+        "before": entry.before,
+        "after": entry.after,
     }
 
 

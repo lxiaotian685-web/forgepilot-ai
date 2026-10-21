@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import uuid
 
@@ -370,7 +370,7 @@ def confirm_diagnosis(
             "diagnosis": diagnosis_to_dict(
                 diagnosis, device, alert, confirmer, existing_order
             ),
-            "workOrder": work_order_to_dict(existing_order, device, owner),
+            "workOrder": work_order_to_dict(existing_order, device, owner, alert, diagnosis),
         }
 
     owner = (
@@ -465,5 +465,5 @@ def confirm_diagnosis(
         "diagnosis": diagnosis_to_dict(
             diagnosis, device, alert, confirmer, existing_order
         ),
-        "workOrder": work_order_to_dict(existing_order, device, owner),
+        "workOrder": work_order_to_dict(existing_order, device, owner, alert, diagnosis),
     }

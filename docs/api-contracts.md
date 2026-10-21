@@ -1,7 +1,8 @@
-﻿# 诊断与确认建单 API 契约（v1.1，已对齐 B 实现）
+﻿# 诊断与确认建单 API 契约（v1.2，已对齐 B 实现）
 
 > 状态：C 侧契约，已对齐 B 的 `docs/api-contracts/business-api.yaml`（PR #16 实际实现）。
 > 关联：Issue #12（C 有据诊断）、Issue #11（B 诊断持久化）、Issue #4（端到端闭环）。
+> v1.2：C 侧新增设备事实提供方与 `device_*` 降级状态。
 
 ## 1. 角色与边界
 
@@ -11,7 +12,9 @@
 | B | 设备事实、权限、诊断落库、确认建单、审计 | 写路径唯一入口 |
 | A | 交互、页面反馈 | 不提交 `equipment_model` |
 
-- 权威型号来自 B 的设备查询，C 不再复制维护一套型号表。
+- 权威设备事实和型号来自 B 的设备查询；C 不再用静态表维护设备事实。
+- `static` 提供方只用于离线演示与测试，生产必须配置 `DEVICE_PROVIDER=http`。
+- 设备型号到知识库文档域的映射是 C 的临时兼容字段，待 B 返回 `knowledgeModel` 后移除。
 - 模型（C）不能直接建单，必须走 B 的确认接口。
 - 组织与用户来自认证上下文，前端不在请求体传 `organization_id`。
 
@@ -27,17 +30,63 @@
 
 ### 3.1 诊断 `POST /api/v1/chat`
 
-请求 `{device_id, question}`；响应 `{device_id, answer, statements, sources, is_mock, status}`。
+请求 `{device_id, question, equipment_model?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, status}`。
 
-`status`：`ok` / `no_answer` / `model_unavailable` / `device_not_found` / `no_knowledge` / `model_mismatch`。
+`status`：
+
+- `ok`：模型返回了可核实引用的结构化诊断；
+- `no_answer`：检索无证据，或事实引用全部无法核实；
+- `model_unavailable`：模型未配置、超时、限流或返回格式异常，降级返回检索证据；
+- `device_not_found`：B 返回 404 或设备不存在；
+- `device_unauthorized`：B 返回 401/403，不泄漏跨组织设备存在性；
+- `device_unavailable`：B 超时、5xx 或响应无法解析；
+- `no_knowledge`：设备存在但无可用的知识库文档域；
+- `model_mismatch`：传入的 `equipment_model` 与设备事实不一致。
+
+只有 `ok` 表示成功；其他状态不得作为诊断成功展示。
 
 ### 3.2 检索与文档
 
 - `POST /api/v1/search`、`POST /api/v1/documents/ingest`、`GET /api/v1/documents`。
 
+### 3.3 设备事实接入（C 已实现）
+
+C 在检索前调用 B 的 `GET /api/v1/devices/{device_id}`，字段映射：
+
+| C 内部字段 | B 响应字段 | 说明 |
+|---|---|---|
+| `device_id` | `id` | 设备编号 |
+| `name` | `name` | 设备名称 |
+| `type` | `type` | 设备类别 |
+| `model` | `model` | 设备型号 |
+| `location` | `location` | 位置 |
+| `status` | `state` | B 使用 `state`，C 统一为 `status` |
+| `organization_id` | 认证上下文 | 不在响应体 |
+
+知识域解析顺序：
+
+1. B 响应中的 `knowledgeModel`（若提供）；
+2. `DEVICE_KNOWLEDGE_MODELS` 环境变量；
+3. 默认映射 `GX11→compressor-002`、`P-102X→pump-004`、`GMC-4000→cnc-003`；
+4. 仍无法解析时返回 `no_knowledge`，不得猜测文档。
+
+环境变量：
+
+```text
+DEVICE_PROVIDER=static|http
+DEVICE_API_BASE_URL
+DEVICE_API_TOKEN
+DEVICE_ORG_ID
+DEVICE_USER_ID
+DEVICE_API_TIMEOUT=5
+DEVICE_KNOWLEDGE_MODELS={"GX11":"compressor-002"}
+```
+
+鉴权与组织隔离沿用 B：演示模式使用 `X-Organization-Id` / `X-User-Id`，生产模式使用 `Authorization: Bearer <token>`；跨组织一律返回 404，C 转换为 `device_not_found`。
+
 ## 4. C 侧证据引用扩展（已实现）
 
-> 稳定引用 ID 与 `source_ids` 已落地；`conflicts` / `verification_suggestions` 已定义字段（默认空数组），真实模型产出接入后填充。
+> 稳定引用 ID、`source_ids`、`conflicts` 与 `verification_suggestions` 已落地；真实模型输出经 Pydantic 校验，非法引用不会伪装成成功。
 
 ### 4.1 稳定引用 ID（含分块维度）
 
@@ -140,6 +189,6 @@ C 的 `/api/v1/chat` 返回结果后，由 B 保存；字段映射：
 
 ## 9. 端到端联调用例（AC-07 空压机）
 
-**正常链路**：设备告警 → `/api/v1/chat` 提问 → 带证据结论 → `/api/v1/diagnoses` 保存 → `/confirm` 人工确认建单 → `/api/v1/audit-events` 可查 → 刷新仍正确、重复确认不重复建单。
+**正常链路**：B 设备查询 `AC-07` → `/api/v1/chat` 提问 → 检索 `compressor-002` → 结构化结论与稳定引用 → `/api/v1/diagnoses` 保存 → `/confirm` 人工确认建单 → `/api/v1/audit-events` 可查 → 刷新仍正确、重复确认不重复建单。
 
-**失败链路**：无文档、型号不匹配、模型不可用、未授权访问，均有明确反馈，不伪造成功、不越权写入。
+**失败链路**：设备不存在、跨组织越权、设备服务超时、无文档、型号不匹配、模型不可用、非法引用，均返回明确 `status`，不伪造成功、不越权写入。

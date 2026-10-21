@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.core.device_provider import DeviceProviderError
 from app.deps import rag
 from app.llm.base import BaseLLM, LLMResult
 from app.llm.mock import UnavailableLLM
@@ -9,6 +10,14 @@ from app.schemas.chat import Statement
 client = TestClient(app)
 
 AIR_COMPRESSOR_CONTENT = "概述\n\n---PAGE---\n\n排气温度过高排查：冷却器、油位。"
+
+
+class UnavailableDeviceProvider:
+    def get_device(self, device_id):
+        raise DeviceProviderError("device_unavailable", "设备服务不可用")
+
+    def close(self):
+        pass
 
 
 class ErrorCitationLLM(BaseLLM):
@@ -150,6 +159,21 @@ def test_chat_model_unavailable_returns_evidence():
     assert body["sources"]
     assert any(s["type"] == "fact" for s in body["statements"])
     assert any(s["type"] == "pending" for s in body["statements"])
+
+
+def test_chat_device_unavailable_returns_status():
+    _ingest_air_compressor()
+    rag.device_provider = UnavailableDeviceProvider()
+    response = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "device_unavailable"
+    assert body["sources"] == []
+    assert body["statements"] == []
 
 
 def test_chat_rejects_missing_question():

@@ -12,21 +12,22 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 已实现：
 
-- FastAPI应用骨架；
-- 健康检查接口；
-- 设备问答请求与响应数据模型；
-- 说明书RAG知识库：文档入库、BM25检索、带页码证据引用；
-- 诊断接口：区分事实/推断/待确认，处理无答案与模型不可用；
-- 设备编号到型号的映射（AC-07、P-102、CNC-04）；
+- FastAPI应用骨架与健康检查接口；
+- 说明书RAG知识库：文档入库、BM25检索、带页码/分块证据引用；
+- 真实模型适配器：OpenAI兼容接口、JSON结构化输出、Pydantic校验；
+- 诊断接口：区分事实/推断/待确认，过滤非法引用，处理无答案与模型不可用；
+- 设备事实提供方抽象：`static`离线演示与`http`调用B包设备接口；
+- 设备不存在、无知识、型号不匹配、设备服务不可用等降级状态；
+- 提示注入防护、客户端复用、连续调用与降级测试；
 - 3 份虚构演示手册与 20 条评测集；
-- API自动化测试。
+- 58 项自动化测试。
 
 尚未实现：
 
 - Web前端；
-- PostgreSQL设备数据库；
-- 真实大模型与Agent工具调用；
-- 工单、备件、权限、审计和生产部署。
+- PostgreSQL设备数据库（本仓库C侧不落库）；
+- Agent工具调用与工单闭环；
+- 备件、权限、审计和生产部署。
 
 完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -72,6 +73,24 @@ $env:LLM_MODEL    = "模型名"
 
 密钥只放后端环境变量，不提交到仓库。真实调用成功才 `is_mock=false`；未配置或调用失败时降级为返回检索证据（`status=model_unavailable`），不伪造结论。
 
+### 设备事实配置（可选）
+
+默认 `DEVICE_PROVIDER=static`，使用内置演示设备，仅用于离线运行和测试。接入B包真实设备接口时：
+
+```powershell
+$env:DEVICE_PROVIDER = "http"
+$env:DEVICE_API_BASE_URL = "http://127.0.0.1:8001"
+$env:DEVICE_API_TOKEN = "你的token"   # 或使用演示头
+$env:DEVICE_ORG_ID = "demo-org"
+$env:DEVICE_USER_ID = "technician@example.com"
+$env:DEVICE_API_TIMEOUT = "5"
+```
+
+- 调用 `GET /api/v1/devices/{device_id}`，使用 `state` 作为设备状态、`model` 作为型号。
+- 设备不存在返回 `device_not_found`，跨组织或越权返回 `device_unauthorized`，超时/5xx返回 `device_unavailable`。
+- 设备型号到知识库文档域的默认映射为 `GX11→compressor-002`、`P-102X→pump-004`、`GMC-4000→cnc-003`，可用 `DEVICE_KNOWLEDGE_MODELS` JSON 覆盖。
+- 生产环境必须使用 `http`；`static` 不得作为真实设备事实来源。
+
 ## 当前接口
 
 | 方法 | 路径 | 状态 | 用途 |
@@ -81,6 +100,22 @@ $env:LLM_MODEL    = "模型名"
 | POST | `/api/v1/search` | 已实现 | 检索文档，返回带页码的证据 |
 | POST | `/api/v1/documents/ingest` | 已实现 | 文档入库 |
 | GET | `/api/v1/documents` | 已实现 | 列出已入库文档 |
+
+### 诊断状态
+
+`status` 取值：`ok`、`no_answer`、`model_unavailable`、`device_not_found`、
+`device_unauthorized`、`device_unavailable`、`no_knowledge`、`model_mismatch`。
+
+只有 `ok` 表示模型返回了可核实的结构化诊断；其余状态均不得当作成功结果展示。
+
+## 已知限制
+
+- 本仓库只包含C侧检索诊断服务，不包含前端、数据库写入和工单流程。
+- 默认BM25检索，尚未接入向量检索；适用于小型演示知识库。
+- `static`设备提供方只用于离线演示，生产必须配置`http`。
+- 真实模型需要兼容OpenAI的`/chat/completions`与JSON模式；不支持时返回`model_unavailable`。
+- 设备型号到知识库文档域仍需受控映射，待B包直接返回`knowledgeModel`后可移除。
+- 回退方式：将`LLM_PROVIDER`和`DEVICE_PROVIDER`恢复为`mock`/`static`即可回到无外部依赖的演示模式。
 
 ## 目标业务闭环
 

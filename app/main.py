@@ -12,6 +12,7 @@ async def lifespan(app: FastAPI):
     ensure_demo_documents(kb)
     yield
     rag.llm.close()
+    rag.device_provider.close()
 
 
 app = FastAPI(

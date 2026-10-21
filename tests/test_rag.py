@@ -1,3 +1,6 @@
+import httpx
+
+from app.core.device_provider import HttpDeviceProvider
 from app.core.store import KnowledgeBase
 from app.llm.base import LLMError
 from app.llm.mock import MockLLM
@@ -86,3 +89,119 @@ def test_mock_llm_marks_is_mock_true():
     assert resp.status == "ok"
     assert resp.is_mock is True
     assert any(s.type == "fact" and s.source_ids for s in resp.statements)
+
+
+def _http_provider(handler) -> HttpDeviceProvider:
+    return HttpDeviceProvider(
+        base_url="http://business-api",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+
+def _air_compressor_payload(**overrides) -> dict:
+    data = {
+        "id": "AC-07",
+        "name": "螺杆空气压缩机",
+        "type": "动力与流体机械",
+        "model": "GX11",
+        "location": "压缩站 Bay03",
+        "state": "attention",
+    }
+    data.update(overrides)
+    return data
+
+
+def _kb_with_two_models() -> KnowledgeBase:
+    kb = KnowledgeBase()
+    kb.ingest(
+        title="空压机维修规范",
+        equipment_model="compressor-002",
+        content="概述\n\n---PAGE---\n\n排气温度过高：检查冷却器与油位。",
+    )
+    kb.ingest(
+        title="离心泵维护手册",
+        equipment_model="pump-004",
+        content="概述\n\n---PAGE---\n\n机械密封泄漏：检查冲洗管线。",
+    )
+    return kb
+
+
+def test_end_to_end_device_http_rag_and_grounded_output():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload())
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "ok"
+    assert resp.sources
+    assert {evidence.title for evidence in resp.sources} == {"空压机维修规范"}
+    source_ids = {evidence.id for evidence in resp.sources}
+    facts = [statement for statement in resp.statements if statement.type == "fact"]
+    assert facts
+    assert all(statement.source_ids for statement in facts)
+    assert all(set(statement.source_ids) <= source_ids for statement in facts)
+
+
+def test_http_device_outside_static_catalog_is_supported():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload(id="AC-99"))
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose("AC-99", "排气温度过高怎么排查？")
+
+    assert resp.status == "ok"
+    assert resp.sources
+
+
+def test_device_provider_timeout_degrades_without_evidence():
+    def handler(request):
+        raise httpx.TimeoutException("timeout")
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "device_unavailable"
+    assert resp.sources == []
+    assert resp.statements == []
+
+
+def test_http_device_unknown_model_returns_no_knowledge():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload(model="UNKNOWN"))
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "no_knowledge"
+    assert resp.sources == []
+
+
+def test_http_device_rejects_mismatched_equipment_model():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload())
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose(
+        "AC-07", "排气温度过高怎么排查？", equipment_model="pump-004"
+    )
+
+    assert resp.status == "model_mismatch"
+    assert resp.sources == []
+
+
+def test_http_device_accepts_device_model_alias():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload())
+
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _http_provider(handler))
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？", equipment_model="GX11")
+
+    assert resp.status == "ok"
+    assert resp.sources

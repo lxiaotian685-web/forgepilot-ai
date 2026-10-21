@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from app.core.devices import resolve_equipment_model
+from app.core.device_provider import (
+    DeviceProvider,
+    DeviceProviderError,
+    StaticDeviceProvider,
+)
 from app.core.store import KnowledgeBase
 from app.llm.base import BaseLLM, LLMError
 from app.schemas.chat import ChatResponse, Statement, VerificationSuggestion
@@ -8,9 +12,16 @@ from app.schemas.document import Evidence
 
 
 class RAGService:
-    def __init__(self, kb: KnowledgeBase, llm: BaseLLM, top_k: int = 3):
+    def __init__(
+        self,
+        kb: KnowledgeBase,
+        llm: BaseLLM,
+        device_provider: DeviceProvider | None = None,
+        top_k: int = 3,
+    ):
         self.kb = kb
         self.llm = llm
+        self.device_provider = device_provider or StaticDeviceProvider()
         self.top_k = top_k
 
     def diagnose(
@@ -19,24 +30,33 @@ class RAGService:
         question: str,
         equipment_model: str | None = None,
     ) -> ChatResponse:
-        model, status = resolve_equipment_model(device_id, equipment_model)
-        if model is None:
-            if status == "device_not_found":
-                answer = f"未找到设备 {device_id} 对应的设备型号，无法检索知识库。"
-            elif status == "no_knowledge":
-                answer = f"设备 {device_id} 暂无适用的知识库文档。"
-            else:
-                answer = f"设备 {device_id} 的型号与传入的型号不一致，已拒绝检索。"
-            return ChatResponse(
-                device_id=device_id,
-                answer=answer,
-                statements=[],
-                sources=[],
-                is_mock=self.llm.is_mock,
-                status=status,
+        try:
+            device = self.device_provider.get_device(device_id)
+        except DeviceProviderError as exc:
+            return self._unavailable(device_id, exc.status, exc.message)
+
+        if device.knowledge_model is None:
+            return self._unavailable(
+                device_id,
+                "no_knowledge",
+                f"设备 {device_id} 暂无适用的知识库文档。",
             )
 
-        evidences = self.kb.search(question, equipment_model=model, top_k=self.top_k)
+        if equipment_model is not None and equipment_model not in {
+            device.knowledge_model,
+            device.model,
+        }:
+            return self._unavailable(
+                device_id,
+                "model_mismatch",
+                f"设备 {device_id} 的型号与传入的型号不一致，已拒绝检索。",
+            )
+
+        evidences = self.kb.search(
+            question,
+            equipment_model=device.knowledge_model,
+            top_k=self.top_k,
+        )
 
         if not evidences:
             return ChatResponse(
@@ -81,6 +101,18 @@ class RAGService:
             verification_suggestions=result.verification_suggestions,
             is_mock=self.llm.is_mock,
             status="ok",
+        )
+
+    def _unavailable(
+        self, device_id: str, status: str, answer: str
+    ) -> ChatResponse:
+        return ChatResponse(
+            device_id=device_id,
+            answer=answer,
+            statements=[],
+            sources=[],
+            is_mock=self.llm.is_mock,
+            status=status,
         )
 
     def _degraded(self, device_id: str, evidences: list[Evidence]) -> ChatResponse:

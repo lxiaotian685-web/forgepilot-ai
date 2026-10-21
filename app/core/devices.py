@@ -1,9 +1,30 @@
 from __future__ import annotations
 
 DEVICE_CATALOG: dict[str, dict[str, str]] = {
-    "AC-07": {"model": "GX11", "category": "screw_air_compressor"},
-    "P-102": {"model": "P-102X", "category": "centrifugal_pump"},
-    "CNC-04": {"model": "CNC-04", "category": "cnc_machine"},
+    "AC-07": {
+        "name": "螺杆空气压缩机",
+        "model": "GX11",
+        "category": "screw_air_compressor",
+        "type": "动力与流体机械",
+        "location": "压缩站 Bay03",
+        "status": "attention",
+    },
+    "P-102": {
+        "name": "高压离心注水泵",
+        "model": "P-102X",
+        "category": "centrifugal_pump",
+        "type": "流体动力系统",
+        "location": "冷却循环水站",
+        "status": "attention",
+    },
+    "CNC-04": {
+        "name": "数控龙门铣床",
+        "model": "GMC-4000",
+        "category": "cnc_machine",
+        "type": "精密加工单元",
+        "location": "重载加工岛 #3",
+        "status": "alert",
+    },
 }
 
 DOC_CATEGORY: dict[str, str] = {

@@ -63,7 +63,7 @@ $env:TEST_DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot
 输出：
 
 ```text
-38 passed, 1 warning in 13.02s
+39 passed, 1 warning in 13.48s
 ```
 
 覆盖：正常确认建单、跨设备拒绝、跨组织拒绝、重复确认幂等、事务失败回滚、刷新后查询、审计查询、鉴权与写入保护。

@@ -259,7 +259,7 @@ def test_create_work_order_rejects_diagnosis_from_other_device(api):
     assert error["details"]["deviceId"] == "AC-07"
 
 
-def test_create_work_order_links_matching_alert_and_diagnosis(api):
+def test_create_work_order_rejects_duplicate_diagnosis_work_order(api):
     client, ids, _ = api
     response = client.post(
         "/api/v1/work-orders",
@@ -271,8 +271,10 @@ def test_create_work_order_links_matching_alert_and_diagnosis(api):
         },
         headers=auth(ids, user="manager@example.com"),
     )
-    assert response.status_code == 201
-    assert response.json()["deviceId"] == "AC-07"
+    assert response.status_code == 409
+    error = response.json()["error"]
+    assert error["code"] == "CONFLICT"
+    assert error["details"]["workOrderId"] == "WO-20250518-01"
 
 
 def test_work_order_patch_transitions(api):

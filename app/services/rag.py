@@ -53,10 +53,28 @@ class RAGService:
         except LLMError:
             return self._degraded(device_id, evidences)
 
-        statements = self._validate_sources(result.statements, evidences)
+        statements, ungrounded = self._validate_sources(result.statements, evidences)
+
+        if ungrounded:
+            return ChatResponse(
+                device_id=device_id,
+                answer=(
+                    "模型给出的引用无法在本次检索结果中核实，不能作为有依据的诊断。"
+                    "以下内容仅为待人工核验的线索。"
+                ),
+                summary="模型引用无法核实，仅为待人工核验线索。",
+                statements=statements,
+                sources=evidences,
+                conflicts=result.conflicts,
+                verification_suggestions=result.verification_suggestions,
+                is_mock=self.llm.is_mock,
+                status="no_answer",
+            )
+
         return ChatResponse(
             device_id=device_id,
             answer=result.answer,
+            summary=result.summary or result.answer,
             statements=statements,
             sources=evidences,
             conflicts=result.conflicts,
@@ -84,6 +102,7 @@ class RAGService:
         return ChatResponse(
             device_id=device_id,
             answer="\n".join(lines),
+            summary="模型服务不可用，以下为检索到的文档证据。",
             statements=statements,
             sources=evidences,
             verification_suggestions=[
@@ -99,16 +118,23 @@ class RAGService:
     @staticmethod
     def _validate_sources(
         statements: list[Statement], evidences: list[Evidence]
-    ) -> list[Statement]:
+    ) -> tuple[list[Statement], bool]:
         valid = {ev.id for ev in evidences}
+        had_fact = False
+        grounded_fact = False
         for statement in statements:
-            if statement.source_ids:
-                statement.source_ids = [
-                    sid for sid in statement.source_ids if sid in valid
-                ]
-                if not statement.source_ids and statement.type == "fact":
+            statement.source_ids = list(dict.fromkeys(statement.source_ids))
+            if statement.type == "fact":
+                had_fact = True
+            statement.source_ids = [
+                sid for sid in statement.source_ids if sid in valid
+            ]
+            if statement.type == "fact":
+                if statement.source_ids:
+                    grounded_fact = True
+                else:
                     statement.type = "pending"
-        return statements
+        return statements, had_fact and not grounded_fact
 
     @staticmethod
     def _ref(ev: Evidence) -> str:

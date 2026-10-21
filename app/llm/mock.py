@@ -47,6 +47,7 @@ class MockLLM(BaseLLM):
         return LLMResult(
             answer="\n".join(lines),
             statements=statements,
+            summary="根据检索到的文档，建议结合现场确认后按文档步骤排查。",
             verification_suggestions=suggestions,
         )
 

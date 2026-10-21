@@ -62,7 +62,7 @@ def test_invalid_citation_is_demoted():
 
     resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
 
-    assert resp.status == "ok"
+    assert resp.status == "no_answer"
     assert resp.statements[0].type == "pending"
     assert resp.statements[0].source_ids == []
 

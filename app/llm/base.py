@@ -15,6 +15,7 @@ class LLMError(Exception):
 class LLMResult:
     answer: str
     statements: list[Statement]
+    summary: str = ""
     conflicts: list[Conflict] = field(default_factory=list)
     verification_suggestions: list[VerificationSuggestion] = field(default_factory=list)
 
@@ -25,3 +26,6 @@ class BaseLLM(ABC):
     @abstractmethod
     def answer(self, query: str, evidences: list[Evidence]) -> LLMResult:
         raise NotImplementedError
+
+    def close(self) -> None:
+        pass

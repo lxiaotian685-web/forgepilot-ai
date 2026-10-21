@@ -4,13 +4,14 @@ from fastapi import FastAPI
 
 from app.api.rag import router as rag_router
 from app.core.demo import ensure_demo_documents
-from app.deps import kb
+from app.deps import kb, rag
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_demo_documents(kb)
     yield
+    rag.llm.close()
 
 
 app = FastAPI(

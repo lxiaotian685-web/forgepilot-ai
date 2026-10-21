@@ -84,6 +84,7 @@ def test_chat_returns_answer_with_sources():
     body = response.json()
     assert body["status"] == "ok"
     assert body["is_mock"] is True
+    assert body["summary"]
     assert body["sources"]
     assert body["sources"][0]["title"] == "空压机维修规范"
     types = {s["type"] for s in body["statements"]}
@@ -189,11 +190,18 @@ def test_chat_filters_invalid_source_ids():
 
     assert response.status_code == 200
     body = response.json()
-    assert body["status"] == "ok"
+    assert body["status"] == "no_answer"
     assert body["is_mock"] is False
     fact = body["statements"][0]
     assert fact["source_ids"] == []
     assert fact["type"] == "pending"
+
+
+def test_statement_list_defaults_not_shared():
+    a = Statement(type="fact", text="a")
+    b = Statement(type="fact", text="b")
+    a.source_ids.append("x")
+    assert b.source_ids == []
 
 
 def test_prompt_injection_treated_as_data():

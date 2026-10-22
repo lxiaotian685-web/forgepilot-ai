@@ -49,6 +49,7 @@ export default function DiagnosisPage({ devices }) {
   const origin = !result ? "尚未生成结果" : result.transport === "local-demo"
     ? "本地固定样例 · 未调用模型" : result.is_mock ? "服务端模拟或降级结果 · 非真实模型诊断" : "服务端标记为真实模型 · 仍需人工核验";
   const pending = result?.statements.filter((item) => item.type === "pending") || [];
+  const suggestions = result?.verification_suggestions || [];
   const selectedDevice = devices.find((item) => item.id === deviceId);
   const contextLabels = {
     sampledAt: "已记录采样时间",
@@ -57,7 +58,11 @@ export default function DiagnosisPage({ devices }) {
   };
   const preparedCount = Object.values(contextChecks).filter(Boolean).length;
   const resultSummary = summarizeDiagnosis(result);
-  const verifiedCount = pending.filter((_, index) => verifiedItems[index]).length;
+  const verificationItems = [
+    ...pending.map((item) => item.text),
+    ...suggestions.map((item) => `${item.missing_evidence}：${item.to_verify}`),
+  ];
+  const verifiedCount = verificationItems.filter((_, index) => verifiedItems[index]).length;
 
   return <>
     <header className="page-header"><div><h1>诊断工作台</h1><p>先核对证据，再形成判断。诊断建议不能替代现场专业确认。</p></div></header>
@@ -106,15 +111,22 @@ export default function DiagnosisPage({ devices }) {
             <p>{resultSummary.pending > 0 ? "当前状态：证据待补齐" : "当前状态：仍需人工复核"}</p>
           </section>
           <p className="diagnostic-answer">{result.answer}</p>
+          {result.conflicts.length > 0 && <section className="diagnostic-conflicts" aria-label="事实冲突">
+            <h3>检测到事实冲突</h3>
+            {result.conflicts.map((conflict, index) => <article key={`${conflict.field}-${index}`}>
+              <strong>{conflict.field}</strong>
+              <ul>{conflict.sources.map((item, sourceIndex) => <li key={`${item.origin}-${sourceIndex}`}><span>{item.origin}</span>：{item.value}{item.ref ? `（${item.ref}）` : ""}</li>)}</ul>
+            </article>)}
+          </section>}
           <div className="statement-list">{result.statements.map((item, index) => <article key={index} className={`statement statement-${item.type}`}>
             <span className="statement-index">{String(index + 1).padStart(2, "0")}</span>
             <div><strong>{types[item.type]}</strong><p>{item.text}</p>
-              {item.sourceKey ? <Button appearance="subtle" onClick={() => setActiveSource(item.sourceKey)}>查看依据：{item.source}</Button>
+              {item.sourceKey ? <Button appearance="subtle" onClick={() => setActiveSource(item.sourceKey)}>查看依据{item.sourceKeys.length > 1 ? `（${item.sourceKeys.length} 条，先打开第 1 条）` : item.source ? `：${item.source}` : ""}</Button>
                 : <small>{item.source ? `引用未唯一匹配：${item.source}` : "未提供直接引用，需人工核对"}</small>}
             </div>
           </article>)}</div>
-          <section className="verification-next"><div className="verification-heading"><h3>证据补采清单</h3>{pending.length > 0 && <strong>{verifiedCount}/{pending.length} 已现场核对</strong>}</div>{pending.length
-            ? <div className="verification-list">{pending.map((item, index) => <label key={index} className={verifiedItems[index] ? "checked" : ""}><input type="checkbox" checked={Boolean(verifiedItems[index])} onChange={(event) => setVerifiedItems((current) => ({ ...current, [index]: event.target.checked }))} /><span>{item.text}</span></label>)}</div>
+          <section className="verification-next"><div className="verification-heading"><h3>证据补采清单</h3>{verificationItems.length > 0 && <strong>{verifiedCount}/{verificationItems.length} 已现场核对</strong>}</div>{verificationItems.length
+            ? <div className="verification-list">{verificationItems.map((item, index) => <label key={index} className={verifiedItems[index] ? "checked" : ""}><input type="checkbox" checked={Boolean(verifiedItems[index])} onChange={(event) => setVerifiedItems((current) => ({ ...current, [index]: event.target.checked }))} /><span>{item}</span></label>)}</div>
             : <p>服务端未提供待验证项，不能据此认为已经验证充分。请补充现场记录并由维护人员复核。</p>}
             <small>勾选记录不会保存，也不会生成任务。尚未建立校准模型，不展示诊断置信度或预测概率。</small>
           </section>
@@ -124,8 +136,8 @@ export default function DiagnosisPage({ devices }) {
       <aside className="panel grounded-sources" aria-label="证据阅读器">
         <div className="panel-title"><div><BookOpen24Regular /><h2>证据阅读器</h2></div><span>{result?.sources.length || 0} 条</span></div>
         {!result?.sources.length && <p className="grounded-empty">暂无可核对的原文片段。</p>}
-        <div className="source-picker">{result?.sources.map((item, index) => <button key={item.key} type="button" aria-pressed={item.key === activeSource} onClick={() => setActiveSource(item.key)}><span>证据 {index + 1}</span><strong>{item.title}</strong><small>第 {item.page} 页</small></button>)}</div>
-        {source && <section className="source-reading" aria-live="polite"><h3>{source.title}</h3><dl><dt>文档编号</dt><dd>{source.document_id}</dd><dt>位置</dt><dd>第 {source.page} 页</dd><dt>文档版本</dt><dd>当前接口未提供</dd></dl><blockquote>{source.snippet}</blockquote><p>这是服务端返回的片段，不是全文。检索分数不是故障概率；该片段是否支持结论仍需人工判断。</p></section>}
+        <div className="source-picker">{result?.sources.map((item, index) => <button key={item.key} type="button" aria-pressed={item.key === activeSource} onClick={() => setActiveSource(item.key)}><span>证据 {index + 1}</span><strong>{item.title}</strong><small>{item.page === null ? "页码未知" : `第 ${item.page} 页`} · 分块 {item.chunk_index}</small></button>)}</div>
+        {source && <section className="source-reading" aria-live="polite"><h3>{source.title}</h3><dl><dt>引用编号</dt><dd>{source.id}</dd><dt>文档编号</dt><dd>{source.document_id}</dd><dt>位置</dt><dd>{source.page === null ? "页码未知" : `第 ${source.page} 页`} · 分块 {source.chunk_index}</dd><dt>文档版本</dt><dd>{source.version}</dd></dl><blockquote>{source.snippet}</blockquote><p>这是服务端返回的片段，不是全文。检索分数不是故障概率；该片段是否支持结论仍需人工判断。</p></section>}
       </aside>
     </div>
   </>;

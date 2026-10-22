@@ -6,6 +6,8 @@ export const diagnosisStatuses = {
   model_mismatch: "设备型号不一致，已拒绝检索",
   no_answer: "未找到足够证据",
   model_unavailable: "模型不可用，仅供人工阅读证据",
+  device_unauthorized: "无权读取该设备",
+  device_unavailable: "设备服务暂不可用",
 };
 
 export function summarizeDiagnosis(result) {
@@ -25,27 +27,60 @@ export function normalizeDiagnosis(payload, deviceId) {
       !Array.isArray(payload.statements) || !Array.isArray(payload.sources)) {
     throw new Error("诊断响应与接口契约不一致，请联系服务端检查。");
   }
+  const sourceIds = new Set();
   const sources = payload.sources.map((source, index) => {
-    if (!source || typeof source.document_id !== "string" || !source.document_id ||
+    if (!source || typeof source.id !== "string" || !source.id || sourceIds.has(source.id) ||
+        typeof source.document_id !== "string" || !source.document_id ||
+        typeof source.version !== "string" || !source.version ||
         typeof source.title !== "string" || typeof source.snippet !== "string" ||
-        !Number.isInteger(source.page) || source.page < 1 ||
+        (source.page !== null && (!Number.isInteger(source.page) || source.page < 1)) ||
+        !Number.isInteger(source.chunk_index) || source.chunk_index < 0 ||
         typeof source.score !== "number" || !Number.isFinite(source.score)) {
       throw new Error("证据字段不完整，无法展示可靠引用。");
     }
-    return { ...source, key: `source-${index}`, reference: `《${source.title}》第${source.page}页` };
+    sourceIds.add(source.id);
+    const location = source.page === null ? "页码未知" : `第${source.page}页`;
+    return { ...source, key: source.id, reference: `《${source.title}》${location}`, order: index };
   });
   const statements = payload.statements.map((statement) => {
     if (!statement || !["fact", "inference", "pending"].includes(statement.type) ||
         typeof statement.text !== "string" ||
-        (statement.source != null && typeof statement.source !== "string")) {
+        (statement.source != null && typeof statement.source !== "string") ||
+        !Array.isArray(statement.source_ids) ||
+        statement.source_ids.some((id) => typeof id !== "string" || !sourceIds.has(id))) {
       throw new Error("诊断陈述格式错误，请联系服务端检查。");
     }
-    // The legacy contract only has display refs, not stable source IDs.
-    // Never guess when a ref is absent or matches more than one result.
-    const matches = sources.filter((source) => source.reference === statement.source);
-    return { ...statement, sourceKey: matches.length === 1 ? matches[0].key : null };
+    return {
+      ...statement,
+      sourceKeys: [...statement.source_ids],
+      sourceKey: statement.source_ids[0] || null,
+    };
   });
-  return { ...payload, sources, statements };
+  const conflicts = payload.conflicts ?? [];
+  const verificationSuggestions = payload.verification_suggestions ?? [];
+  if (!Array.isArray(conflicts) || conflicts.some((conflict) =>
+    !conflict || typeof conflict.field !== "string" || !Array.isArray(conflict.sources) ||
+    conflict.sources.some((source) => !source || typeof source.origin !== "string" ||
+      typeof source.value !== "string" || (source.ref != null && typeof source.ref !== "string")))) {
+    throw new Error("冲突字段格式错误，请联系服务端检查。");
+  }
+  if (!Array.isArray(verificationSuggestions) || verificationSuggestions.some((suggestion) =>
+    !suggestion || typeof suggestion.missing_evidence !== "string" ||
+    typeof suggestion.to_verify !== "string")) {
+    throw new Error("补采建议格式错误，请联系服务端检查。");
+  }
+  if (payload.status === "ok" && !statements.some((statement) =>
+    statement.type === "fact" && statement.source_ids.length > 0)) {
+    throw new Error("成功诊断缺少可核实的事实引用，已拒绝展示为成功结果。");
+  }
+  return {
+    ...payload,
+    summary: typeof payload.summary === "string" ? payload.summary : payload.answer,
+    sources,
+    statements,
+    conflicts,
+    verification_suggestions: verificationSuggestions,
+  };
 }
 
 function demoDiagnosis(deviceId) {
@@ -57,10 +92,12 @@ function demoDiagnosis(deviceId) {
       ? "这是固定的界面演示样例，未分析你输入的现象，也未调用模型。示例展示如何核对文档和记录待验证项，不构成设备故障判断。"
       : "本地样例只覆盖 AC-07；该设备没有演示证据，请配置诊断服务后重试。",
     statements: deviceId === "AC-07" ? [
-      { type: "fact", text: "示例文档说明：异常振动应结合工况及维护记录复核。", source: "《空压机演示检查说明》第1页" },
-      { type: "pending", text: "待人工补充振动采样位置、单位、采样时间与工况，不能仅凭异响确定故障。", source: null },
+      { type: "fact", text: "示例文档说明：异常振动应结合工况及维护记录复核。", source: "《空压机演示检查说明》第1页", source_ids: ["local-demo@v1.0#p1c0"] },
+      { type: "pending", text: "待人工补充振动采样位置、单位、采样时间与工况，不能仅凭异响确定故障。", source: null, source_ids: [] },
     ] : [],
-    sources: deviceId === "AC-07" ? [{ document_id: "local-demo", title: "空压机演示检查说明", page: 1, snippet: "虚构界面样例，非企业手册。异常振动应结合工况及维护记录复核。", score: 0 }] : [],
+    sources: deviceId === "AC-07" ? [{ id: "local-demo@v1.0#p1c0", document_id: "local-demo", version: "1.0", title: "空压机演示检查说明", page: 1, chunk_index: 0, snippet: "虚构界面样例，非企业手册。异常振动应结合工况及维护记录复核。", score: 0 }] : [],
+    conflicts: [],
+    verification_suggestions: [],
   }, deviceId);
 }
 

@@ -25,6 +25,12 @@
 .grounded-empty h3 { color: #243c52; font-size: 16px; }
 .diagnostic-error { padding: 15px; margin: 16px; background: #fff0ef; border-left: 3px solid #b42318; color: #8d211a; font-size: 13px; line-height: 1.7; }
 .diagnostic-answer { padding: 0 20px; font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.diagnostic-conflicts { margin: 16px 20px; padding: 14px 16px; border-left: 3px solid #b42318; background: #fff4f2; }
+.diagnostic-conflicts h3 { margin: 0 0 10px; color: #8d211a; font-size: 13px; }
+.diagnostic-conflicts article + article { margin-top: 12px; padding-top: 12px; border-top: 1px solid #edcbc6; }
+.diagnostic-conflicts strong, .diagnostic-conflicts li { font-size: 12px; line-height: 1.7; }
+.diagnostic-conflicts ul { margin: 7px 0 0; padding-left: 18px; }
+.diagnostic-conflicts span { color: #6f463f; font-family: Consolas, monospace; font-size: 11px; }
 .diagnosis-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 18px 20px; border: 1px solid #b9c8d5; border-left: 3px solid #0f5a91; }
 .diagnosis-summary div { padding: 12px; border-right: 1px solid #d6dfe7; }
 .diagnosis-summary div:nth-child(4) { border-right: 0; }

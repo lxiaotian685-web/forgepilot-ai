@@ -3,14 +3,15 @@ import assert from "node:assert/strict";
 import { normalizeDiagnosis, requestDiagnosis, diagnosisStatuses, summarizeDiagnosis } from "../src/services/diagnosis.js";
 
 const payload = () => ({ device_id: "AC-07", answer: "需核验", is_mock: true, status: "ok", statements: [
-  { type: "fact", text: "文档片段", source: "《演示手册》第2页" },
-], sources: [{ document_id: "doc-1", title: "演示手册", page: 2, snippet: "原文", score: 1.5 }] });
+  { type: "fact", text: "文档片段", source: "《演示手册》第2页", source_ids: ["doc-1@v1#p2c0"] },
+], sources: [{ id: "doc-1@v1#p2c0", document_id: "doc-1", version: "v1", title: "演示手册", page: 2, chunk_index: 0, snippet: "原文", score: 1.5 }], conflicts: [], verification_suggestions: [] });
 const input = { deviceId: "AC-07", question: " 振动异常 " };
 const config = { VITE_DATA_MODE: "api", VITE_API_BASE_URL: "https://api.example.test/" };
 
 test("links a unique exact reference, keeps retrieval score unscaled", () => {
   const result = normalizeDiagnosis(payload(), "AC-07");
-  assert.equal(result.statements[0].sourceKey, "source-0");
+  assert.equal(result.statements[0].sourceKey, "doc-1@v1#p2c0");
+  assert.deepEqual(result.statements[0].sourceKeys, ["doc-1@v1#p2c0"]);
   assert.equal(result.sources[0].score, 1.5);
 });
 test("summarizes only real statement and source counts", () => {
@@ -19,11 +20,12 @@ test("summarizes only real statement and source counts", () => {
   assert.deepEqual(summarizeDiagnosis(value), { fact: 1, inference: 1, pending: 1, sources: 1 });
   assert.deepEqual(summarizeDiagnosis(null), { fact: 0, inference: 0, pending: 0, sources: 0 });
 });
-test("does not guess ambiguous or unknown references", () => {
-  const value = payload(); value.sources.push({ ...value.sources[0], document_id: "other-version" });
-  assert.equal(normalizeDiagnosis(value, "AC-07").statements[0].sourceKey, null);
-  value.statements[0].source = "别的来源";
-  assert.equal(normalizeDiagnosis(value, "AC-07").statements[0].sourceKey, null);
+test("uses stable source IDs and rejects unknown or duplicate IDs", () => {
+  assert.equal(normalizeDiagnosis(payload(), "AC-07").statements[0].sourceKey, "doc-1@v1#p2c0");
+  const unknown = payload(); unknown.statements[0].source_ids = ["missing"];
+  assert.throws(() => normalizeDiagnosis(unknown, "AC-07"), /诊断陈述格式错误/);
+  const duplicate = payload(); duplicate.sources.push({ ...duplicate.sources[0] });
+  assert.throws(() => normalizeDiagnosis(duplicate, "AC-07"), /证据字段不完整/);
 });
 test("rejects wrong device and missing mock flag", () => {
   assert.throws(() => normalizeDiagnosis(payload(), "P-102"));
@@ -31,10 +33,25 @@ test("rejects wrong device and missing mock flag", () => {
 });
 test("rejects malformed evidence, statements and unknown status", () => {
   for (const value of [
-    { ...payload(), sources: [{ ...payload().sources[0], page: null }] },
+    { ...payload(), sources: [{ ...payload().sources[0], chunk_index: -1 }] },
     { ...payload(), statements: [{ type: "diagnosis", text: "bad" }] },
     { ...payload(), status: "unexpected" },
   ]) assert.throws(() => normalizeDiagnosis(value, "AC-07"));
+});
+test("accepts an explicitly unknown page without inventing a page number", () => {
+  const value = payload(); value.sources[0].page = null;
+  const result = normalizeDiagnosis(value, "AC-07");
+  assert.match(result.sources[0].reference, /页码未知/);
+});
+test("validates conflicts, verification suggestions and grounded success", () => {
+  const value = payload();
+  value.conflicts = [{ field: "额定压力", sources: [{ origin: "device_record", value: "0.8 MPa", ref: null }] }];
+  value.verification_suggestions = [{ missing_evidence: "校准记录", to_verify: "排除传感器漂移" }];
+  const result = normalizeDiagnosis(value, "AC-07");
+  assert.equal(result.conflicts[0].field, "额定压力");
+  assert.equal(result.verification_suggestions[0].missing_evidence, "校准记录");
+  const ungrounded = payload(); ungrounded.statements[0].source_ids = [];
+  assert.throws(() => normalizeDiagnosis(ungrounded, "AC-07"), /缺少可核实/);
 });
 for (const status of Object.keys(diagnosisStatuses)) {
   test(`preserves server status ${status}`, () => assert.equal(normalizeDiagnosis({ ...payload(), status }, "AC-07").status, status));

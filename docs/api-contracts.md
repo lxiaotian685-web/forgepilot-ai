@@ -40,6 +40,7 @@
 - `device_not_found`：B 返回 404 或设备不存在；
 - `device_unauthorized`：B 返回 401/403，不泄漏跨组织设备存在性；
 - `device_unavailable`：B 超时、5xx 或响应无法解析；
+- `device_mismatch`：B 返回的设备编号与请求的 `device_id` 不一致；
 - `no_knowledge`：设备存在但无可用的知识库文档域；
 - `model_mismatch`：传入的 `equipment_model` 与设备事实不一致。
 
@@ -70,19 +71,20 @@ C 在检索前调用 B 的 `GET /api/v1/devices/{device_id}`，字段映射：
 3. 默认映射 `GX11→compressor-002`、`P-102X→pump-004`、`GMC-4000→cnc-003`；
 4. 仍无法解析时返回 `no_knowledge`，不得猜测文档。
 
-环境变量：
+环境变量只保留连接配置：
 
 ```text
 DEVICE_PROVIDER=static|http
 DEVICE_API_BASE_URL
-DEVICE_API_TOKEN
-DEVICE_ORG_ID
-DEVICE_USER_ID
 DEVICE_API_TIMEOUT=5
 DEVICE_KNOWLEDGE_MODELS={"GX11":"compressor-002"}
 ```
 
-鉴权与组织隔离沿用 B：演示模式使用 `X-Organization-Id` / `X-User-Id`，生产模式使用 `Authorization: Bearer <token>`；跨组织一律返回 404，C 转换为 `device_not_found`。
+C **不得**从环境变量固定组织、用户或 token。每次 `/chat` 请求的
+`Authorization: Bearer <token>`、`X-Organization-Id`、`X-User-Id` 会原样透传给 B；
+演示模式使用后两者，生产模式使用 Bearer。跨组织一律返回 404，C 转换为
+`device_not_found`；B 返回的设备编号与请求不一致时，C 返回 `device_mismatch`
+并拒绝使用该设备事实。
 
 ## 4. C 侧证据引用扩展（已实现）
 
@@ -111,6 +113,8 @@ DEVICE_KNOWLEDGE_MODELS={"GX11":"compressor-002"}
 ### 4.2 `statement.source_ids`
 
 每条 `statement` 增加 `source_ids`，指向本次返回 `sources` 的稳定 ID；模型引用不在本次 `sources` 中视为错误引用。
+
+只要存在任何一条事实无法关联到本次 `sources`（包括混合有效/无效引用），整体返回 `no_answer`，替换模型原回答，不保留无依据事实的叙述；有效事实仍保留，无效事实降级为 `pending`。
 
 ### 4.3 `conflicts` 与 `verification_suggestions`
 
@@ -191,4 +195,4 @@ C 的 `/api/v1/chat` 返回结果后，由 B 保存；字段映射：
 
 **正常链路**：B 设备查询 `AC-07` → `/api/v1/chat` 提问 → 检索 `compressor-002` → 结构化结论与稳定引用 → `/api/v1/diagnoses` 保存 → `/confirm` 人工确认建单 → `/api/v1/audit-events` 可查 → 刷新仍正确、重复确认不重复建单。
 
-**失败链路**：设备不存在、跨组织越权、设备服务超时、无文档、型号不匹配、模型不可用、非法引用，均返回明确 `status`，不伪造成功、不越权写入。
+**失败链路**：设备不存在、跨组织越权、设备编号不一致、设备服务超时、无文档、型号不匹配、模型不可用、非法引用，均返回明确 `status`，不伪造成功、不越权写入。

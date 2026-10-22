@@ -1,6 +1,6 @@
 import httpx
 
-from app.core.device_provider import HttpDeviceProvider
+from app.core.device_provider import HttpDeviceProvider, StaticDeviceProvider
 from app.core.store import KnowledgeBase
 from app.llm.base import LLMError
 from app.llm.mock import MockLLM
@@ -20,6 +20,28 @@ class _BadCitationLLM(MockLLM):
             Statement(type="fact", text="x", source=None, source_ids=["not-in-evidence"])
         ]
         return result
+
+
+class _MixedCitationLLM(MockLLM):
+    def answer(self, query, evidences):
+        result = super().answer(query, evidences)
+        result.answer = "有效事实；无依据事实"
+        result.summary = "混合引用摘要"
+        result.statements = [
+            Statement(type="fact", text="有效事实", source_ids=[evidences[0].id]),
+            Statement(
+                type="fact", text="无依据事实", source_ids=["invalid-id"]
+            ),
+        ]
+        return result
+
+
+class _WrongDeviceProvider:
+    def get_device(self, device_id, auth=None):
+        return StaticDeviceProvider().get_device("P-102")
+
+    def close(self):
+        pass
 
 
 class _ConflictingLLM(MockLLM):
@@ -205,3 +227,27 @@ def test_http_device_accepts_device_model_alias():
 
     assert resp.status == "ok"
     assert resp.sources
+
+
+def test_mixed_valid_and_invalid_citations_are_not_ok():
+    svc = _make_service(_MixedCitationLLM())
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "no_answer"
+    assert resp.statements[0].type == "fact"
+    assert resp.statements[0].source_ids == [resp.sources[0].id]
+    assert resp.statements[1].type == "pending"
+    assert resp.statements[1].source_ids == []
+    assert "无依据事实" not in resp.answer
+    assert "混合引用摘要" not in resp.summary
+
+
+def test_provider_identity_mismatch_is_rejected():
+    svc = RAGService(_kb_with_two_models(), MockLLM(), _WrongDeviceProvider())
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "device_mismatch"
+    assert resp.sources == []
+    assert resp.statements == []

@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from app.core.device_provider import (
+    DeviceAuth,
     DeviceProviderError,
     HttpDeviceProvider,
     StaticDeviceProvider,
@@ -56,14 +57,17 @@ def test_http_provider_maps_b_fields_and_identity_headers():
         return httpx.Response(200, json=_payload())
 
     provider = HttpDeviceProvider(
-        base_url="http://business-api",
-        token="token",
-        organization_id="demo-org",
-        user_id="technician@example.com",
-        client=_client(handler),
+        base_url="http://business-api", client=_client(handler)
     )
 
-    device = provider.get_device("AC-07")
+    device = provider.get_device(
+        "AC-07",
+        auth=DeviceAuth(
+            token="token",
+            organization_id="demo-org",
+            user_id="technician@example.com",
+        ),
+    )
 
     assert captured["url"].endswith("/api/v1/devices/AC-07")
     assert captured["authorization"] == "Bearer token"
@@ -73,6 +77,41 @@ def test_http_provider_maps_b_fields_and_identity_headers():
     assert device.status == "attention"
     assert device.knowledge_model == "compressor-002"
     assert device.organization_id == "demo-org"
+
+
+def test_http_provider_does_not_invent_identity_headers():
+    captured = {}
+
+    def handler(request):
+        captured["authorization"] = request.headers.get("authorization")
+        captured["organization"] = request.headers.get("x-organization-id")
+        captured["user"] = request.headers.get("x-user-id")
+        return httpx.Response(200, json=_payload())
+
+    provider = HttpDeviceProvider(
+        base_url="http://business-api", client=_client(handler)
+    )
+
+    device = provider.get_device("AC-07")
+
+    assert captured["authorization"] is None
+    assert captured["organization"] is None
+    assert captured["user"] is None
+    assert device.organization_id is None
+
+
+def test_http_provider_rejects_mismatched_device_id():
+    def handler(request):
+        return httpx.Response(200, json=_payload(id="AC-99"))
+
+    provider = HttpDeviceProvider(
+        base_url="http://business-api", client=_client(handler)
+    )
+
+    with pytest.raises(DeviceProviderError) as raised:
+        provider.get_device("AC-07")
+
+    assert raised.value.status == "device_mismatch"
 
 
 def test_http_provider_accepts_explicit_knowledge_model():

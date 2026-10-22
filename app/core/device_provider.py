@@ -27,6 +27,15 @@ class DeviceProviderError(Exception):
 
 
 @dataclass(frozen=True)
+class DeviceAuth:
+    """当前请求者的认证上下文，按请求透传给 B 包。"""
+
+    token: str | None = None
+    organization_id: str | None = None
+    user_id: str | None = None
+
+
+@dataclass(frozen=True)
 class DeviceContext:
     device_id: str
     name: str
@@ -39,7 +48,9 @@ class DeviceContext:
 
 
 class DeviceProvider(Protocol):
-    def get_device(self, device_id: str) -> DeviceContext:
+    def get_device(
+        self, device_id: str, auth: DeviceAuth | None = None
+    ) -> DeviceContext:
         raise NotImplementedError
 
     def close(self) -> None:
@@ -62,7 +73,9 @@ class StaticDeviceProvider:
                 knowledge_model=CATEGORY_DOC_MODEL.get(info["category"]),
             )
 
-    def get_device(self, device_id: str) -> DeviceContext:
+    def get_device(
+        self, device_id: str, auth: DeviceAuth | None = None
+    ) -> DeviceContext:
         device = self._devices.get(device_id)
         if device is None:
             raise DeviceProviderError(
@@ -81,9 +94,6 @@ class HttpDeviceProvider:
         self,
         base_url: str,
         *,
-        token: str | None = None,
-        organization_id: str | None = None,
-        user_id: str | None = None,
         timeout: float = 5.0,
         client: httpx.Client | None = None,
         knowledge_models: dict[str, str] | None = None,
@@ -91,15 +101,7 @@ class HttpDeviceProvider:
         if not base_url:
             raise ValueError("DEVICE_API_BASE_URL 未配置")
         self.base_url = base_url.rstrip("/")
-        self.organization_id = organization_id
         self._knowledge_models = _load_knowledge_models(knowledge_models)
-        self._headers: dict[str, str] = {}
-        if token:
-            self._headers["Authorization"] = f"Bearer {token}"
-        if organization_id:
-            self._headers["X-Organization-Id"] = organization_id
-        if user_id:
-            self._headers["X-User-Id"] = user_id
         self._owns_client = client is None
         self._client = client or httpx.Client(timeout=timeout)
 
@@ -111,10 +113,12 @@ class HttpDeviceProvider:
         if self._owns_client:
             self._client.close()
 
-    def get_device(self, device_id: str) -> DeviceContext:
+    def get_device(
+        self, device_id: str, auth: DeviceAuth | None = None
+    ) -> DeviceContext:
         url = f"{self.base_url}/api/v1/devices/{quote(device_id, safe='')}"
         try:
-            response = self._client.get(url, headers=self._headers)
+            response = self._client.get(url, headers=self._headers(auth))
         except httpx.TimeoutException as exc:
             raise DeviceProviderError(
                 "device_unavailable", "设备服务调用超时，无法校验设备事实。"
@@ -149,17 +153,38 @@ class HttpDeviceProvider:
                 "device_unavailable", "设备服务响应缺少设备编号。"
             )
 
+        response_id = str(data["id"])
+        if response_id != device_id:
+            raise DeviceProviderError(
+                "device_mismatch",
+                f"设备服务返回的设备编号 {response_id} 与请求 {device_id} 不一致，"
+                "已拒绝使用。",
+            )
+
         model = str(data.get("model") or "")
         return DeviceContext(
-            device_id=str(data["id"]),
+            device_id=response_id,
             name=str(data.get("name") or ""),
             type=str(data.get("type") or ""),
             model=model,
             location=str(data.get("location") or ""),
             status=str(data.get("state") or data.get("status") or "unknown"),
             knowledge_model=self._resolve_knowledge_model(data, model),
-            organization_id=self.organization_id,
+            organization_id=auth.organization_id if auth else None,
         )
+
+    @staticmethod
+    def _headers(auth: DeviceAuth | None) -> dict[str, str]:
+        if auth is None:
+            return {}
+        headers: dict[str, str] = {}
+        if auth.token:
+            headers["Authorization"] = f"Bearer {auth.token}"
+        if auth.organization_id:
+            headers["X-Organization-Id"] = auth.organization_id
+        if auth.user_id:
+            headers["X-User-Id"] = auth.user_id
+        return headers
 
     def _resolve_knowledge_model(self, data: dict, model: str) -> str | None:
         explicit = data.get("knowledgeModel")
@@ -191,9 +216,6 @@ def build_device_provider() -> DeviceProvider:
     if provider == "http":
         return HttpDeviceProvider(
             base_url=os.getenv("DEVICE_API_BASE_URL", ""),
-            token=os.getenv("DEVICE_API_TOKEN") or None,
-            organization_id=os.getenv("DEVICE_ORG_ID") or None,
-            user_id=os.getenv("DEVICE_USER_ID") or None,
             timeout=float(os.getenv("DEVICE_API_TIMEOUT", "5")),
         )
     raise ValueError(f"不支持的 DEVICE_PROVIDER: {provider}")

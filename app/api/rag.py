@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
+from app.core.device_provider import DeviceAuth
 from app.core.store import KnowledgeBase
 from app.deps import get_kb, get_rag
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -49,10 +50,27 @@ def list_documents(kb: KnowledgeBase = Depends(get_kb)):
     return kb.list_documents()
 
 
+def _device_auth(request: Request) -> DeviceAuth:
+    authorization = request.headers.get("authorization", "")
+    token = None
+    if authorization[:7].lower() == "bearer ":
+        token = authorization[7:].strip() or None
+    return DeviceAuth(
+        token=token,
+        organization_id=request.headers.get("x-organization-id"),
+        user_id=request.headers.get("x-user-id"),
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest, rag: RAGService = Depends(get_rag)):
+def chat(
+    payload: ChatRequest,
+    request: Request,
+    rag: RAGService = Depends(get_rag),
+):
     return rag.diagnose(
-        device_id=request.device_id,
-        question=request.question,
-        equipment_model=request.equipment_model,
+        device_id=payload.device_id,
+        question=payload.question,
+        equipment_model=payload.equipment_model,
+        auth=_device_auth(request),
     )

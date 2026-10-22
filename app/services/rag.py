@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.core.device_provider import (
+    DeviceAuth,
     DeviceProvider,
     DeviceProviderError,
     StaticDeviceProvider,
@@ -29,11 +30,20 @@ class RAGService:
         device_id: str,
         question: str,
         equipment_model: str | None = None,
+        auth: DeviceAuth | None = None,
     ) -> ChatResponse:
         try:
-            device = self.device_provider.get_device(device_id)
+            device = self.device_provider.get_device(device_id, auth=auth)
         except DeviceProviderError as exc:
             return self._unavailable(device_id, exc.status, exc.message)
+
+        if device.device_id != device_id:
+            return self._unavailable(
+                device_id,
+                "device_mismatch",
+                f"设备服务返回的设备编号 {device.device_id} 与请求 {device_id} "
+                "不一致，已拒绝使用。",
+            )
 
         if device.knowledge_model is None:
             return self._unavailable(
@@ -73,16 +83,19 @@ class RAGService:
         except LLMError:
             return self._degraded(device_id, evidences)
 
-        statements, ungrounded = self._validate_sources(result.statements, evidences)
+        statements, has_ungrounded_fact = self._validate_sources(
+            result.statements, evidences
+        )
 
-        if ungrounded:
+        if has_ungrounded_fact:
             return ChatResponse(
                 device_id=device_id,
                 answer=(
-                    "模型给出的引用无法在本次检索结果中核实，不能作为有依据的诊断。"
-                    "以下内容仅为待人工核验的线索。"
+                    "模型给出的部分事实引用无法在本次检索结果中核实，"
+                    "不能作为有依据的诊断。以下仅保留可核实事实，"
+                    "其余内容已标记为待人工核验。"
                 ),
-                summary="模型引用无法核实，仅为待人工核验线索。",
+                summary="模型存在无法核实的引用，结论不可直接采用。",
                 statements=statements,
                 sources=evidences,
                 conflicts=result.conflicts,
@@ -152,21 +165,16 @@ class RAGService:
         statements: list[Statement], evidences: list[Evidence]
     ) -> tuple[list[Statement], bool]:
         valid = {ev.id for ev in evidences}
-        had_fact = False
-        grounded_fact = False
+        has_ungrounded_fact = False
         for statement in statements:
             statement.source_ids = list(dict.fromkeys(statement.source_ids))
-            if statement.type == "fact":
-                had_fact = True
             statement.source_ids = [
                 sid for sid in statement.source_ids if sid in valid
             ]
-            if statement.type == "fact":
-                if statement.source_ids:
-                    grounded_fact = True
-                else:
-                    statement.type = "pending"
-        return statements, had_fact and not grounded_fact
+            if statement.type == "fact" and not statement.source_ids:
+                statement.type = "pending"
+                has_ungrounded_fact = True
+        return statements, has_ungrounded_fact
 
     @staticmethod
     def _ref(ev: Evidence) -> str:

@@ -20,7 +20,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - 设备不存在、无知识、型号不匹配、设备服务不可用等降级状态；
 - 提示注入防护、客户端复用、连续调用与降级测试；
 - 3 份虚构演示手册与 20 条评测集；
-- 58 项自动化测试。
+- 63 项自动化测试。
 
 尚未实现：
 
@@ -80,14 +80,14 @@ $env:LLM_MODEL    = "模型名"
 ```powershell
 $env:DEVICE_PROVIDER = "http"
 $env:DEVICE_API_BASE_URL = "http://127.0.0.1:8001"
-$env:DEVICE_API_TOKEN = "你的token"   # 或使用演示头
-$env:DEVICE_ORG_ID = "demo-org"
-$env:DEVICE_USER_ID = "technician@example.com"
 $env:DEVICE_API_TIMEOUT = "5"
 ```
 
+- C 不再从环境变量固定组织、用户或 token；每次 `/chat` 请求的
+  `Authorization: Bearer`、`X-Organization-Id`、`X-User-Id` 会原样透传给 B。
 - 调用 `GET /api/v1/devices/{device_id}`，使用 `state` 作为设备状态、`model` 作为型号。
 - 设备不存在返回 `device_not_found`，跨组织或越权返回 `device_unauthorized`，超时/5xx返回 `device_unavailable`。
+- B 返回的设备编号与请求不一致时返回 `device_mismatch`，拒绝使用该设备事实。
 - 设备型号到知识库文档域的默认映射为 `GX11→compressor-002`、`P-102X→pump-004`、`GMC-4000→cnc-003`，可用 `DEVICE_KNOWLEDGE_MODELS` JSON 覆盖。
 - 生产环境必须使用 `http`；`static` 不得作为真实设备事实来源。
 
@@ -104,7 +104,8 @@ $env:DEVICE_API_TIMEOUT = "5"
 ### 诊断状态
 
 `status` 取值：`ok`、`no_answer`、`model_unavailable`、`device_not_found`、
-`device_unauthorized`、`device_unavailable`、`no_knowledge`、`model_mismatch`。
+`device_unauthorized`、`device_unavailable`、`device_mismatch`、`no_knowledge`、
+`model_mismatch`。
 
 只有 `ok` 表示模型返回了可核实的结构化诊断；其余状态均不得当作成功结果展示。
 

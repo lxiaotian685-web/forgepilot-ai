@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.core.device_provider import DeviceProviderError
+from app.core.device_provider import DeviceProviderError, StaticDeviceProvider
 from app.deps import rag
 from app.llm.base import BaseLLM, LLMResult
 from app.llm.mock import UnavailableLLM
@@ -13,8 +13,21 @@ AIR_COMPRESSOR_CONTENT = "概述\n\n---PAGE---\n\n排气温度过高排查：冷
 
 
 class UnavailableDeviceProvider:
-    def get_device(self, device_id):
+    def get_device(self, device_id, auth=None):
         raise DeviceProviderError("device_unavailable", "设备服务不可用")
+
+    def close(self):
+        pass
+
+
+class CapturingDeviceProvider:
+    def __init__(self):
+        self.calls = []
+        self._static = StaticDeviceProvider()
+
+    def get_device(self, device_id, auth=None):
+        self.calls.append((device_id, auth))
+        return self._static.get_device(device_id)
 
     def close(self):
         pass
@@ -174,6 +187,39 @@ def test_chat_device_unavailable_returns_status():
     assert body["status"] == "device_unavailable"
     assert body["sources"] == []
     assert body["statements"] == []
+
+
+def test_chat_forwards_current_request_auth_context():
+    _ingest_air_compressor()
+    provider = CapturingDeviceProvider()
+    rag.device_provider = provider
+
+    first = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+        headers={
+            "Authorization": "Bearer request-token",
+            "X-Organization-Id": "org-1",
+            "X-User-Id": "user-1",
+        },
+    )
+    second = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+        headers={
+            "X-Organization-Id": "org-2",
+            "X-User-Id": "user-2",
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert provider.calls[0][1].token == "request-token"
+    assert provider.calls[0][1].organization_id == "org-1"
+    assert provider.calls[0][1].user_id == "user-1"
+    assert provider.calls[1][1].token is None
+    assert provider.calls[1][1].organization_id == "org-2"
+    assert provider.calls[1][1].user_id == "user-2"
 
 
 def test_chat_rejects_missing_question():

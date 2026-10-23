@@ -21,6 +21,7 @@ import {
   Dismiss24Regular,
   Filter24Regular,
   MoreHorizontal24Regular,
+  PeopleTeam24Regular,
   Play24Regular,
   Pulse24Regular,
   Search24Regular,
@@ -43,6 +44,7 @@ import { loadWorkspaceData } from "./services/api";
 import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "./services/alertCenter";
 import DiagnosisPage from "./DiagnosisPage";
 import WorkOrdersPage from "./WorkOrdersPage";
+import PeoplePage from "./PeoplePage";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -51,6 +53,7 @@ const navItems = [
   { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
+  { id: "people", label: "人员管理", icon: PeopleTeam24Regular },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
 
@@ -313,6 +316,7 @@ function App() {
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
     orders: <WorkOrdersPage notify={notify} workOrders={workOrders} devices={devices} sourceAlert={pageContext.alert} />,
+    people: <PeoplePage notify={notify} />,
     audit: <AuditPage auditRows={auditRows} />,
   };
   return (

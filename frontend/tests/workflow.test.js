@@ -73,6 +73,20 @@ test("loads diagnosis audit with encoded query and validates pagination", async 
   assert.equal(items[0].action, "diagnosis.confirm");
 });
 
+test("discovers the internal diagnosis entity id from its business code", async () => {
+  const calls = [];
+  const items = await loadDiagnosisAudit({ diagnosisId: "DIAG-001" }, config, async (url) => {
+    calls.push(url);
+    if (calls.length === 1) return { ok: true, json: async () => ({ items: [
+      { entityId: "4d60b6e7-2f72-4e14-b718-92ac2c7f35b5", after: { code: "DIAG-001" } },
+    ] }) };
+    return { ok: true, json: async () => ({ items: [{ action: "diagnosis.confirm" }] }) };
+  });
+  assert.match(calls[0], /action=diagnosis.create/);
+  assert.match(calls[1], /entityId=4d60b6e7/);
+  assert.equal(items[0].action, "diagnosis.confirm");
+});
+
 test("surfaces the B error message and never treats malformed success as confirmation", async () => {
   await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001" }, config, async () => ({
     ok: false, status: 409, json: async () => ({ error: { message: "诊断已拒绝" } }),

@@ -8,6 +8,7 @@ export const diagnosisStatuses = {
   model_unavailable: "模型不可用，仅供人工阅读证据",
   device_unauthorized: "无权读取该设备",
   device_unavailable: "设备服务暂不可用",
+  device_mismatch: "设备身份不一致，已拒绝诊断",
 };
 
 export function summarizeDiagnosis(result) {
@@ -110,6 +111,7 @@ export async function requestDiagnosis({ deviceId, question, signal }, config = 
   const base = (config.VITE_DIAGNOSIS_API_BASE_URL || config.VITE_API_BASE_URL || "").replace(/\/$/, "");
   if (!base) throw new Error("尚未配置诊断服务地址，请设置 VITE_DIAGNOSIS_API_BASE_URL。");
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
+  if (config.VITE_API_TOKEN) headers.Authorization = `Bearer ${config.VITE_API_TOKEN}`;
   if (config.VITE_API_ORGANIZATION_ID) headers["X-Organization-Id"] = config.VITE_API_ORGANIZATION_ID;
   if (config.VITE_API_USER_ID) headers["X-User-Id"] = config.VITE_API_USER_ID;
   const controller = new AbortController();

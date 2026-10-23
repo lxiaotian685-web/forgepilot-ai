@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
 import { diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
+import { confirmDiagnosis, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
 import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
@@ -15,6 +16,12 @@ export default function DiagnosisPage({ devices }) {
   const [activeSource, setActiveSource] = useState(null);
   const [contextChecks, setContextChecks] = useState({ sampledAt: false, measuringPoint: false, operatingMode: false });
   const [verifiedItems, setVerifiedItems] = useState({});
+  const [riskLevel, setRiskLevel] = useState("");
+  const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [savedDiagnosis, setSavedDiagnosis] = useState(null);
+  const [confirmedOrder, setConfirmedOrder] = useState(null);
+  const [auditEvents, setAuditEvents] = useState([]);
+  const [workflowMessage, setWorkflowMessage] = useState("");
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
 
@@ -23,6 +30,54 @@ export default function DiagnosisPage({ devices }) {
     setError("");
     setActiveSource(null);
     setVerifiedItems({});
+    setRiskLevel("");
+    setSavedDiagnosis(null);
+    setConfirmedOrder(null);
+    setAuditEvents([]);
+    setWorkflowMessage("");
+  }
+
+  async function persistDiagnosis() {
+    if (workflowBusy) return;
+    setWorkflowBusy(true);
+    setWorkflowMessage("");
+    try {
+      const saved = await saveDiagnosis({ deviceId, question, result, riskLevel });
+      setSavedDiagnosis(saved);
+      setWorkflowMessage(`诊断 ${saved.id} 已保存，等待人工确认。`);
+    } catch (failure) {
+      setWorkflowMessage(failure.message || "诊断保存失败。");
+    } finally {
+      setWorkflowBusy(false);
+    }
+  }
+
+  async function confirmAndCreateOrder() {
+    if (workflowBusy || !savedDiagnosis?.id) return;
+    setWorkflowBusy(true);
+    setWorkflowMessage("");
+    try {
+      const confirmed = await confirmDiagnosis({
+        diagnosisId: savedDiagnosis.id,
+        title: `${deviceId} 诊断处理`,
+        priority: riskLevel === "high" ? "P1 紧急" : riskLevel === "medium" ? "P2 高" : "P3 中",
+        note: "前端诊断工作台人工确认",
+      });
+      setSavedDiagnosis(confirmed.diagnosis);
+      setConfirmedOrder(confirmed.workOrder);
+      let events = [];
+      try {
+        events = await loadDiagnosisAudit({ diagnosisId: savedDiagnosis.id });
+      } catch (auditFailure) {
+        setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已生成。审计记录暂无法读取：${auditFailure.message}`);
+      }
+      setAuditEvents(events);
+      if (events.length) setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已生成，并核对 ${events.length} 条诊断审计记录。`);
+    } catch (failure) {
+      setWorkflowMessage(failure.message || "人工确认失败。");
+    } finally {
+      setWorkflowBusy(false);
+    }
   }
 
   async function diagnose(event) {
@@ -130,7 +185,19 @@ export default function DiagnosisPage({ devices }) {
             : <p>服务端未提供待验证项，不能据此认为已经验证充分。请补充现场记录并由维护人员复核。</p>}
             <small>勾选记录不会保存，也不会生成任务。尚未建立校准模型，不展示诊断置信度或预测概率。</small>
           </section>
-          <div className="grounded-confirm"><Button disabled>人工确认并生成工单</Button><p>等待 B 包持久化与确认接口，当前结果未保存到业务数据库。</p></div>
+          <section className="grounded-confirm" aria-label="诊断确认与建单">
+            <label htmlFor="diagnosis-risk">人工风险分级</label>
+            <select id="diagnosis-risk" value={riskLevel} disabled={workflowBusy || Boolean(savedDiagnosis)} onChange={(event) => setRiskLevel(event.target.value)}>
+              <option value="">请选择</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option>
+            </select>
+            <div className="workflow-actions">
+              <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.transport !== "api" || result.is_mock || result.status !== "ok" || !riskLevel} onClick={persistDiagnosis}>{savedDiagnosis ? "诊断已保存" : workflowBusy ? "正在处理" : "保存诊断"}</Button>
+              <Button disabled={workflowBusy || !savedDiagnosis || Boolean(confirmedOrder)} onClick={confirmAndCreateOrder}>{confirmedOrder ? "工单已生成" : "人工确认并生成工单"}</Button>
+            </div>
+            <p>{result.transport !== "api" || result.is_mock || result.status !== "ok" ? "只有真实接口返回且证据校验通过的诊断才能保存。" : "风险等级由人工选择；确认后由 B 服务幂等生成工单。"}</p>
+            {workflowMessage && <p className="workflow-message" role="status">{workflowMessage}</p>}
+            {savedDiagnosis && <dl className="workflow-result"><dt>诊断编号</dt><dd>{savedDiagnosis.id}</dd>{confirmedOrder && <><dt>工单编号</dt><dd>{confirmedOrder.id}</dd><dt>审计记录</dt><dd>{auditEvents.length ? `${auditEvents.length} 条已核对` : "待管理员权限核对"}</dd></>}</dl>}
+          </section>
         </>}
       </section>
       <aside className="panel grounded-sources" aria-label="证据阅读器">

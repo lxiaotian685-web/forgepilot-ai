@@ -4,6 +4,7 @@ function apiBase(config) {
 
 function authHeaders(config) {
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
+  if (config.VITE_API_TOKEN) headers.Authorization = `Bearer ${config.VITE_API_TOKEN}`;
   if (config.VITE_API_ORGANIZATION_ID) headers["X-Organization-Id"] = config.VITE_API_ORGANIZATION_ID;
   if (config.VITE_API_USER_ID) headers["X-User-Id"] = config.VITE_API_USER_ID;
   return headers;
@@ -88,12 +89,21 @@ export async function confirmDiagnosis(
 }
 
 export async function loadDiagnosisAudit(
-  { diagnosisEntityId },
+  { diagnosisEntityId, diagnosisId },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
-  if (!diagnosisEntityId) throw new Error("缺少诊断实体编号，无法查询审计记录。");
-  const query = new URLSearchParams({ entityType: "diagnosis", entityId: diagnosisEntityId });
+  let entityId = diagnosisEntityId;
+  if (!entityId && diagnosisId) {
+    const discoveryQuery = new URLSearchParams({
+      entityType: "diagnosis", action: "diagnosis.create", pageSize: "100",
+    });
+    const discovery = await requestBusiness(`/api/v1/audit-events?${discoveryQuery}`, { method: "GET" }, config, fetcher);
+    const created = discovery?.items?.find((item) => item?.after?.code === diagnosisId);
+    entityId = created?.entityId;
+  }
+  if (!entityId) throw new Error("未找到该诊断的审计实体编号。");
+  const query = new URLSearchParams({ entityType: "diagnosis", entityId });
   const payload = await requestBusiness(`/api/v1/audit-events?${query}`, { method: "GET" }, config, fetcher);
   if (!payload || !Array.isArray(payload.items)) {
     throw new Error("审计响应缺少 items。");

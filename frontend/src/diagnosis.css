@@ -55,7 +55,14 @@
 .verification-list label.checked span { color: #657487; text-decoration: line-through; }
 .verification-next small { font-size: 11px; color: #705539; }
 .grounded-confirm { padding: 16px 20px; border-top: 1px solid var(--border); }
+.grounded-confirm > label { display: block; margin-bottom: 7px; color: #243c52; font-size: 12px; font-weight: 600; }
+.grounded-confirm > select { min-width: 180px; padding: 8px 10px; border: 1px solid #8a9aac; border-radius: 2px; background: white; color: #152033; }
+.workflow-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .grounded-confirm p { font-size: 11px; color: #526173; line-height: 1.7; }
+.grounded-confirm .workflow-message { padding: 10px 12px; border-left: 3px solid #0f5a91; background: #edf4fa; color: #234762; }
+.workflow-result { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 7px 10px; margin: 12px 0 0; font-size: 11px; }
+.workflow-result dt { color: #657487; }
+.workflow-result dd { margin: 0; color: #20394f; font-family: Consolas, monospace; overflow-wrap: anywhere; }
 .source-picker { display: grid; gap: 0; padding: 8px 12px; }
 .source-picker button { text-align: left; padding: 12px; background: white; border: 1px solid transparent; cursor: pointer; white-space: normal; }
 .source-picker button[aria-pressed=true] { background: #edf4fa; border-color: #0f5a91; }

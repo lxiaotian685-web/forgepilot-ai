@@ -72,6 +72,15 @@ test("POSTs current C contract without overriding equipment model", async () => 
   });
   assert.equal(result.transport, "api"); assert.equal(result.is_mock, false);
 });
+
+test("forwards a configured bearer token to C", async () => {
+  await requestDiagnosis({ deviceId: "AC-07", question: "x" }, {
+    VITE_DATA_MODE: "api", VITE_DIAGNOSIS_API_BASE_URL: "https://rag.test", VITE_API_TOKEN: "demo-token",
+  }, async (_url, options) => {
+    assert.equal(options.headers.Authorization, "Bearer demo-token");
+    return { ok: true, json: async () => payload() };
+  });
+});
 test("missing config or blank input fail explicitly", async () => {
   await assert.rejects(requestDiagnosis(input, { VITE_DATA_MODE: "api" }), /尚未配置/);
   await assert.rejects(requestDiagnosis({ ...input, question: "  " }, {}), /填写/);

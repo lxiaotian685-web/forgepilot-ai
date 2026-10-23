@@ -150,6 +150,7 @@ $env:DEVICE_API_TIMEOUT = "5"
 - 设备型号到知识库文档域仍需受控映射，待B包直接返回`knowledgeModel`后可移除。
 - 知识库目前是进程内 JSON + 单机锁；多 worker 部署会出现各自内存与文件竞争，正式环境应迁移 PostgreSQL/pgvector。
 - 限流是单进程内存实现，多 worker 或网关部署时应在网关层统一限流。
+- `MAX_REQUEST_BYTES` 依赖 `Content-Length`；生产网关还应限制 chunked/无长度请求体。
 - C 侧组织隔离依赖请求头 `X-Organization-Id`；生产必须由可信网关注入，不能直接信任公网浏览器提交的值。
 - 回退方式：将`LLM_PROVIDER`和`DEVICE_PROVIDER`恢复为`mock`/`static`，并设置 `C_REQUIRE_AUTH=false`、`C_ENABLE_INGEST=true` 回到无外部依赖的本地演示模式（仅限开发）。
 

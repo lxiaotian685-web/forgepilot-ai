@@ -19,6 +19,12 @@ class AlertAcknowledgeRequest(RequestModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class LoginRequest(RequestModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=200)
+    organization_code: str | None = Field(default=None, max_length=64)
+
+
 class DiagnosisCreate(RequestModel):
     device_id: str = Field(min_length=1)
     question: str = Field(min_length=1, max_length=2000)

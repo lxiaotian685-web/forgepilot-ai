@@ -3,7 +3,9 @@ import json
 import httpx
 import pytest
 
+from app.core.device_provider import DeviceContext
 from app.llm.base import LLMError
+from app.llm.factory import build_llm
 from app.llm.openai import OpenAILLM
 from app.schemas.document import Evidence
 
@@ -176,3 +178,54 @@ def test_openai_llm_reuses_client():
     llm.answer("q1", _evidence())
     llm.answer("q2", _evidence())
     assert count["n"] == 2
+
+
+def _device():
+    return DeviceContext(
+        device_id="AC-07",
+        name="螺杆空气压缩机",
+        type="动力与流体机械",
+        model="GX11",
+        location="压缩站 Bay03",
+        status="attention",
+        knowledge_model="compressor-002",
+    )
+
+
+def test_openai_llm_prompt_includes_device_facts():
+    captured = {}
+
+    def handler(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_completion(_valid_payload()))
+
+    llm = OpenAILLM(
+        api_key="k", base_url="http://x", model="m", client=_client(handler)
+    )
+    llm.answer("问题", _evidence(), device=_device())
+
+    user_prompt = captured["body"]["messages"][1]["content"]
+    assert "设备事实" in user_prompt
+    assert "AC-07" in user_prompt
+    assert "GX11" in user_prompt
+    assert captured["body"]["max_tokens"] == 1024
+
+
+def test_openai_llm_invalid_http_json_degrades():
+    def handler(request):
+        return httpx.Response(200, text="not-json")
+
+    llm = OpenAILLM(
+        api_key="k", base_url="http://x", model="m", client=_client(handler)
+    )
+
+    with pytest.raises(LLMError):
+        llm.answer("问题", _evidence())
+
+
+def test_build_llm_rejects_mock_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+
+    with pytest.raises(ValueError):
+        build_llm()

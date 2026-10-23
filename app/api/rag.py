@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
 
+from app.api.context import RequestContext, get_request_context
+from app.config import ingest_enabled
 from app.core.device_provider import DeviceAuth
 from app.core.store import KnowledgeBase
 from app.deps import get_kb, get_rag
@@ -17,26 +20,48 @@ from app.services.rag import RAGService
 
 router = APIRouter(prefix="/api/v1", tags=["rag"])
 
+_HTTP_STATUS = {
+    "device_not_found": 404,
+    "device_unauthorized": 403,
+    "device_unavailable": 503,
+    "device_mismatch": 502,
+}
+
 
 @router.post("/search", response_model=SearchResponse)
-def search(request: SearchRequest, kb: KnowledgeBase = Depends(get_kb)):
+def search(
+    request: SearchRequest,
+    context: RequestContext = Depends(get_request_context),
+    kb: KnowledgeBase = Depends(get_kb),
+):
     results = kb.search(
         request.query,
         equipment_model=request.equipment_model,
         top_k=request.top_k,
+        organization_id=context.organization_id,
     )
     return SearchResponse(query=request.query, count=len(results), results=results)
 
 
 @router.post("/documents/ingest", response_model=IngestResponse)
-def ingest(request: IngestRequest, kb: KnowledgeBase = Depends(get_kb)):
-    document, chunks = kb.ingest(
-        title=request.title,
-        equipment_model=request.equipment_model,
-        content=request.content,
-        version=request.version,
-        source=request.source,
-    )
+def ingest(
+    request: IngestRequest,
+    context: RequestContext = Depends(get_request_context),
+    kb: KnowledgeBase = Depends(get_kb),
+):
+    if not ingest_enabled():
+        raise HTTPException(status_code=403, detail="文档入库接口已禁用")
+    try:
+        document, chunks = kb.ingest(
+            title=request.title,
+            equipment_model=request.equipment_model,
+            organization_id=context.organization_id,
+            content=request.content,
+            version=request.version,
+            source=request.source,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return IngestResponse(
         document_id=document.id,
         title=document.title,
@@ -46,31 +71,39 @@ def ingest(request: IngestRequest, kb: KnowledgeBase = Depends(get_kb)):
 
 
 @router.get("/documents", response_model=list[Document])
-def list_documents(kb: KnowledgeBase = Depends(get_kb)):
-    return kb.list_documents()
-
-
-def _device_auth(request: Request) -> DeviceAuth:
-    authorization = request.headers.get("authorization", "")
-    token = None
-    if authorization[:7].lower() == "bearer ":
-        token = authorization[7:].strip() or None
-    return DeviceAuth(
-        token=token,
-        organization_id=request.headers.get("x-organization-id"),
-        user_id=request.headers.get("x-user-id"),
+def list_documents(
+    context: RequestContext = Depends(get_request_context),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    kb: KnowledgeBase = Depends(get_kb),
+):
+    return kb.list_documents(
+        organization_id=context.organization_id,
+        limit=limit,
+        offset=offset,
     )
 
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(
     payload: ChatRequest,
-    request: Request,
+    context: RequestContext = Depends(get_request_context),
     rag: RAGService = Depends(get_rag),
 ):
-    return rag.diagnose(
+    result = rag.diagnose(
         device_id=payload.device_id,
         question=payload.question,
         equipment_model=payload.equipment_model,
-        auth=_device_auth(request),
+        auth=DeviceAuth(
+            token=context.token,
+            organization_id=context.organization_id,
+            user_id=context.user_id,
+        ),
     )
+    status_code = _HTTP_STATUS.get(result.status)
+    if status_code is not None:
+        return JSONResponse(
+            status_code=status_code,
+            content=result.model_dump(mode="json"),
+        )
+    return result

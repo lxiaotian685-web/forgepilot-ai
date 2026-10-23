@@ -7,6 +7,8 @@ from typing import Literal
 import httpx
 from pydantic import BaseModel, Field, ValidationError
 
+from app.config import env_bool, env_int
+from app.core.device_provider import DeviceContext
 from app.llm.base import BaseLLM, LLMError, LLMResult
 from app.schemas.chat import (
     Conflict,
@@ -34,37 +36,38 @@ _SYSTEM_PROMPT = """\
   ]
 }
 规则：fact 的 source_ids 只能引用本次提供的证据编号；不要编造置信度、概率或修改设备参数。
+若设备事实与文档证据冲突，必须写入 conflicts 并保留双方来源，禁止静默覆盖。
 """
 
 
 class _ModelStatement(BaseModel):
     type: Literal["fact", "inference", "pending"]
-    text: str
-    source_ids: list[str] = Field(default_factory=list)
+    text: str = Field(min_length=1, max_length=2_000)
+    source_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class _ModelConflictSource(BaseModel):
-    origin: str
-    value: str
-    ref: str | None = None
+    origin: str = Field(min_length=1, max_length=100)
+    value: str = Field(min_length=1, max_length=500)
+    ref: str | None = Field(default=None, max_length=200)
 
 
 class _ModelConflict(BaseModel):
-    field: str
-    sources: list[_ModelConflictSource] = Field(default_factory=list)
+    field: str = Field(min_length=1, max_length=200)
+    sources: list[_ModelConflictSource] = Field(default_factory=list, max_length=20)
 
 
 class _ModelVerificationSuggestion(BaseModel):
-    missing_evidence: str
-    to_verify: str
+    missing_evidence: str = Field(min_length=1, max_length=1_000)
+    to_verify: str = Field(min_length=1, max_length=1_000)
 
 
 class _ModelDiagnosis(BaseModel):
-    summary: str
-    statements: list[_ModelStatement] = Field(default_factory=list)
-    conflicts: list[_ModelConflict] = Field(default_factory=list)
+    summary: str = Field(min_length=1, max_length=8_000)
+    statements: list[_ModelStatement] = Field(default_factory=list, max_length=50)
+    conflicts: list[_ModelConflict] = Field(default_factory=list, max_length=20)
     verification_suggestions: list[_ModelVerificationSuggestion] = Field(
-        default_factory=list
+        default_factory=list, max_length=20
     )
 
 
@@ -72,6 +75,7 @@ class OpenAILLM(BaseLLM):
     """OpenAI 兼容接口的模型适配器（结构化 JSON 输出，可注入 client 便于测试）。"""
 
     is_mock = False
+    name = "openai"
 
     def __init__(
         self,
@@ -87,8 +91,11 @@ class OpenAILLM(BaseLLM):
         if timeout is None:
             timeout = float(os.getenv("LLM_TIMEOUT", "30"))
         self.timeout = timeout
+        self.max_tokens = env_int("LLM_MAX_TOKENS", 1_024, minimum=1)
         self._owns_client = client is None
-        self._client = client or httpx.Client(timeout=self.timeout)
+        self._client = client or httpx.Client(
+            timeout=self.timeout, trust_env=env_bool("HTTP_TRUST_ENV", False)
+        )
 
     @property
     def _http(self) -> httpx.Client:
@@ -98,16 +105,25 @@ class OpenAILLM(BaseLLM):
         if self._owns_client:
             self._client.close()
 
-    def answer(self, query: str, evidences: list[Evidence]) -> LLMResult:
+    def answer(
+        self,
+        query: str,
+        evidences: list[Evidence],
+        device: DeviceContext | None = None,
+    ) -> LLMResult:
         if not self.api_key or not self.base_url:
             raise LLMError("模型未配置（缺少 LLM_API_KEY / LLM_BASE_URL）")
 
         payload = {
             "model": self.model,
             "response_format": {"type": "json_object"},
+            "max_tokens": self.max_tokens,
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": self._build_user_prompt(query, evidences)},
+                {
+                    "role": "user",
+                    "content": self._build_user_prompt(query, evidences, device),
+                },
             ],
         }
         try:
@@ -122,13 +138,35 @@ class OpenAILLM(BaseLLM):
         except httpx.HTTPError as exc:
             raise LLMError("模型调用失败") from exc
 
-        return self._parse(response.json())
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise LLMError("模型返回不是合法 JSON") from exc
+        return self._parse(data)
 
-    def _build_user_prompt(self, query: str, evidences: list[Evidence]) -> str:
+    def _build_user_prompt(
+        self,
+        query: str,
+        evidences: list[Evidence],
+        device: DeviceContext | None = None,
+    ) -> str:
         context = "\n\n".join(
             f"[{ev.id}] {ev.title} 第{ev.page}页：{ev.snippet}" for ev in evidences
         )
-        return f"文档证据：\n{context}\n\n用户问题：{query}"
+        parts: list[str] = []
+        if device is not None:
+            parts.append(
+                "设备事实：\n"
+                f"- 设备编号：{device.device_id}\n"
+                f"- 名称：{device.name}\n"
+                f"- 类别：{device.type}\n"
+                f"- 型号：{device.model}\n"
+                f"- 位置：{device.location}\n"
+                f"- 状态：{device.status}"
+            )
+        parts.append(f"文档证据：\n{context}")
+        parts.append(f"用户问题：{query}")
+        return "\n\n".join(parts)
 
     def _parse(self, data: dict) -> LLMResult:
         try:

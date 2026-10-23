@@ -4,6 +4,10 @@ from app.core.parser import Page
 
 
 def chunk_text(text: str, chunk_size: int = 400, overlap: int = 60) -> list[str]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size 必须大于 0")
+    if overlap < 0 or overlap >= chunk_size:
+        raise ValueError("overlap 必须满足 0 <= overlap < chunk_size")
     if len(text) <= chunk_size:
         return [text]
 

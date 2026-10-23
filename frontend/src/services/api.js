@@ -11,17 +11,29 @@ const businessResources = {
   workOrders: "/api/v1/work-orders",
 };
 
-async function request(path) {
+export class ApiRequestError extends Error {
+  constructor(status, path) {
+    super(`API request failed: ${status}`);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.path = path;
+  }
+}
+
+async function request(path, accessToken) {
   const headers = { Accept: "application/json" };
-  if (organizationId) headers["X-Organization-Id"] = organizationId;
-  if (userId) headers["X-User-Id"] = userId;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  else {
+    if (organizationId) headers["X-Organization-Id"] = organizationId;
+    if (userId) headers["X-User-Id"] = userId;
+  }
 
   const response = await fetch(`${baseUrl}${path}`, {
     headers,
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    throw new ApiRequestError(response.status, path);
   }
 
   return response.json();
@@ -64,7 +76,7 @@ function normalizeCollection(key, payload) {
   return payload.items;
 }
 
-export async function loadWorkspaceData() {
+export async function loadWorkspaceData({ accessToken } = {}) {
   if (mode !== "api" || !baseUrl) {
     return { data: mockData, source: "mock", connectedResources: [] };
   }
@@ -72,13 +84,16 @@ export async function loadWorkspaceData() {
   const results = await Promise.allSettled(
     Object.entries(businessResources).map(async ([key, path]) => [
       key,
-      normalizeCollection(key, await request(path)),
+      normalizeCollection(key, await request(path, accessToken)),
     ]),
   );
   const connectedEntries = results
     .filter((result) => result.status === "fulfilled")
     .map((result) => result.value);
   const failedResults = results.filter((result) => result.status === "rejected");
+
+  const authFailure = failedResults.find(({ reason }) => reason?.status === 401 || reason?.status === 403);
+  if (authFailure) throw authFailure.reason;
 
   if (failedResults.length) {
     console.warn(

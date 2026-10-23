@@ -42,7 +42,7 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
-import { authService, canAccessPage, getAllowedPageIds, roleLabels } from "./services/auth";
+import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
 import DiagnosisPage from "./DiagnosisPage";
 
 const navItems = [
@@ -397,7 +397,7 @@ function WorkspaceApp({ session, onLogout }) {
 }
 
 function App() {
-  const [session, setSession] = useState(() => authService.getStoredSession());
+  const [session, setSession] = useState(() => selectStoredSession(authService, dataMode));
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -405,9 +405,13 @@ function App() {
     let active = true;
     authService.refresh(session).then((value) => { if (active) setSession(value); }).catch((error) => {
       if (!active) return;
-      authService.clear();
-      setSession(null);
-      setMessage(error.message || "登录状态已失效");
+      if (error.status === 401 || error.status === 403) {
+        authService.clear();
+        setSession(null);
+        setMessage(error.message || "登录状态已失效");
+      } else {
+        setMessage("暂时无法校验登录状态，已保留当前会话");
+      }
     });
     return () => { active = false; };
   }, []);
@@ -419,7 +423,7 @@ function App() {
   };
 
   if (!session) return <><LoginPage onLogin={(value) => { setMessage(""); setSession(value); }} />{message && <div className="toast" role="status"><Alert24Regular />{message}</div>}</>;
-  return <WorkspaceApp session={session} onLogout={logout} />;
+  return <><WorkspaceApp session={session} onLogout={logout} />{message && <div className="toast" role="status"><Alert24Regular />{message}</div>}</>;
 }
 
 export default App;

@@ -107,4 +107,13 @@ export function createAuthService({
   };
 }
 
+export function selectStoredSession(service, dataMode) {
+  const session = service.getStoredSession();
+  if (dataMode === "api" && session?.isPreview) {
+    service.clear();
+    return null;
+  }
+  return session;
+}
+
 export const authService = createAuthService();

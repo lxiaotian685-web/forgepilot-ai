@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AuthError, canAccessPage, createAuthService, getAllowedPageIds, SESSION_KEY } from "../src/services/auth.js";
+import { AuthError, canAccessPage, createAuthService, getAllowedPageIds, selectStoredSession, SESSION_KEY } from "../src/services/auth.js";
 
 function memoryStorage() {
   const values = new Map();
@@ -62,4 +62,12 @@ test("role navigation is deny-by-default", () => {
   assert.equal(canAccessPage("technician", "audit"), false);
   assert.equal(canAccessPage("viewer", "diagnosis"), false);
   assert.deepEqual(getAllowedPageIds("unknown"), []);
+});
+
+test("api mode discards a stored local preview identity", () => {
+  let cleared = false;
+  const service = { getStoredSession: () => ({ ...session, isPreview: true }), clear: () => { cleared = true; } };
+  assert.equal(selectStoredSession(service, "api"), null);
+  assert.equal(cleared, true);
+  assert.equal(selectStoredSession({ ...service, clear: () => assert.fail("should not clear") }, "mock").isPreview, true);
 });

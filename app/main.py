@@ -13,8 +13,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api import (
     alerts,
     audit_events,
+    auth,
+    device_parameters,
     devices,
     diagnoses,
+    faults,
+    maintenance_records,
     work_orders,
 )
 from app.api.errors import ERROR_CODES
@@ -31,6 +35,7 @@ DOCS_ENABLED = os.getenv("DOCS_ENABLED", "true").lower() in {
     "yes",
 }
 WRITE_API_KEY = os.getenv("WRITE_API_KEY", "")
+WRITE_EXEMPT_PATHS = {"/api/v1/auth/login"}
 
 app = FastAPI(
     title="制造领航 ForgePilot API",
@@ -62,6 +67,7 @@ async def write_protection(request: Request, call_next):
         WRITE_API_KEY
         and request.method in {"POST", "PUT", "PATCH", "DELETE"}
         and request.url.path.startswith("/api/v1/")
+        and request.url.path not in WRITE_EXEMPT_PATHS
     ):
         provided = request.headers.get("X-Write-Key", "")
         if not hmac.compare_digest(provided, WRITE_API_KEY):
@@ -124,7 +130,11 @@ def chat(request: ChatRequest):
 
 
 app.include_router(devices.router)
+app.include_router(device_parameters.router)
+app.include_router(faults.router)
 app.include_router(alerts.router)
 app.include_router(work_orders.router)
 app.include_router(diagnoses.router)
 app.include_router(audit_events.router)
+app.include_router(maintenance_records.router)
+app.include_router(auth.router)

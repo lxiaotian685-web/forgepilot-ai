@@ -88,8 +88,10 @@ def get_context(
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
 ) -> RequestContext:
-    if AUTH_MODE == "token":
+    if authorization and authorization.lower().startswith("bearer "):
         org_value, user_value = _identity_from_token(authorization)
+    elif AUTH_MODE == "token":
+        raise api_error(401, "UNAUTHORIZED", "缺少 Bearer 令牌")
     else:
         org_value, user_value = x_organization_id, x_user_id
     org = _resolve_organization(db, org_value)

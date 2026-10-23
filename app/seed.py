@@ -13,12 +13,14 @@ from app.models import (
     DeviceComponent,
     DeviceParameter,
     Diagnosis,
+    MaintenanceRecord,
     Membership,
     Organization,
     Plant,
     User,
     WorkOrder,
 )
+from app.security import hash_password
 
 # 固定 UUID，便于演示环境与接口示例复现；数据全部为虚构。
 ORG_DEMO_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
@@ -32,6 +34,9 @@ USER_OTHER_ID = uuid.UUID("00000000-0000-4000-8000-000000000105")
 USER_ZHAO_ID = uuid.UUID("00000000-0000-4000-8000-000000000106")
 
 BASE = datetime(2026, 5, 18, 9, 44, tzinfo=timezone.utc)
+
+DEMO_PASSWORD = "ForgePilot123!"
+DEMO_PASSWORD_HASH = hash_password(DEMO_PASSWORD)
 
 TREND_POINTS = [
     (0, 3.1, 67),
@@ -81,37 +86,37 @@ def seed_demo(db: Session) -> dict:
         id=USER_OWNER_ID,
         email="demo@example.com",
         display_name="李振华",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     tech = User(
         id=USER_TECH_ID,
         email="tech@example.com",
         display_name="张工",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     manager = User(
         id=USER_MANAGER_ID,
         email="manager@example.com",
         display_name="王强",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     viewer = User(
         id=USER_VIEWER_ID,
         email="viewer@example.com",
         display_name="只读用户",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     other = User(
         id=USER_OTHER_ID,
         email="other@example.com",
         display_name="赵工",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     zhao = User(
         id=USER_ZHAO_ID,
         email="zhao@example.com",
         display_name="赵工",
-        password_hash="demo-not-a-real-hash",
+        password_hash=DEMO_PASSWORD_HASH,
     )
     db.add_all([owner, tech, manager, viewer, other, zhao])
     db.flush()
@@ -578,6 +583,22 @@ def seed_demo(db: Session) -> dict:
         work_orders.append(order)
 
     db.flush()
+
+    db.add(
+        MaintenanceRecord(
+            organization_id=demo_org.id,
+            device_id=devices["AC-08"].id,
+            work_order_id=work_orders[3].id,
+            alert_id=alerts["ALT-0911"].id,
+            record_type="maintenance",
+            summary="AC-08 月度定检与油分滤芯检查",
+            action_taken="完成月度定检，更换油分滤芯。",
+            recorded_by=tech.id,
+            recorded_at=BASE - timedelta(days=2, hours=1),
+            created_by=tech.id,
+            updated_by=tech.id,
+        )
+    )
 
     db.add(
         WorkOrder(

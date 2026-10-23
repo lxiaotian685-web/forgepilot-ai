@@ -49,6 +49,10 @@ erDiagram
     DEVICES       ||--o{ WORK_ORDERS : "产生工单"
     ALERTS        ||--o{ WORK_ORDERS : "告警转工单"
     DIAGNOSES     ||--o{ WORK_ORDERS : "诊断转工单"
+    DEVICES       ||--o{ MAINTENANCE_RECORDS : "设备历史"
+    WORK_ORDERS   ||--o| MAINTENANCE_RECORDS : "完成回写"
+    DIAGNOSES     ||--o{ MAINTENANCE_RECORDS : "来源诊断"
+    ALERTS        ||--o{ MAINTENANCE_RECORDS : "来源告警"
     ORGANIZATIONS ||--o{ AUDIT_LOGS : "记录审计"
     USERS         ||--o{ AUDIT_LOGS : "作为操作人"
 
@@ -141,6 +145,18 @@ erDiagram
         varchar priority
         varchar status
         uuid owner_user_id FK
+        timestamptz deleted_at
+    }
+    MAINTENANCE_RECORDS {
+        uuid id PK
+        uuid organization_id FK
+        uuid device_id FK
+        uuid work_order_id FK
+        uuid diagnosis_id FK
+        uuid alert_id FK
+        varchar record_type
+        varchar summary
+        timestamptz recorded_at
         timestamptz deleted_at
     }
     AUDIT_LOGS {
@@ -339,8 +355,31 @@ erDiagram
 约束：`UNIQUE (organization_id, code) WHERE deleted_at IS NULL`；`UNIQUE (diagnosis_id) WHERE diagnosis_id IS NOT NULL AND deleted_at IS NULL`（一个诊断最多一条有效工单）；索引 `(organization_id, status)`、`(device_id)`、`(owner_user_id)`。
 
 状态流转：`pending → processing → verifying → completed`；`pending/processing → cancelled`；`verifying → processing`（返工）。其余流转拒绝。
+完成回写：转为 `completed` 时设置 `closed_at`，并在同一事务内写入 `maintenance_records`；重复完成不重复写入。
 
-### 4.11 audit_logs（审计日志）
+### 4.11 maintenance_records（设备历史）
+
+| 列名 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | `uuid` | PK | 主键 |
+| `organization_id` | `uuid` | NOT NULL, FK → `organizations.id` ON DELETE RESTRICT | 组织隔离键 |
+| `device_id` | `uuid` | NOT NULL, FK → `devices.id` ON DELETE RESTRICT | 设备 |
+| `work_order_id` | `uuid` | NULL, FK → `work_orders.id` ON DELETE SET NULL | 来源工单 |
+| `diagnosis_id` | `uuid` | NULL, FK → `diagnoses.id` ON DELETE SET NULL | 来源诊断 |
+| `alert_id` | `uuid` | NULL, FK → `alerts.id` ON DELETE SET NULL | 来源告警 |
+| `record_type` | `varchar(20)` | NOT NULL, CHECK | `maintenance`/`inspection`/`repair`/`replacement`/`other` |
+| `summary` | `varchar(255)` | NOT NULL | 历史摘要 |
+| `root_cause` | `text` | NULL | 根因 |
+| `action_taken` | `text` | NULL | 处理措施 |
+| `recorded_by` | `uuid` | NULL, FK → `users.id` ON DELETE SET NULL | 记录人 |
+| `recorded_at` | `timestamptz` | NOT NULL | 发生/记录时间 |
+| `deleted_at` | `timestamptz` | NULL | 软删除时间 |
+| 审计字段 | | | 四列 |
+
+约束：`UNIQUE (work_order_id) WHERE work_order_id IS NOT NULL AND deleted_at IS NULL`（一个工单最多一条有效历史）；索引 `(organization_id, device_id, recorded_at)`。
+回写规则：工单转为 `completed` 时，在同一事务内写入一条设备历史；重复完成幂等，不重复写入。
+
+### 4.12 audit_logs（审计日志）
 
 | 列名 | 类型 | 约束 | 说明 |
 |---|---|---|---|

@@ -39,6 +39,31 @@ class DiagnosisConfirm(RequestModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class DeviceParameterCreate(RequestModel):
+    name: str = Field(min_length=1, max_length=120)
+    value: float
+    unit: str | None = Field(default=None, max_length=32)
+    source: str = Field(default="sensor")
+    source_ref: str | None = Field(default=None, max_length=255)
+    is_authoritative: bool | None = None
+    recorded_at: datetime | None = None
+
+
+class DeviceParameterUpdate(RequestModel):
+    value: float | None = None
+    unit: str | None = Field(default=None, max_length=32)
+    source: str | None = None
+    source_ref: str | None = Field(default=None, max_length=255)
+    is_authoritative: bool | None = None
+    recorded_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _require_one_field(self) -> "DeviceParameterUpdate":
+        if not self.model_fields_set:
+            raise ValueError("至少提供一个可更新字段")
+        return self
+
+
 class WorkOrderCreate(RequestModel):
     title: str = Field(min_length=1, max_length=255)
     device_id: str = Field(min_length=1)

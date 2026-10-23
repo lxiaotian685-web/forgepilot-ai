@@ -16,6 +16,7 @@ from app.models import (
     Alert,
     AuditLog,
     Device,
+    DeviceParameter,
     Diagnosis,
     MaintenanceRecord,
     Plant,
@@ -41,6 +42,23 @@ def device_to_dict(device: Device, alert_count: int) -> dict:
         "health": float(device.health),
         "state": DEVICE_STATE_LABELS.get(device.state, device.state),
         "alert": alert_count,
+    }
+
+
+def device_parameter_to_dict(
+    parameter: DeviceParameter, device: Device | None
+) -> dict:
+    return {
+        "id": str(parameter.id),
+        "deviceId": device.code if device else None,
+        "name": parameter.name,
+        "value": float(parameter.value),
+        "unit": parameter.unit,
+        "source": parameter.source,
+        "sourceRef": parameter.source_ref,
+        "isAuthoritative": parameter.is_authoritative,
+        "recordedAt": iso(parameter.recorded_at),
+        "createdAt": iso(parameter.created_at),
     }
 
 

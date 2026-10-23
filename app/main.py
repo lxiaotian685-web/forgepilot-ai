@@ -13,8 +13,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api import (
     alerts,
     audit_events,
+    device_parameters,
     devices,
     diagnoses,
+    faults,
     maintenance_records,
     work_orders,
 )
@@ -125,6 +127,8 @@ def chat(request: ChatRequest):
 
 
 app.include_router(devices.router)
+app.include_router(device_parameters.router)
+app.include_router(faults.router)
 app.include_router(alerts.router)
 app.include_router(work_orders.router)
 app.include_router(diagnoses.router)

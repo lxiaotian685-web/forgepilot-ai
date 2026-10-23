@@ -57,6 +57,15 @@ RECORD_TYPE_LABELS = {
     "other": "其他",
 }
 
+PARAMETER_SOURCES = {
+    "nameplate",
+    "manual",
+    "sensor",
+    "imported",
+    "model_inference",
+    "corrected",
+}
+
 WORK_ORDER_TRANSITIONS = {
     "pending": {"processing", "cancelled"},
     "processing": {"verifying", "cancelled"},

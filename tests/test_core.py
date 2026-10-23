@@ -1,4 +1,7 @@
+import pytest
+
 from app.core import devices
+from app.core.chunker import chunk_text
 from app.core.demo import ensure_demo_documents, ingest_demo_docs
 from app.core.store import KnowledgeBase
 
@@ -67,3 +70,13 @@ def test_ensure_demo_documents_skips_when_populated(tmp_path):
 
     assert ensure_demo_documents(kb) == 0
     assert len(kb.list_documents()) == 3
+
+
+def test_chunk_text_rejects_invalid_overlap():
+    with pytest.raises(ValueError):
+        chunk_text("x" * 1_000, chunk_size=100, overlap=100)
+
+
+def test_chunk_text_rejects_zero_chunk_size():
+    with pytest.raises(ValueError):
+        chunk_text("x" * 100, chunk_size=0)

@@ -9,12 +9,12 @@ from app.services.rag import RAGService
 
 
 class _FailingLLM(MockLLM):
-    def answer(self, query, evidences):
+    def answer(self, query, evidences, device=None):
         raise LLMError("boom")
 
 
 class _BadCitationLLM(MockLLM):
-    def answer(self, query, evidences):
+    def answer(self, query, evidences, device=None):
         result = super().answer(query, evidences)
         result.statements = [
             Statement(type="fact", text="x", source=None, source_ids=["not-in-evidence"])
@@ -23,7 +23,7 @@ class _BadCitationLLM(MockLLM):
 
 
 class _MixedCitationLLM(MockLLM):
-    def answer(self, query, evidences):
+    def answer(self, query, evidences, device=None):
         result = super().answer(query, evidences)
         result.answer = "有效事实；无依据事实"
         result.summary = "混合引用摘要"
@@ -45,7 +45,7 @@ class _WrongDeviceProvider:
 
 
 class _ConflictingLLM(MockLLM):
-    def answer(self, query, evidences):
+    def answer(self, query, evidences, device=None):
         result = super().answer(query, evidences)
         result.conflicts = [
             Conflict(
@@ -53,7 +53,7 @@ class _ConflictingLLM(MockLLM):
                 sources=[
                     ConflictSource(origin="device_record", value="0.8 MPa"),
                     ConflictSource(
-                        origin="document", value="0.7 MPa", ref="a@v1.0#p1c0"
+                        origin="document", value="0.7 MPa", ref=evidences[0].id
                     ),
                 ],
             )
@@ -251,3 +251,80 @@ def test_provider_identity_mismatch_is_rejected():
     assert resp.status == "device_mismatch"
     assert resp.sources == []
     assert resp.statements == []
+
+
+class _CapturingLLM(MockLLM):
+    name = "mock"
+
+    def __init__(self):
+        self.last_device = None
+
+    def answer(self, query, evidences, device=None):
+        self.last_device = device
+        return super().answer(query, evidences, device=device)
+
+
+class _BadConflictLLM(MockLLM):
+    def answer(self, query, evidences, device=None):
+        result = super().answer(query, evidences, device=device)
+        result.conflicts = [
+            Conflict(
+                field="编造冲突",
+                sources=[
+                    ConflictSource(
+                        origin="document", value="编造值", ref="not-in-evidence"
+                    )
+                ],
+            )
+        ]
+        return result
+
+
+class _RealLikeLLM(MockLLM):
+    is_mock = False
+    name = "openai"
+
+
+def test_device_facts_are_passed_to_llm():
+    llm = _CapturingLLM()
+    svc = _make_service(llm)
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "ok"
+    assert llm.last_device is not None
+    assert llm.last_device.device_id == "AC-07"
+    assert llm.last_device.model == "GX11"
+
+
+def test_invalid_conflict_document_ref_is_dropped():
+    svc = _make_service(_BadConflictLLM())
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "ok"
+    assert resp.conflicts == []
+
+
+def test_static_provider_is_marked_demo():
+    svc = _make_service(MockLLM())
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.device_source == "static"
+    assert resp.is_demo is True
+
+
+def test_http_provider_with_real_llm_is_not_demo():
+    def handler(request):
+        return httpx.Response(200, json=_air_compressor_payload())
+
+    svc = RAGService(
+        _kb_with_two_models(), _RealLikeLLM(), _http_provider(handler)
+    )
+
+    resp = svc.diagnose("AC-07", "排气温度过高怎么排查？")
+
+    assert resp.status == "ok"
+    assert resp.device_source == "http"
+    assert resp.is_demo is False

@@ -1,36 +1,39 @@
-﻿# 诊断与确认建单 API 契约（v1.2，已对齐 B 实现）
+﻿# 诊断与确认建单 API 契约（v1.3，已对齐 B 实现）
 
 > 状态：C 侧契约，已对齐 B 的 `docs/api-contracts/business-api.yaml`（PR #16 实际实现）。
 > 关联：Issue #12（C 有据诊断）、Issue #11（B 诊断持久化）、Issue #4（端到端闭环）。
-> v1.2：C 侧新增设备事实提供方与 `device_*` 降级状态。
+> v1.3：C 侧新增组织隔离、鉴权要求、写接口开关、限流与 HTTP 状态映射。
 
 ## 1. 角色与边界
 
 | 角色 | 职责 | 边界 |
 |---|---|---|
-| C | 检索、模型调用、返回证据 | 只读；不落库、不建单 |
+| C | 检索、模型调用、返回证据 | 默认只读；文档写入默认关闭 |
 | B | 设备事实、权限、诊断落库、确认建单、审计 | 写路径唯一入口 |
 | A | 交互、页面反馈 | 不提交 `equipment_model` |
 
 - 权威设备事实和型号来自 B 的设备查询；C 不再用静态表维护设备事实。
-- `static` 提供方只用于离线演示与测试，生产必须配置 `DEVICE_PROVIDER=http`。
+- `static` 提供方只用于离线演示与测试，生产必须配置 `DEVICE_PROVIDER=http`；`APP_ENV=production` 时 static 会启动失败。
 - 设备型号到知识库文档域的映射是 C 的临时兼容字段，待 B 返回 `knowledgeModel` 后移除。
 - 模型（C）不能直接建单，必须走 B 的确认接口。
 - 组织与用户来自认证上下文，前端不在请求体传 `organization_id`。
 
-## 2. 认证与权限（B 定义）
+## 2. 认证与权限
 
 - 组织与用户来自**认证上下文**，不在 JSON 请求体。
-- 演示模式：请求头 `X-Organization-Id`、`X-User-Id`；缺省回落到 demo 组织/用户。
-- 生产模式：`Authorization: Bearer <token>`（token 内含 org/user，HMAC 签名）。
+- B 演示模式：请求头 `X-Organization-Id`、`X-User-Id`；缺省回落到 demo 组织/用户。
+- B 生产模式：`Authorization: Bearer <token>`（token 内含 org/user，HMAC 签名）。
+- C 默认要求 `X-Organization-Id`（`C_REQUIRE_AUTH=true`），用于知识库组织隔离；C 不自行签发 token，生产应由可信网关注入组织上下文。
 - 角色等级：`viewer < technician < manager < admin < owner`。
 - 跨组织资源一律返回 404。
 
-## 3. C 侧接口（只读）
+## 3. C 侧接口
 
 ### 3.1 诊断 `POST /api/v1/chat`
 
-请求 `{device_id, question, equipment_model?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, status}`。
+请求 `{device_id, question, equipment_model?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, device_source, is_demo, status}`。
+
+`device_source` 为 `static`/`http`，`is_demo` 表示模型或设备事实至少一方为演示模式；只有 `status=ok` 且 `is_demo=false` 才表示真实诊断成功。
 
 `status`：
 
@@ -46,9 +49,21 @@
 
 只有 `ok` 表示成功；其他状态不得作为诊断成功展示。
 
+HTTP 状态映射：
+
+| `status` | HTTP |
+|---|---|
+| `device_not_found` | 404 |
+| `device_unauthorized` | 403 |
+| `device_mismatch` | 502 |
+| `device_unavailable` | 503 |
+| 其他诊断状态 | 200（客户端必须检查 `status`） |
+
 ### 3.2 检索与文档
 
-- `POST /api/v1/search`、`POST /api/v1/documents/ingest`、`GET /api/v1/documents`。
+- `POST /api/v1/search`：检索当前组织文档，需要 `X-Organization-Id`。
+- `GET /api/v1/documents`：列出当前组织文档，支持 `limit`（1–500）和 `offset`。
+- `POST /api/v1/documents/ingest`：文档入库，需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`），生产不得开放无鉴权写入。
 
 ### 3.3 设备事实接入（C 已实现）
 
@@ -61,7 +76,7 @@ C 在检索前调用 B 的 `GET /api/v1/devices/{device_id}`，字段映射：
 | `type` | `type` | 设备类别 |
 | `model` | `model` | 设备型号 |
 | `location` | `location` | 位置 |
-| `status` | `state` | B 使用 `state`，C 统一为 `status` |
+| `status` | `state` | B 使用 `state`，C 将 `需关注/告警/运行/停机/维护` 归一化为 `attention/alert/running/stopped/maintenance` |
 | `organization_id` | 认证上下文 | 不在响应体 |
 
 知识域解析顺序：
@@ -74,10 +89,20 @@ C 在检索前调用 B 的 `GET /api/v1/devices/{device_id}`，字段映射：
 环境变量只保留连接配置：
 
 ```text
+APP_ENV=development|production
 DEVICE_PROVIDER=static|http
 DEVICE_API_BASE_URL
 DEVICE_API_TIMEOUT=5
 DEVICE_KNOWLEDGE_MODELS={"GX11":"compressor-002"}
+C_REQUIRE_AUTH=true
+C_DEFAULT_ORGANIZATION_ID=demo-org
+C_ENABLE_INGEST=false
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+RATE_LIMIT_PER_MINUTE=60
+MAX_REQUEST_BYTES=1000000
+DOCS_ENABLED=true
+LLM_MAX_TOKENS=1024
+HTTP_TRUST_ENV=false
 ```
 
 C **不得**从环境变量固定组织、用户或 token。每次 `/chat` 请求的
@@ -114,11 +139,12 @@ C **不得**从环境变量固定组织、用户或 token。每次 `/chat` 请�
 
 每条 `statement` 增加 `source_ids`，指向本次返回 `sources` 的稳定 ID；模型引用不在本次 `sources` 中视为错误引用。
 
-只要存在任何一条事实无法关联到本次 `sources`（包括混合有效/无效引用），整体返回 `no_answer`，替换模型原回答，不保留无依据事实的叙述；有效事实仍保留，无效事实降级为 `pending`。
+只要存在任何一条事实无法关联到本次 `sources`（包括混合有效/无效引用），整体返回 `no_answer`，替换模型原回答，不保留无依据事实的叙述；有效事实仍保留，无效事实降级为 `pending`。`statement.source` 由 C 根据有效 `source_ids` 重新生成，不采用模型自填的来源文本。
 
 ### 4.3 `conflicts` 与 `verification_suggestions`
 
 - `conflicts`：设备事实与文档结论不一致时，同时展示双方来源，禁止静默覆盖。
+- `origin=document` 且 `ref` 不在本次 `sources` 中的冲突来源会被丢弃；全部来源被丢弃时整条冲突丢弃。
 - `verification_suggestions`：说明缺什么证据、用于核验什么判断。
 - 禁止编造置信度、概率变化或自动修改设备参数。
 

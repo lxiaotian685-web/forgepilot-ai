@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from app.schemas.chat import Conflict, Statement, VerificationSuggestion
 from app.schemas.document import Evidence
+
+if TYPE_CHECKING:
+    from app.core.device_provider import DeviceContext
 
 
 class LLMError(Exception):
@@ -22,9 +26,15 @@ class LLMResult:
 
 class BaseLLM(ABC):
     is_mock: bool = True
+    name: str = "unknown"
 
     @abstractmethod
-    def answer(self, query: str, evidences: list[Evidence]) -> LLMResult:
+    def answer(
+        self,
+        query: str,
+        evidences: list[Evidence],
+        device: DeviceContext | None = None,
+    ) -> LLMResult:
         raise NotImplementedError
 
     def close(self) -> None:

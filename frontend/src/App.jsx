@@ -42,6 +42,7 @@ import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
 import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "./services/alertCenter";
 import DiagnosisPage from "./DiagnosisPage";
+import WorkOrdersPage from "./WorkOrdersPage";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -311,7 +312,7 @@ function App() {
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
-    orders: <OrdersPage notify={notify} workOrders={workOrders} sourceAlert={pageContext.alert} />,
+    orders: <WorkOrdersPage notify={notify} workOrders={workOrders} devices={devices} sourceAlert={pageContext.alert} />,
     audit: <AuditPage auditRows={auditRows} />,
   };
   return (

@@ -30,7 +30,10 @@ tags:
     description: 设备参数 CRUD
   - name: faults
     description: 设备历史故障链路
+  - name: auth
+    description: 登录与当前会话
 security:
+  - bearerAuth: []
   - organizationId: []
     userId: []
 paths:
@@ -921,8 +924,91 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: 登录并签发令牌
+      description: |
+        公开接口。
+        校验邮箱/密码和成员关系，签发 Bearer 令牌；生产必须配置 `AUTH_SECRET`。
+        本路径为 v0.1 待确认契约。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example:
+              email: demo@example.com
+              password: ForgePilot123!
+              organizationCode: demo-org
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+              example:
+                accessToken: eyJvcmciOiJkZW1vLW9yZyIsInVzZXIiOiJkZW1vQGV4YW1wbGUuY29tIn0.signature
+                tokenType: Bearer
+                expiresIn: 3600
+                user:
+                  id: 00000000-0000-4000-8000-000000000101
+                  email: demo@example.com
+                  displayName: 李振华
+                organization:
+                  id: 00000000-0000-4000-8000-000000000001
+                  code: demo-org
+                  name: 虚构演示制造企业
+                role: owner
+        '401':
+          description: 邮箱或密码错误
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+              example:
+                error: { code: UNAUTHORIZED, message: 邮箱或密码错误 }
+        '403':
+          description: 用户不属于该组织或已停用
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      operationId: getCurrentUser
+      summary: 当前用户与组织
+      description: 需要 Bearer 令牌或演示请求头。
+      responses:
+        '200':
+          description: 当前会话
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MeResponse' }
+              example:
+                user:
+                  id: 00000000-0000-4000-8000-000000000101
+                  email: demo@example.com
+                  displayName: 李振华
+                organization:
+                  id: 00000000-0000-4000-8000-000000000001
+                  code: demo-org
+                  name: 虚构演示制造企业
+                role: owner
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 登录接口签发的 Bearer 令牌（v0.1 为 HMAC 签名过渡方案）。
     organizationId:
       type: apiKey
       in: header
@@ -1259,6 +1345,51 @@ components:
         pageSize: { type: integer }
         total: { type: integer }
         totalPages: { type: integer }
+    UserSummary:
+      type: object
+      required: [id, email, displayName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+    OrganizationSummary:
+      type: object
+      required: [id, code, name]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: demo-org }
+        name: { type: string, example: 虚构演示制造企业 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 1 }
+        organizationCode:
+          type: string
+          nullable: true
+          description: 企业代码；用户只属于一个企业时可省略
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user, organization, role]
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, enum: [Bearer] }
+        expiresIn: { type: integer, example: 3600 }
+        user: { $ref: '#/components/schemas/UserSummary' }
+        organization: { $ref: '#/components/schemas/OrganizationSummary' }
+        role:
+          type: string
+          enum: [owner, admin, manager, technician, viewer]
+    MeResponse:
+      type: object
+      required: [user, organization, role]
+      properties:
+        user: { $ref: '#/components/schemas/UserSummary' }
+        organization: { $ref: '#/components/schemas/OrganizationSummary' }
+        role:
+          type: string
+          enum: [owner, admin, manager, technician, viewer]
     ErrorResponse:
       type: object
       required: [error]

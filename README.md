@@ -14,7 +14,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 - FastAPI应用骨架与健康检查；
 - 设备问答请求与响应数据模型，以及明确标记为 mock 的诊断接口；
-- 设备、告警、工单、诊断与人工确认业务 API（分页、筛选、权限、组织隔离、审计、幂等与事务），设备参数 CRUD、历史故障链路查询，工单完成自动回写设备历史；
+- 设备、告警、工单、诊断与人工确认业务 API（分页、筛选、权限、组织隔离、审计、幂等与事务），设备参数 CRUD、历史故障链路查询，工单完成自动回写设备历史，邮箱密码登录与 Bearer 令牌；
 - PostgreSQL 第一版 Alembic 迁移与虚构种子数据；
 - API 自动化测试（pytest）覆盖 CRUD、权限、隔离和状态机。
 
@@ -70,6 +70,18 @@ $env:DATABASE_URL="postgresql+psycopg://forgepilot:change-me@localhost:5432/forg
 
 注意：PostgreSQL 必须先执行迁移再 seed；SQLite 演示由 `app.seed` 自动建表。环境变量参考 `.env.example`。
 
+### 演示账号（仅虚构演示）
+
+| 组织 | 邮箱 | 密码 | 角色 |
+|---|---|---|---|
+| demo-org | demo@example.com | ForgePilot123! | owner |
+| demo-org | tech@example.com | ForgePilot123! | technician |
+| demo-org | manager@example.com | ForgePilot123! | manager |
+| demo-org | viewer@example.com | ForgePilot123! | viewer |
+| northwind-org | other@example.com | ForgePilot123! | owner |
+
+登录：`POST /api/v1/auth/login`，需要配置 `AUTH_SECRET`。演示密码仅用于本地/评审，生产必须替换。
+
 数据模型见 [docs/data-model/README.md](docs/data-model/README.md)，接口契约见 [docs/api-contracts/business-api.yaml](docs/api-contracts/business-api.yaml)。
 
 PostgreSQL 实测记录见 [docs/postgres-verification.md](docs/postgres-verification.md)，认证与写入保护见 [docs/security.md](docs/security.md)。
@@ -98,6 +110,8 @@ PostgreSQL 实测记录见 [docs/postgres-verification.md](docs/postgres-verific
 | PATCH | `/api/v1/devices/{device_id}/parameters/{parameter_id}` | 已实现 | 更新设备参数 |
 | DELETE | `/api/v1/devices/{device_id}/parameters/{parameter_id}` | 已实现 | 软删除设备参数 |
 | GET | `/api/v1/devices/{device_id}/faults` | 已实现 | 设备历史故障链路查询 |
+| POST | `/api/v1/auth/login` | 已实现 | 登录并签发 Bearer 令牌 |
+| GET | `/api/v1/auth/me` | 已实现 | 当前用户、组织与角色 |
 
 ## 目标业务闭环
 

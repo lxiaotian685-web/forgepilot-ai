@@ -40,6 +40,7 @@ $env:DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot"
 ```text
 organizations=2
 devices=7
+device_parameters=16
 diagnoses=2
 work_orders=5
 maintenance_records=1
@@ -65,10 +66,10 @@ $env:TEST_DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot
 输出：
 
 ```text
-43 passed, 1 warning in 17.72s
+54 passed, 1 warning in 22.25s
 ```
 
-覆盖：正常确认建单、跨设备拒绝、跨组织拒绝、重复确认幂等、事务失败回滚、刷新后查询、审计查询、鉴权与写入保护、工单完成回写设备历史与去重。
+覆盖：正常确认建单、跨设备拒绝、跨组织拒绝、重复确认幂等、事务失败回滚、刷新后查询、审计查询、鉴权与写入保护、工单完成回写设备历史与去重、设备参数 CRUD、历史故障链路查询。
 
 ## 5. 迁移回退与重建
 

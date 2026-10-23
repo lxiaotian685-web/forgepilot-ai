@@ -26,6 +26,10 @@ tags:
     description: 审计事件查询
   - name: maintenance
     description: 设备历史（工单完成回写）
+  - name: device-parameters
+    description: 设备参数 CRUD
+  - name: faults
+    description: 设备历史故障链路
 security:
   - organizationId: []
     userId: []
@@ -694,6 +698,229 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/devices/{device_id}/parameters:
+    get:
+      tags: [device-parameters]
+      operationId: listDeviceParameters
+      summary: 设备参数列表
+      description: |
+        权限：组织内任意有效成员。
+        返回参数读数；latest=true 时每个参数名只返回最新一条。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: name
+          in: query
+          required: false
+          schema: { type: string, example: vibration }
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [nameplate, manual, sensor, imported, model_inference, corrected]
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: latest
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: 参数分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceParameterPage' }
+              example:
+                items:
+                  - id: 0b7c2a9e-0000-4000-8000-000000000001
+                    deviceId: AC-07
+                    name: rated_power
+                    value: 55
+                    unit: kW
+                    source: nameplate
+                    sourceRef: 铭牌照片 DEMO-NAMEPLATE
+                    isAuthoritative: true
+                    recordedAt: '2026-04-18T09:44:00+08:00'
+                page: 1
+                pageSize: 20
+                total: 16
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [device-parameters]
+      operationId: createDeviceParameter
+      summary: 新增设备参数
+      description: |
+        权限：technician 及以上。
+        source=model_inference 时强制 isAuthoritative=false。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceParameterCreate' }
+            example:
+              name: oil_pressure
+              value: 0.42
+              unit: MPa
+              source: sensor
+              sourceRef: sensor:AC-07:OIL-01
+              recordedAt: '2026-10-21T12:00:00+08:00'
+      responses:
+        '201':
+          description: 已创建的参数
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceParameter' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: 同一设备、参数名和采集时间已存在
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/devices/{device_id}/parameters/{parameter_id}:
+    patch:
+      tags: [device-parameters]
+      operationId: updateDeviceParameter
+      summary: 更新设备参数
+      description: 权限：technician 及以上。source=model_inference 时强制 isAuthoritative=false。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+        - name: parameter_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeviceParameterUpdate' }
+            example:
+              value: 0.45
+              unit: bar
+      responses:
+        '200':
+          description: 更新后的参数
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceParameter' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 参数名与采集时间冲突, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      tags: [device-parameters]
+      operationId: deleteDeviceParameter
+      summary: 软删除设备参数
+      description: 权限：manager 及以上。写入 deleted_at，不做物理删除。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+        - name: parameter_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: 已软删除 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/devices/{device_id}/faults:
+    get:
+      tags: [faults]
+      operationId: listDeviceFaults
+      summary: 设备历史故障
+      description: |
+        权限：组织内任意有效成员。
+        返回告警及其关联的诊断、工单和设备历史，形成“告警→诊断→工单→历史”链路。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [待确认, 处理中, 已确认, 已关闭]
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [一级紧急, 二级警告, 三级提示]
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: 设备故障历史分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FaultHistoryPage' }
+              example:
+                items:
+                  - alertId: ALT-0941
+                    deviceId: AC-07
+                    level: 一级紧急
+                    title: 驱动端轴承高频振动 RMS 严重突破警戒上限
+                    status: 待确认
+                    occurredAt: '2026-05-18T09:00:00+08:00'
+                    diagnosisId: DIAG-20250518-0941
+                    workOrderId: WO-20250518-01
+                    maintenanceRecordId: null
+                    resolvedAt: null
+                page: 1
+                pageSize: 20
+                total: 1
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     organizationId:
@@ -954,6 +1181,80 @@ components:
       required: [items, page, pageSize, total, totalPages]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/MaintenanceRecord' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    DeviceParameter:
+      type: object
+      required: [id, deviceId, name, value, source, isAuthoritative, recordedAt]
+      properties:
+        id: { type: string, format: uuid }
+        deviceId: { type: string, example: AC-07 }
+        name: { type: string, example: vibration }
+        value: { type: number, format: float }
+        unit: { type: string, nullable: true, example: mm/s }
+        source:
+          type: string
+          enum: [nameplate, manual, sensor, imported, model_inference, corrected]
+        sourceRef: { type: string, nullable: true }
+        isAuthoritative: { type: boolean }
+        recordedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    DeviceParameterCreate:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        value: { type: number, format: float }
+        unit: { type: string, maxLength: 32, nullable: true }
+        source:
+          type: string
+          enum: [nameplate, manual, sensor, imported, model_inference, corrected]
+          default: sensor
+        sourceRef: { type: string, maxLength: 255, nullable: true }
+        isAuthoritative: { type: boolean, nullable: true }
+        recordedAt: { type: string, format: date-time, nullable: true }
+    DeviceParameterUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        value: { type: number, format: float }
+        unit: { type: string, maxLength: 32, nullable: true }
+        source:
+          type: string
+          enum: [nameplate, manual, sensor, imported, model_inference, corrected]
+        sourceRef: { type: string, maxLength: 255, nullable: true }
+        isAuthoritative: { type: boolean, nullable: true }
+        recordedAt: { type: string, format: date-time, nullable: true }
+    DeviceParameterPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/DeviceParameter' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    FaultHistoryItem:
+      type: object
+      required: [alertId, deviceId, level, title, status, occurredAt]
+      properties:
+        alertId: { type: string, example: ALT-0941 }
+        deviceId: { type: string, example: AC-07 }
+        level: { type: string, enum: [一级紧急, 二级警告, 三级提示] }
+        title: { type: string }
+        status: { type: string, enum: [待确认, 处理中, 已确认, 已关闭] }
+        occurredAt: { type: string, format: date-time }
+        diagnosisId: { type: string, nullable: true }
+        workOrderId: { type: string, nullable: true }
+        maintenanceRecordId: { type: string, format: uuid, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+    FaultHistoryPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/FaultHistoryItem' } }
         page: { type: integer }
         pageSize: { type: integer }
         total: { type: integer }

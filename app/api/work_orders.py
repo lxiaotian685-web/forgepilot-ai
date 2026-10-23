@@ -18,7 +18,16 @@ from app.api.labels import (
 )
 from app.api.serializers import page_response, work_order_to_dict
 from app.db import get_db
-from app.models import Alert, Device, Diagnosis, Membership, User, WorkOrder, utcnow
+from app.models import (
+    Alert,
+    Device,
+    Diagnosis,
+    MaintenanceRecord,
+    Membership,
+    User,
+    WorkOrder,
+    utcnow,
+)
 from app.schemas.requests import WorkOrderCreate, WorkOrderUpdate
 
 router = APIRouter(prefix="/api/v1/work-orders", tags=["work-orders"])
@@ -419,10 +428,53 @@ def update_work_order(
             "ownerId": str(order.owner_user_id) if order.owner_user_id else None,
         },
     )
-    db.commit()
+    device = db.get(Device, order.device_id)
+    try:
+        if order.status == "completed":
+            existing_record = db.scalar(
+                select(MaintenanceRecord).where(
+                    MaintenanceRecord.organization_id
+                    == context.organization_id,
+                    MaintenanceRecord.work_order_id == order.id,
+                    MaintenanceRecord.deleted_at.is_(None),
+                )
+            )
+            if existing_record is None:
+                record = MaintenanceRecord(
+                    organization_id=context.organization_id,
+                    device_id=order.device_id,
+                    work_order_id=order.id,
+                    diagnosis_id=order.diagnosis_id,
+                    alert_id=order.alert_id,
+                    record_type="maintenance",
+                    summary=order.title[:255],
+                    action_taken=order.description,
+                    recorded_by=context.user_id,
+                    recorded_at=utcnow(),
+                    created_by=context.user_id,
+                    updated_by=context.user_id,
+                )
+                db.add(record)
+                db.flush()
+                write_audit(
+                    db,
+                    organization_id=context.organization_id,
+                    actor_user_id=context.user_id,
+                    action="maintenance_record.create",
+                    entity_type="maintenance_record",
+                    entity_id=record.id,
+                    after={
+                        "deviceId": device.code if device else None,
+                        "workOrderId": order.code,
+                        "recordType": record.record_type,
+                    },
+                )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(order)
 
-    device = db.get(Device, order.device_id)
     owner = db.get(User, order.owner_user_id) if order.owner_user_id else None
     alert = db.get(Alert, order.alert_id) if order.alert_id else None
     diagnosis = (

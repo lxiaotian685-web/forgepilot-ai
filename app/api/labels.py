@@ -49,6 +49,14 @@ DIAGNOSIS_STATUS_LABELS = {
     "rejected": "已拒绝",
 }
 
+RECORD_TYPE_LABELS = {
+    "maintenance": "维护",
+    "inspection": "点检",
+    "repair": "维修",
+    "replacement": "更换",
+    "other": "其他",
+}
+
 WORK_ORDER_TRANSITIONS = {
     "pending": {"processing", "cancelled"},
     "processing": {"verifying", "cancelled"},

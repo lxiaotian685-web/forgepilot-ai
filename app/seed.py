@@ -13,6 +13,7 @@ from app.models import (
     DeviceComponent,
     DeviceParameter,
     Diagnosis,
+    MaintenanceRecord,
     Membership,
     Organization,
     Plant,
@@ -578,6 +579,22 @@ def seed_demo(db: Session) -> dict:
         work_orders.append(order)
 
     db.flush()
+
+    db.add(
+        MaintenanceRecord(
+            organization_id=demo_org.id,
+            device_id=devices["AC-08"].id,
+            work_order_id=work_orders[3].id,
+            alert_id=alerts["ALT-0911"].id,
+            record_type="maintenance",
+            summary="AC-08 月度定检与油分滤芯检查",
+            action_taken="完成月度定检，更换油分滤芯。",
+            recorded_by=tech.id,
+            recorded_at=BASE - timedelta(days=2, hours=1),
+            created_by=tech.id,
+            updated_by=tech.id,
+        )
+    )
 
     db.add(
         WorkOrder(

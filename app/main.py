@@ -15,6 +15,7 @@ from app.api import (
     audit_events,
     devices,
     diagnoses,
+    maintenance_records,
     work_orders,
 )
 from app.api.errors import ERROR_CODES
@@ -128,3 +129,4 @@ app.include_router(alerts.router)
 app.include_router(work_orders.router)
 app.include_router(diagnoses.router)
 app.include_router(audit_events.router)
+app.include_router(maintenance_records.router)

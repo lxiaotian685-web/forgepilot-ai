@@ -410,8 +410,9 @@ def test_token_round_trip_and_expiry(monkeypatch):
     expired = issue_token("demo-org", "demo@example.com", ttl_seconds=-1)
     assert verify_token(expired) is None
 
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
-    assert verify_token(tampered) is None
+    body, signature = token.split(".", 1)
+    tampered_body = ("A" if body[0] != "A" else "B") + body[1:]
+    assert verify_token(f"{tampered_body}.{signature}") is None
 
 
 def test_device_query_adapter_is_authoritative(api):

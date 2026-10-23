@@ -20,7 +20,8 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - 设备不存在、无知识、型号不匹配、设备服务不可用等降级状态；
 - 提示注入防护、客户端复用、连续调用与降级测试；
 - 3 份虚构演示手册与 20 条评测集；
-- 63 项自动化测试。
+- 63 项自动化测试；
+- 已用 B 侧 SQLite 种子数据完成 AC-07 真实设备事实联调（模型仍为 Mock，真实模型待密钥复测）。
 
 尚未实现：
 
@@ -29,7 +30,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - Agent工具调用与工单闭环；
 - 备件、权限、审计和生产部署。
 
-完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。AC-07 的 C↔B 联调记录见 [docs/integration-ac07.md](docs/integration-ac07.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 本地运行
 

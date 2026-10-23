@@ -24,7 +24,8 @@ $env:DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot"
 ```text
 Running upgrade  -> 0001_initial, initial schema
 Running upgrade 0001_initial -> 0002_diagnosis_confirmation, diagnosis confirmation and work order link
-0002_diagnosis_confirmation (head)
+Running upgrade 0002_diagnosis_confirmation -> 0003_maintenance_records, maintenance records (device history)
+0003_maintenance_records (head)
 ```
 
 ## 3. 种子数据
@@ -41,6 +42,7 @@ organizations=2
 devices=7
 diagnoses=2
 work_orders=5
+maintenance_records=1
 audit_logs=2
 ```
 
@@ -63,10 +65,10 @@ $env:TEST_DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot
 输出：
 
 ```text
-39 passed, 1 warning in 13.48s
+43 passed, 1 warning in 17.72s
 ```
 
-覆盖：正常确认建单、跨设备拒绝、跨组织拒绝、重复确认幂等、事务失败回滚、刷新后查询、审计查询、鉴权与写入保护。
+覆盖：正常确认建单、跨设备拒绝、跨组织拒绝、重复确认幂等、事务失败回滚、刷新后查询、审计查询、鉴权与写入保护、工单完成回写设备历史与去重。
 
 ## 5. 迁移回退与重建
 
@@ -79,10 +81,12 @@ $env:DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:55432/forgepilot_test
 关键输出：
 
 ```text
+Running downgrade 0003_maintenance_records -> 0002_diagnosis_confirmation
 Running downgrade 0002_diagnosis_confirmation -> 0001_initial
 Running downgrade 0001_initial ->
 Running upgrade  -> 0001_initial
 Running upgrade 0001_initial -> 0002_diagnosis_confirmation
+Running upgrade 0002_diagnosis_confirmation -> 0003_maintenance_records
 ```
 
 ## 6. 部署说明

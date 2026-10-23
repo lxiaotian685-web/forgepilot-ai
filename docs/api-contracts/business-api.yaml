@@ -24,6 +24,8 @@ tags:
     description: 诊断结果与人工确认
   - name: audit
     description: 审计事件查询
+  - name: maintenance
+    description: 设备历史（工单完成回写）
 security:
   - organizationId: []
     userId: []
@@ -630,6 +632,68 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/maintenance-records:
+    get:
+      tags: [maintenance]
+      operationId: listMaintenanceRecords
+      summary: 设备历史查询
+      description: |
+        权限：组织内任意有效成员。
+        工单完成时自动回写设备历史；按组织隔离，支持按设备/工单/类型/时间筛选。
+        本路径为 v0.1 待确认契约。
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: deviceId
+          in: query
+          required: false
+          schema: { type: string, example: AC-07 }
+        - name: workOrderId
+          in: query
+          required: false
+          schema: { type: string, example: WO-20250518-01 }
+        - name: recordType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [maintenance, inspection, repair, replacement, other, 维护, 点检, 维修, 更换, 其他]
+        - name: from
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: 设备历史分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceRecordPage' }
+              example:
+                items:
+                  - id: 0b7c2a9e-0000-4000-8000-000000000001
+                    deviceId: AC-08
+                    workOrderId: WO-20250516-04
+                    diagnosisId: null
+                    alertId: ALT-0911
+                    recordType: 维护
+                    recordTypeCode: maintenance
+                    summary: AC-08 月度定检与油分滤芯检查
+                    rootCause: null
+                    actionTaken: 完成月度定检，更换油分滤芯。
+                    recordedBy: 张工
+                    recordedAt: '2026-05-16T08:44:00+08:00'
+                page: 1
+                pageSize: 20
+                total: 1
+                totalPages: 1
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     organizationId:
@@ -859,6 +923,37 @@ components:
       required: [items, page, pageSize, total, totalPages]
       properties:
         items: { type: array, items: { $ref: '#/components/schemas/AuditEvent' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    MaintenanceRecord:
+      type: object
+      required: [id, deviceId, recordType, summary, recordedAt]
+      properties:
+        id: { type: string, format: uuid }
+        deviceId: { type: string, example: AC-08 }
+        workOrderId: { type: string, nullable: true }
+        diagnosisId: { type: string, nullable: true }
+        alertId: { type: string, nullable: true }
+        recordType:
+          type: string
+          enum: [维护, 点检, 维修, 更换, 其他]
+        recordTypeCode:
+          type: string
+          enum: [maintenance, inspection, repair, replacement, other]
+        summary: { type: string }
+        rootCause: { type: string, nullable: true }
+        actionTaken: { type: string, nullable: true }
+        recordedBy: { type: string, nullable: true }
+        recordedById: { type: string, format: uuid, nullable: true }
+        recordedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    MaintenanceRecordPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/MaintenanceRecord' } }
         page: { type: integer }
         pageSize: { type: integer }
         total: { type: integer }

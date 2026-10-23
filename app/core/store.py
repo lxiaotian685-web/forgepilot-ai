@@ -76,9 +76,12 @@ class KnowledgeBase:
             doc = self._documents[chunk.document_id]
             results.append(
                 Evidence(
+                    id=f"{doc.id}@{doc.version}#p{chunk.page}c{chunk.chunk_index}",
                     document_id=doc.id,
+                    version=doc.version,
                     title=doc.title,
                     page=chunk.page,
+                    chunk_index=chunk.chunk_index,
                     snippet=chunk.text[:200],
                     score=round(score, 4),
                 )

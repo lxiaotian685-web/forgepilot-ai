@@ -9,6 +9,23 @@ class Statement(BaseModel):
     type: Literal["fact", "inference", "pending"]
     text: str
     source: str | None = None
+    source_ids: list[str] = Field(default_factory=list)
+
+
+class ConflictSource(BaseModel):
+    origin: str
+    value: str
+    ref: str | None = None
+
+
+class Conflict(BaseModel):
+    field: str
+    sources: list[ConflictSource] = Field(default_factory=list)
+
+
+class VerificationSuggestion(BaseModel):
+    missing_evidence: str
+    to_verify: str
 
 
 class ChatRequest(BaseModel):
@@ -20,7 +37,12 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     device_id: str
     answer: str
+    summary: str = ""
     statements: list[Statement]
     sources: list[Evidence]
+    conflicts: list[Conflict] = Field(default_factory=list)
+    verification_suggestions: list[VerificationSuggestion] = Field(
+        default_factory=list
+    )
     is_mock: bool
     status: str = "ok"

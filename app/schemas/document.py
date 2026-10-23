@@ -19,9 +19,12 @@ class Chunk(BaseModel):
 
 
 class Evidence(BaseModel):
+    id: str
     document_id: str
+    version: str
     title: str
-    page: int
+    page: int | None = None
+    chunk_index: int = 0
     snippet: str
     score: float
 

@@ -21,6 +21,7 @@ import {
   Dismiss24Regular,
   Filter24Regular,
   MoreHorizontal24Regular,
+  PeopleTeam24Regular,
   Play24Regular,
   Pulse24Regular,
   Search24Regular,
@@ -40,8 +41,10 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
-import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "./services/alertCenter";
+import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import DiagnosisPage from "./DiagnosisPage";
+import WorkOrdersPage from "./WorkOrdersPage";
+import PeoplePage from "./PeoplePage";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -50,6 +53,7 @@ const navItems = [
   { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
+  { id: "people", label: "人员管理", icon: PeopleTeam24Regular },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
 
@@ -209,6 +213,8 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
   const [filters, setFilters] = useState({ query: "", status: "", level: "", owner: "", device: "" });
   const [assignee, setAssignee] = useState("");
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState(null);
   useEffect(() => setItems(alerts), [alerts]);
   const counts = countAlerts(items);
   const filtered = filterAlerts(items, filters);
@@ -221,6 +227,23 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
       setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
       setAssignee("");
       notify(`告警 ${updated.id} 已更新为${updated.status}；正式持久化等待 T05 接口`);
+    } catch (error) { notify(error.message); }
+  };
+  const saveAlert = () => {
+    try {
+      const updated = updateAlert(selected, editDraft);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditDraft(null);
+      notify(`告警 ${updated.id} 修改已保存（当前会话）`);
+    } catch (error) { notify(error.message); }
+  };
+  const reopen = () => {
+    if (!window.confirm(`确认重新打开告警 ${selected.id}？`)) return;
+    try {
+      const updated = reopenAlert(selected);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setMenuOpen(false);
+      notify(`告警 ${updated.id} 已重新进入处理中`);
     } catch (error) { notify(error.message); }
   };
   return (
@@ -245,7 +268,7 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
           <div className="action-row">
             {selected.status === "待确认" && <><select aria-label="指派负责人" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">选择负责人</option>{["张工", "王强", "赵工"].map((owner) => <option key={owner}>{owner}</option>)}</select><Button appearance="primary" onClick={() => updateStatus("处理中")}>确认并指派</Button></>}
             {selected.status === "处理中" && <Button appearance="primary" onClick={() => updateStatus("已关闭")}>解决并关闭</Button>}
-            <Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" />
+            <div className="more-menu-wrap"><Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} />{menuOpen && <div className="more-menu" role="menu"><button onClick={() => { setEditDraft({ title: selected.title, level: selected.level, owner: selected.owner, note: selected.note || "" }); setMenuOpen(false); }}>编辑告警</button><button onClick={() => { setEditDraft({ title: selected.title, level: selected.level, owner: selected.owner, note: selected.note || "" }); setMenuOpen(false); }}>转交负责人</button><button onClick={() => { navigator.clipboard?.writeText(selected.id); setMenuOpen(false); notify(`已复制告警编号 ${selected.id}`); }}>复制告警编号</button>{selected.status === "已关闭" && <button onClick={reopen}>重新打开</button>}</div>}</div>
           </div>
           <div className="reading-grid"><div><span>当前值</span><strong className="text-danger">7.82 mm/s</strong></div><div><span>告警阈值</span><strong>4.50 mm/s</strong></div><div><span>采样频率</span><strong>1,000 Hz</strong></div><div><span>特征频率</span><strong>148.5 Hz</strong></div></div>
           <TrendChart data={trendData} compact />
@@ -253,6 +276,7 @@ function AlertsPage({ navigate, notify, alerts, trendData }) {
           <div className="action-row"><Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis", { deviceId: alertDeviceId(selected), alert: selected })}>进入诊断工作台</Button><Button onClick={() => navigate("orders", { deviceId: alertDeviceId(selected), alert: selected })}>创建维修工单</Button></div>
         </section> : <section className="panel alert-detail"><div className="alert-empty">请选择一条告警</div></section>}
       </div>
+      {editDraft && <div className="modal-backdrop" role="presentation"><section className="panel alert-edit-dialog" role="dialog" aria-modal="true" aria-label="编辑告警"><div className="form-heading"><div><small>{selected.id}</small><h2>编辑告警</h2></div><Button appearance="subtle" onClick={() => setEditDraft(null)}>关闭</Button></div><label>告警标题<Input value={editDraft.title} onChange={(_, data) => setEditDraft((current) => ({ ...current, title: data.value }))} /></label><div className="form-grid"><label>告警等级<select value={editDraft.level} onChange={(event) => setEditDraft((current) => ({ ...current, level: event.target.value }))}>{["一级紧急", "二级警告", "三级提示"].map((level) => <option key={level}>{level}</option>)}</select></label><label>负责人<select value={editDraft.owner} onChange={(event) => setEditDraft((current) => ({ ...current, owner: event.target.value }))}><option>未指派</option>{["张工", "王强", "赵工"].map((owner) => <option key={owner}>{owner}</option>)}</select></label></div><label>处置备注<textarea value={editDraft.note} onChange={(event) => setEditDraft((current) => ({ ...current, note: event.target.value }))} placeholder="记录复核结果、现场情况或转交原因" /></label><div className="form-actions"><Button onClick={() => setEditDraft(null)}>取消</Button><Button appearance="primary" onClick={saveAlert}>保存修改</Button></div><p className="boundary-note">当前保存到前端会话；服务器持久化等待告警更新接口。</p></section></div>}
     </>
   );
 }
@@ -311,7 +335,8 @@ function App() {
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
-    orders: <OrdersPage notify={notify} workOrders={workOrders} sourceAlert={pageContext.alert} />,
+    orders: <WorkOrdersPage notify={notify} workOrders={workOrders} devices={devices} sourceAlert={pageContext.alert} />,
+    people: <PeoplePage notify={notify} />,
     audit: <AuditPage auditRows={auditRows} />,
   };
   return (

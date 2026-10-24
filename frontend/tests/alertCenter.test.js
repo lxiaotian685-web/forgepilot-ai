@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "../src/services/alertCenter.js";
+import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "../src/services/alertCenter.js";
 
 const alerts = [
   { id: "A-1", level: "一级紧急", title: "振动超限", device: "AC-07 空压机", owner: "未指派", status: "待确认" },
@@ -19,3 +19,9 @@ test("requires an owner and rejects illegal status jumps", () => {
   assert.throws(() => transitionAlert(alerts[0], "已关闭", "赵工"), /不能从/);
 });
 test("extracts the equipment id for downstream context", () => assert.equal(alertDeviceId(alerts[1]), "P-102"));
+test("validates edits and reopens only closed alerts", () => {
+  assert.equal(updateAlert(alerts[0], { title: "温度持续超限", level: "一级紧急", owner: "赵工", note: "现场复核" }).owner, "赵工");
+  assert.throws(() => updateAlert(alerts[0], { title: "", level: "一级紧急", owner: "赵工" }), /标题/);
+  assert.equal(reopenAlert(alerts[2]).status, "处理中");
+  assert.throws(() => reopenAlert(alerts[0]), /已关闭/);
+});

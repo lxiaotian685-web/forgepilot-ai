@@ -8,12 +8,21 @@ from urllib.parse import quote
 
 import httpx
 
+from app.config import env_bool, is_production
 from app.core.devices import CATEGORY_DOC_MODEL, DEVICE_CATALOG
 
 DEFAULT_KNOWLEDGE_MODELS: dict[str, str] = {
     "GX11": "compressor-002",
     "P-102X": "pump-004",
     "GMC-4000": "cnc-003",
+}
+
+STATE_CODES = {
+    "需关注": "attention",
+    "告警": "alert",
+    "运行": "running",
+    "停机": "stopped",
+    "维护": "maintenance",
 }
 
 
@@ -48,6 +57,8 @@ class DeviceContext:
 
 
 class DeviceProvider(Protocol):
+    source: str
+
     def get_device(
         self, device_id: str, auth: DeviceAuth | None = None
     ) -> DeviceContext:
@@ -59,6 +70,8 @@ class DeviceProvider(Protocol):
 
 class StaticDeviceProvider:
     """离线演示与单元测试使用的内置设备数据，不作为生产事实来源。"""
+
+    source = "static"
 
     def __init__(self) -> None:
         self._devices: dict[str, DeviceContext] = {}
@@ -90,6 +103,8 @@ class StaticDeviceProvider:
 class HttpDeviceProvider:
     """调用 B 包 GET /api/v1/devices/{device_id} 获取真实设备事实。"""
 
+    source = "http"
+
     def __init__(
         self,
         base_url: str,
@@ -103,7 +118,9 @@ class HttpDeviceProvider:
         self.base_url = base_url.rstrip("/")
         self._knowledge_models = _load_knowledge_models(knowledge_models)
         self._owns_client = client is None
-        self._client = client or httpx.Client(timeout=timeout)
+        self._client = client or httpx.Client(
+            timeout=timeout, trust_env=env_bool("HTTP_TRUST_ENV", False)
+        )
 
     @property
     def client(self) -> httpx.Client:
@@ -162,13 +179,14 @@ class HttpDeviceProvider:
             )
 
         model = str(data.get("model") or "")
+        raw_state = str(data.get("state") or data.get("status") or "unknown")
         return DeviceContext(
             device_id=response_id,
             name=str(data.get("name") or ""),
             type=str(data.get("type") or ""),
             model=model,
             location=str(data.get("location") or ""),
-            status=str(data.get("state") or data.get("status") or "unknown"),
+            status=STATE_CODES.get(raw_state, raw_state),
             knowledge_model=self._resolve_knowledge_model(data, model),
             organization_id=auth.organization_id if auth else None,
         )
@@ -212,6 +230,8 @@ def _load_knowledge_models(overrides: dict[str, str] | None) -> dict[str, str]:
 def build_device_provider() -> DeviceProvider:
     provider = os.getenv("DEVICE_PROVIDER", "static").strip().lower()
     if provider == "static":
+        if is_production():
+            raise ValueError("生产环境不允许使用 DEVICE_PROVIDER=static")
         return StaticDeviceProvider()
     if provider == "http":
         return HttpDeviceProvider(

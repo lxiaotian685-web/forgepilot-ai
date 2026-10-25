@@ -259,3 +259,22 @@ def test_build_device_provider_rejects_unknown_value(monkeypatch):
 
     with pytest.raises(ValueError):
         build_device_provider()
+
+
+def test_http_provider_normalizes_state_label():
+    def handler(request):
+        return httpx.Response(200, json=_payload(state="需关注"))
+
+    provider = HttpDeviceProvider(
+        base_url="http://business-api", client=_client(handler)
+    )
+
+    assert provider.get_device("AC-07").status == "attention"
+
+
+def test_build_device_provider_rejects_static_in_production(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DEVICE_PROVIDER", "static")
+
+    with pytest.raises(ValueError):
+        build_device_provider()

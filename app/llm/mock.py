@@ -7,8 +7,9 @@ from app.schemas.document import Evidence
 
 class MockLLM(BaseLLM):
     is_mock = True
+    name = "mock"
 
-    def answer(self, query: str, evidences: list[Evidence]) -> LLMResult:
+    def answer(self, query: str, evidences: list[Evidence], device=None) -> LLMResult:
         lines = ["基于知识库检索，给出以下模拟诊断建议（请结合现场确认）：", ""]
         statements: list[Statement] = []
         for i, ev in enumerate(evidences, start=1):
@@ -59,6 +60,7 @@ class MockLLM(BaseLLM):
 
 class UnavailableLLM(BaseLLM):
     is_mock = True
+    name = "unavailable"
 
-    def answer(self, query: str, evidences: list[Evidence]) -> LLMResult:
+    def answer(self, query: str, evidences: list[Evidence], device=None) -> LLMResult:
         raise LLMError("模型服务不可用")

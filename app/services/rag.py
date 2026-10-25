@@ -8,7 +8,13 @@ from app.core.device_provider import (
 )
 from app.core.store import KnowledgeBase
 from app.llm.base import BaseLLM, LLMError
-from app.schemas.chat import ChatResponse, Statement, VerificationSuggestion
+from app.schemas.chat import (
+    ChatResponse,
+    Conflict,
+    DiagnosisStatus,
+    Statement,
+    VerificationSuggestion,
+)
 from app.schemas.document import Evidence
 
 
@@ -66,30 +72,32 @@ class RAGService:
             question,
             equipment_model=device.knowledge_model,
             top_k=self.top_k,
+            organization_id=auth.organization_id if auth else None,
         )
 
         if not evidences:
-            return ChatResponse(
-                device_id=device_id,
+            return self._respond(
+                device_id,
+                "no_answer",
                 answer="未在知识库中找到相关文档，无法给出有证据的诊断建议。",
                 statements=[],
                 sources=[],
-                is_mock=self.llm.is_mock,
-                status="no_answer",
             )
 
         try:
-            result = self.llm.answer(question, evidences)
+            result = self.llm.answer(question, evidences, device=device)
         except LLMError:
             return self._degraded(device_id, evidences)
 
         statements, has_ungrounded_fact = self._validate_sources(
             result.statements, evidences
         )
+        conflicts = self._validate_conflicts(result.conflicts, evidences)
 
         if has_ungrounded_fact:
-            return ChatResponse(
-                device_id=device_id,
+            return self._respond(
+                device_id,
+                "no_answer",
                 answer=(
                     "模型给出的部分事实引用无法在本次检索结果中核实，"
                     "不能作为有依据的诊断。以下仅保留可核实事实，"
@@ -98,34 +106,46 @@ class RAGService:
                 summary="模型存在无法核实的引用，结论不可直接采用。",
                 statements=statements,
                 sources=evidences,
-                conflicts=result.conflicts,
+                conflicts=conflicts,
                 verification_suggestions=result.verification_suggestions,
-                is_mock=self.llm.is_mock,
-                status="no_answer",
             )
 
-        return ChatResponse(
-            device_id=device_id,
+        return self._respond(
+            device_id,
+            "ok",
             answer=result.answer,
             summary=result.summary or result.answer,
             statements=statements,
             sources=evidences,
-            conflicts=result.conflicts,
+            conflicts=conflicts,
             verification_suggestions=result.verification_suggestions,
+        )
+
+    def _respond(
+        self,
+        device_id: str,
+        status: DiagnosisStatus,
+        **fields,
+    ) -> ChatResponse:
+        device_source = getattr(self.device_provider, "source", "unknown")
+        return ChatResponse(
+            device_id=device_id,
+            status=status,
             is_mock=self.llm.is_mock,
-            status="ok",
+            device_source=device_source,
+            is_demo=self.llm.is_mock or device_source != "http",
+            **fields,
         )
 
     def _unavailable(
-        self, device_id: str, status: str, answer: str
+        self, device_id: str, status: DiagnosisStatus, answer: str
     ) -> ChatResponse:
-        return ChatResponse(
-            device_id=device_id,
+        return self._respond(
+            device_id,
+            status,
             answer=answer,
             statements=[],
             sources=[],
-            is_mock=self.llm.is_mock,
-            status=status,
         )
 
     def _degraded(self, device_id: str, evidences: list[Evidence]) -> ChatResponse:
@@ -144,8 +164,9 @@ class RAGService:
         ]
         for i, ev in enumerate(evidences, start=1):
             lines.append(f"{i}. {self._ref(ev)}：{ev.snippet}")
-        return ChatResponse(
-            device_id=device_id,
+        return self._respond(
+            device_id,
+            "model_unavailable",
             answer="\n".join(lines),
             summary="模型服务不可用，以下为检索到的文档证据。",
             statements=statements,
@@ -156,25 +177,47 @@ class RAGService:
                     to_verify="确认以上文档证据是否足以支撑人工诊断结论",
                 )
             ],
-            is_mock=self.llm.is_mock,
-            status="model_unavailable",
         )
 
     @staticmethod
     def _validate_sources(
         statements: list[Statement], evidences: list[Evidence]
     ) -> tuple[list[Statement], bool]:
-        valid = {ev.id for ev in evidences}
+        evidence_by_id = {ev.id: ev for ev in evidences}
         has_ungrounded_fact = False
         for statement in statements:
             statement.source_ids = list(dict.fromkeys(statement.source_ids))
             statement.source_ids = [
-                sid for sid in statement.source_ids if sid in valid
+                sid for sid in statement.source_ids if sid in evidence_by_id
             ]
             if statement.type == "fact" and not statement.source_ids:
                 statement.type = "pending"
                 has_ungrounded_fact = True
+            if statement.type == "fact":
+                statement.source = RAGService._ref(
+                    evidence_by_id[statement.source_ids[0]]
+                )
+            else:
+                statement.source = None
         return statements, has_ungrounded_fact
+
+    @staticmethod
+    def _validate_conflicts(
+        conflicts: list[Conflict], evidences: list[Evidence]
+    ) -> list[Conflict]:
+        valid = {ev.id for ev in evidences}
+        cleaned: list[Conflict] = []
+        for conflict in conflicts:
+            conflict.sources = [
+                source
+                for source in conflict.sources
+                if source.origin != "document"
+                or not source.ref
+                or source.ref in valid
+            ]
+            if conflict.sources:
+                cleaned.append(conflict)
+        return cleaned
 
     @staticmethod
     def _ref(ev: Evidence) -> str:

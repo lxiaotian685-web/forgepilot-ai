@@ -5,6 +5,7 @@ from app.deps import rag
 from app.llm.base import BaseLLM, LLMResult
 from app.llm.mock import UnavailableLLM
 from app.main import app
+from app.rate_limit import limiter
 from app.schemas.chat import Statement
 
 client = TestClient(app)
@@ -15,6 +16,16 @@ AIR_COMPRESSOR_CONTENT = "概述\n\n---PAGE---\n\n排气温度过高排查：冷
 class UnavailableDeviceProvider:
     def get_device(self, device_id, auth=None):
         raise DeviceProviderError("device_unavailable", "设备服务不可用")
+
+    def close(self):
+        pass
+
+
+class UnauthorizedDeviceProvider:
+    source = "http"
+
+    def get_device(self, device_id, auth=None):
+        raise DeviceProviderError("device_unauthorized", "无权访问该设备")
 
     def close(self):
         pass
@@ -36,7 +47,7 @@ class CapturingDeviceProvider:
 class ErrorCitationLLM(BaseLLM):
     is_mock = False
 
-    def answer(self, query, evidences):
+    def answer(self, query, evidences, device=None):
         return LLMResult(
             answer="answer",
             statements=[
@@ -65,7 +76,10 @@ def test_health_returns_ok():
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["device_provider"] == "static"
+    assert body["llm_provider"] == "mock"
 
 
 def test_ingest_document():
@@ -140,7 +154,7 @@ def test_chat_unknown_device_returns_not_found():
         json={"device_id": "UNKNOWN-99", "question": "排气温度过高怎么排查？"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 404
     body = response.json()
     assert body["status"] == "device_not_found"
     assert body["sources"] == []
@@ -182,7 +196,7 @@ def test_chat_device_unavailable_returns_status():
         json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 503
     body = response.json()
     assert body["status"] == "device_unavailable"
     assert body["sources"] == []
@@ -296,3 +310,142 @@ def test_prompt_injection_treated_as_data():
     body = response.json()
     assert body["status"] == "ok"
     assert body["answer"].startswith("基于知识库检索")
+
+
+
+def test_chat_device_unauthorized_returns_403():
+    rag.device_provider = UnauthorizedDeviceProvider()
+    response = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+    )
+
+    assert response.status_code == 403
+    body = response.json()
+    assert body["status"] == "device_unauthorized"
+    assert body["sources"] == []
+
+
+def test_org_context_required_when_enabled(monkeypatch):
+    monkeypatch.setenv("C_REQUIRE_AUTH", "true")
+
+    response = client.get("/api/v1/documents")
+    assert response.status_code == 401
+
+    allowed = client.get(
+        "/api/v1/documents", headers={"X-Organization-Id": "demo-org"}
+    )
+    assert allowed.status_code == 200
+
+
+def test_ingest_can_be_disabled(monkeypatch):
+    monkeypatch.setenv("C_ENABLE_INGEST", "false")
+
+    response = client.post(
+        "/api/v1/documents/ingest",
+        json={
+            "title": "禁用测试",
+            "equipment_model": "compressor-002",
+            "content": "内容",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_documents_and_search_are_org_scoped():
+    client.post(
+        "/api/v1/documents/ingest",
+        headers={"X-Organization-Id": "org-a"},
+        json={
+            "title": "组织A空压机",
+            "equipment_model": "compressor-002",
+            "content": "排气温度过高排查",
+        },
+    )
+    client.post(
+        "/api/v1/documents/ingest",
+        headers={"X-Organization-Id": "org-b"},
+        json={
+            "title": "组织B空压机",
+            "equipment_model": "compressor-002",
+            "content": "排气温度过高排查",
+        },
+    )
+
+    docs = client.get(
+        "/api/v1/documents", headers={"X-Organization-Id": "org-a"}
+    ).json()
+    assert [doc["title"] for doc in docs] == ["组织A空压机"]
+
+    search = client.post(
+        "/api/v1/search",
+        headers={"X-Organization-Id": "org-a"},
+        json={"query": "排气温度过高", "equipment_model": "compressor-002"},
+    ).json()
+    assert search["count"] >= 1
+    assert {item["title"] for item in search["results"]} == {"组织A空压机"}
+
+
+def test_documents_support_pagination():
+    for index in range(3):
+        client.post(
+            "/api/v1/documents/ingest",
+            json={
+                "title": f"分页文档{index}",
+                "equipment_model": "compressor-002",
+                "content": "内容",
+            },
+        )
+
+    page = client.get("/api/v1/documents?limit=1&offset=1").json()
+    assert len(page) == 1
+
+
+def test_cors_preflight_allows_configured_origin():
+    response = client.options(
+        "/api/v1/chat",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_body_size_limit_returns_413():
+    response = client.post(
+        "/api/v1/documents/ingest",
+        json={
+            "title": "超大请求",
+            "equipment_model": "compressor-002",
+            "content": "x" * 1_100_000,
+        },
+    )
+
+    assert response.status_code == 413
+
+
+def test_rate_limit_returns_429(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_PER_MINUTE", "1")
+    limiter.clear()
+
+    first = client.post("/api/v1/search", json={"query": "排气温度过高"})
+    second = client.post("/api/v1/search", json={"query": "排气温度过高"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+
+
+def test_ingest_rejects_blank_content():
+    response = client.post(
+        "/api/v1/documents/ingest",
+        json={
+            "title": "空白内容",
+            "equipment_model": "compressor-002",
+            "content": "   ",
+        },
+    )
+
+    assert response.status_code == 422

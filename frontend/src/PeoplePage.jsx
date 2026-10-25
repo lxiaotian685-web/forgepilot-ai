@@ -1,21 +1,73 @@
 import { useMemo, useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
 import { changePersonStatus, filterPeople, updatePerson } from "./services/peopleManagement.js";
+import { openOrdersFor, reassignOwner } from "./services/workOrderLifecycle.js";
 
-const seed = [
-  {id:"1",code:"EMP-001",name:"李振华",role:"维护主管",team:"设备管理组",status:"在岗",openOrders:1,phone:"138****1024"},
-  {id:"2",code:"EMP-014",name:"张工",role:"维修技师",team:"机械一班",status:"在岗",openOrders:2,phone:"136****8812"},
-  {id:"3",code:"EMP-021",name:"王强",role:"诊断工程师",team:"可靠性组",status:"在岗",openOrders:1,phone:"139****4506"},
-  {id:"4",code:"EMP-028",name:"赵工",role:"维修技师",team:"电气二班",status:"在岗",openOrders:0,phone:"137****6630"},
-  {id:"5",code:"EMP-032",name:"陈敏",role:"生产观察员",team:"生产运行组",status:"停用",openOrders:0,phone:"135****2701"},
+export const demoPeople = [
+  { id: "1", code: "EMP-001", name: "李振华", role: "维护主管", team: "设备管理组", status: "在岗", phone: "138****1024" },
+  { id: "2", code: "EMP-014", name: "张工", role: "维修技师", team: "机械一班", status: "在岗", phone: "136****8812" },
+  { id: "3", code: "EMP-021", name: "王强", role: "诊断工程师", team: "可靠性组", status: "在岗", phone: "139****4506" },
+  { id: "4", code: "EMP-028", name: "赵工", role: "维修技师", team: "电气二班", status: "在岗", phone: "137****6630" },
+  { id: "5", code: "EMP-032", name: "陈敏", role: "生产观察员", team: "生产运行组", status: "停用", phone: "135****2701" },
 ];
-const roles=["超级管理员","维护主管","诊断工程师","维修技师","生产观察员"];
-const teams=["设备管理组","可靠性组","机械一班","电气二班","生产运行组"];
+const roles = ["超级管理员", "维护主管", "诊断工程师", "维修技师", "生产观察员"];
+const teams = ["设备管理组", "可靠性组", "机械一班", "电气二班", "生产运行组"];
 
-export default function PeoplePage({notify}){
- const [people,setPeople]=useState(seed),[filters,setFilters]=useState({query:"",role:"",status:"",team:""}),[selectedId,setSelectedId]=useState("1"),[editing,setEditing]=useState(false),[draft,setDraft]=useState(null),[reassign,setReassign]=useState("");
- const rows=useMemo(()=>filterPeople(people,filters),[people,filters]); const selected=people.find(p=>p.id===selectedId)||rows[0];
- const edit=()=>{setDraft({...selected});setEditing(true)}; const save=()=>{try{setPeople(updatePerson(people,selected.id,draft));setEditing(false);notify("人员资料已更新（本地演示，等待成员管理接口）")}catch(e){notify(e.message)}};
- const toggle=()=>{try{const target=selected.status==="在岗"?"停用":"在岗";setPeople(changePersonStatus(people,selected.id,target,reassign));setReassign("");notify(target==="停用"?"账号已停用，未完成任务已安排转派":"账号已恢复") }catch(e){notify(e.message)}};
- return <><div className="page-heading"><div><h1>人员管理</h1><p>按岗位、班组和状态管理厂内人员及任务责任</p></div><span className="tone-badge tone-warning">本地演示 · 待后端接口</span></div><div className="toolbar"><Input className="search-input" placeholder="搜索姓名、工号、岗位或班组" value={filters.query} onChange={(_,d)=>setFilters(f=>({...f,query:d.value}))}/><select value={filters.role} onChange={e=>setFilters(f=>({...f,role:e.target.value}))}><option value="">全部岗位</option>{roles.map(v=><option key={v}>{v}</option>)}</select><select value={filters.team} onChange={e=>setFilters(f=>({...f,team:e.target.value}))}><option value="">全部班组</option>{teams.map(v=><option key={v}>{v}</option>)}</select><select value={filters.status} onChange={e=>setFilters(f=>({...f,status:e.target.value}))}><option value="">全部状态</option><option>在岗</option><option>停用</option></select><Button onClick={()=>setFilters({query:"",role:"",status:"",team:""})}>重置</Button></div><div className="split-layout people-layout"><section className="panel table-panel grow"><table className="data-table"><thead><tr><th>人员</th><th>岗位</th><th>班组</th><th>未完成工单</th><th>状态</th></tr></thead><tbody>{rows.map(p=><tr key={p.id} className={selected?.id===p.id?"selected":""} onClick={()=>{setSelectedId(p.id);setEditing(false)}}><td><strong>{p.name}</strong><small>{p.code}</small></td><td>{p.role}</td><td>{p.team}</td><td>{p.openOrders}</td><td>{p.status}</td></tr>)}</tbody></table></section>{selected&&<aside className="panel person-detail"><div className="drawer-heading"><div><small>{selected.code}</small><h2>{selected.name}</h2></div><Button onClick={edit}>编辑资料</Button></div>{editing?<div className="person-form"><label>姓名<Input value={draft.name} onChange={(_,d)=>setDraft(v=>({...v,name:d.value}))}/></label><label>岗位<select value={draft.role} onChange={e=>setDraft(v=>({...v,role:e.target.value}))}>{roles.map(v=><option key={v}>{v}</option>)}</select></label><label>班组<select value={draft.team} onChange={e=>setDraft(v=>({...v,team:e.target.value}))}>{teams.map(v=><option key={v}>{v}</option>)}</select></label><div><Button onClick={()=>setEditing(false)}>取消</Button><Button appearance="primary" onClick={save}>保存修改</Button></div></div>:<div className="person-summary"><span>岗位<strong>{selected.role}</strong></span><span>班组<strong>{selected.team}</strong></span><span>联系电话<strong>{selected.phone}</strong></span><span>未完成工单<strong>{selected.openOrders}</strong></span></div>}{selected.status==="在岗"&&selected.openOrders>0&&<label className="reassign-field">停用前任务转派<select value={reassign} onChange={e=>setReassign(e.target.value)}><option value="">选择接收人</option>{people.filter(p=>p.id!==selected.id&&p.status==="在岗").map(p=><option key={p.id}>{p.name}</option>)}</select></label>}<Button appearance={selected.status==="在岗"?"secondary":"primary"} onClick={toggle}>{selected.status==="在岗"?"停用账号":"恢复账号"}</Button><p className="boundary-note">人员不做硬删除，以保留历史工单和审计责任链。</p></aside>}</div></>;
+export default function PeoplePage({ notify, orders, onOrdersChange, people, onPeopleChange }) {
+  const [filters, setFilters] = useState({ query: "", role: "", status: "", team: "" });
+  const [selectedId, setSelectedId] = useState("1");
+  const [draft, setDraft] = useState(null);
+  const [recipient, setRecipient] = useState("");
+  const countedPeople = useMemo(() => people.map((person) => ({ ...person, openOrders: openOrdersFor(orders, person.name).length })), [people, orders]);
+  const rows = useMemo(() => filterPeople(countedPeople, filters), [countedPeople, filters]);
+  const selected = rows.find((person) => person.id === selectedId) || rows[0];
+  const changeFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+
+  const save = () => {
+    try {
+      const next = updatePerson(people, selected.id, draft);
+      if (draft.name.trim() !== selected.name) onOrdersChange(orders.map((order) => order.owner === selected.name ? { ...order, owner: draft.name.trim() } : order));
+      onPeopleChange(next);
+      setDraft(null);
+      notify("人员资料与相关工单已在本次演示会话中更新");
+    } catch (error) { notify(error.message); }
+  };
+
+  const toggleStatus = () => {
+    const nextStatus = selected.status === "在岗" ? "停用" : "在岗";
+    try {
+      const next = changePersonStatus(countedPeople, selected.id, nextStatus, recipient);
+      if (nextStatus === "停用" && !window.confirm(`确认停用 ${selected.name}？${selected.openOrders ? `${selected.openOrders} 张未完成工单将转给 ${recipient}。` : ""}`)) return;
+      if (nextStatus === "停用" && selected.openOrders) onOrdersChange(reassignOwner(orders, selected.name, recipient));
+      onPeopleChange(next.map(({ openOrders: _count, ...person }) => person));
+      setRecipient("");
+      notify(nextStatus === "停用" ? `${selected.name} 已停用${selected.openOrders ? `，${selected.openOrders} 张工单已转给 ${recipient}` : ""}（本次会话）` : `${selected.name} 已恢复（本次会话）`);
+    } catch (error) { notify(error.message); }
+  };
+
+  return <>
+    <div className="page-heading"><div><h1>人员管理</h1><p>按岗位、班组和状态管理厂内人员及任务责任</p></div><span className="tone-badge tone-warning">本次会话演示 · 刷新后重置</span></div>
+    <div className="toolbar">
+      <Input className="search-input" placeholder="搜索姓名、工号、岗位或班组" value={filters.query} onChange={(_, data) => changeFilter("query", data.value)} />
+      <select aria-label="岗位" value={filters.role} onChange={(event) => changeFilter("role", event.target.value)}><option value="">全部岗位</option>{roles.map((value) => <option key={value}>{value}</option>)}</select>
+      <select aria-label="班组" value={filters.team} onChange={(event) => changeFilter("team", event.target.value)}><option value="">全部班组</option>{teams.map((value) => <option key={value}>{value}</option>)}</select>
+      <select aria-label="在岗状态" value={filters.status} onChange={(event) => changeFilter("status", event.target.value)}><option value="">全部状态</option><option>在岗</option><option>停用</option></select>
+      <Button onClick={() => setFilters({ query: "", role: "", status: "", team: "" })}>重置</Button>
+    </div>
+    <div className="split-layout people-layout">
+      <section className="panel table-panel grow"><table className="data-table"><thead><tr><th>人员</th><th>岗位</th><th>班组</th><th>未完成工单</th><th>状态</th></tr></thead><tbody>{rows.map((person) => <tr key={person.id} className={selected?.id === person.id ? "selected" : ""} onClick={() => { setSelectedId(person.id); setDraft(null); setRecipient(""); }}><td><strong>{person.name}</strong><small>{person.code}</small></td><td>{person.role}</td><td>{person.team}</td><td>{person.openOrders}</td><td>{person.status}</td></tr>)}</tbody></table>{!rows.length && <div className="alert-empty">没有符合条件的人员</div>}</section>
+      {selected && <aside className="panel person-detail">
+        <div className="drawer-heading"><div><small>{selected.code}</small><h2>{selected.name}</h2></div><Button onClick={() => setDraft({ ...selected })}>编辑资料</Button></div>
+        {draft ? <div className="person-form">
+          <label>姓名<Input value={draft.name} onChange={(_, data) => setDraft((current) => ({ ...current, name: data.value }))} /></label>
+          <label>岗位<select value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value }))}>{roles.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label>班组<select value={draft.team} onChange={(event) => setDraft((current) => ({ ...current, team: event.target.value }))}>{teams.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <div><Button onClick={() => setDraft(null)}>取消</Button><Button appearance="primary" onClick={save}>保存修改</Button></div>
+        </div> : <div className="person-summary"><span>岗位<strong>{selected.role}</strong></span><span>班组<strong>{selected.team}</strong></span><span>联系电话<strong>{selected.phone}</strong></span><span>未完成工单<strong>{selected.openOrders}</strong></span></div>}
+        {selected.status === "在岗" && selected.openOrders > 0 && <label className="reassign-field">停用前转派 {selected.openOrders} 张未完成工单<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="">选择接收人</option>{people.filter((person) => person.id !== selected.id && person.status === "在岗").map((person) => <option key={person.id}>{person.name}</option>)}</select></label>}
+        <Button appearance={selected.status === "在岗" ? "secondary" : "primary"} onClick={toggleStatus}>{selected.status === "在岗" ? "停用账号" : "恢复账号"}</Button>
+        <p className="boundary-note">本页操作只保留在当前浏览器会话；正式人员接口接入后才能保存到服务器。</p>
+      </aside>}
+    </div>
+  </>;
 }

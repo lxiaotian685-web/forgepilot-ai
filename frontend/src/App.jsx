@@ -44,7 +44,8 @@ import { loadWorkspaceData } from "./services/api";
 import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import DiagnosisPage from "./DiagnosisPage";
 import WorkOrdersPage from "./WorkOrdersPage";
-import PeoplePage from "./PeoplePage";
+import PeoplePage, { demoPeople } from "./PeoplePage";
+import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -308,6 +309,8 @@ function App() {
   const [workspaceData, setWorkspaceData] = useState(demoData);
   const [dataSource, setDataSource] = useState("mock");
   const [connectedResources, setConnectedResources] = useState([]);
+  const [managedOrders, setManagedOrders] = useState(null);
+  const [managedPeople, setManagedPeople] = useState(demoPeople);
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage), [activePage]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
   const navigate = (pageId, context = {}) => {
@@ -329,14 +332,15 @@ function App() {
   }, []);
 
   const { alerts, auditRows, devices, evidence, trendData, workOrders } = workspaceData;
+  const visibleOrders = useMemo(() => managedOrders ?? workOrders.map(normalizeWorkOrder), [managedOrders, workOrders]);
   const pages = {
     overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
     devices: <DevicePage navigate={navigate} devices={devices} trendData={trendData} />,
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
-    orders: <WorkOrdersPage notify={notify} workOrders={workOrders} devices={devices} sourceAlert={pageContext.alert} />,
-    people: <PeoplePage notify={notify} />,
+    orders: <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />,
+    people: <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />,
     audit: <AuditPage auditRows={auditRows} />,
   };
   return (

@@ -924,6 +924,74 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/members:
+    get:
+      tags: [auth]
+      operationId: listMembers
+      summary: 查询当前组织成员
+      description: manager 及以上角色可用；返回每位成员的未完成工单数。
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { name: role, in: query, schema: { $ref: '#/components/schemas/MemberRole' } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/MemberStatus' } }
+        - { name: q, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: 成员分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MemberPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    post:
+      tags: [auth]
+      operationId: createMember
+      summary: 新增组织成员
+      description: admin 及以上角色可用；只有 owner 可以创建 admin 或 owner。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberCreate' }
+      responses:
+        '201':
+          description: 成员已创建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /api/v1/members/{user_id}:
+    patch:
+      tags: [auth]
+      operationId: updateMember
+      summary: 更新成员资料、角色或状态
+      description: 停用仍有未完成工单的成员时，必须提供启用的接收人并在同一事务转派。
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MemberUpdate' }
+      responses:
+        '200':
+          description: 成员已更新
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Member' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
   /api/v1/auth/login:
     post:
       tags: [auth]
@@ -1352,6 +1420,58 @@ components:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         displayName: { type: string }
+    MemberRole:
+      type: string
+      enum: [owner, admin, manager, technician, viewer]
+    MemberStatus:
+      type: string
+      enum: [active, disabled]
+    Member:
+      type: object
+      required: [id, membershipId, email, displayName, role, status, openWorkOrderCount]
+      properties:
+        id: { type: string, format: uuid }
+        membershipId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        status: { $ref: '#/components/schemas/MemberStatus' }
+        openWorkOrderCount: { type: integer, minimum: 0 }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    MemberPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Member' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    MemberCreate:
+      type: object
+      required: [email, displayName]
+      properties:
+        email: { type: string, format: email }
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        initialPassword:
+          type: string
+          minLength: 8
+          nullable: true
+          description: 新用户必填；已有跨组织用户可省略
+    MemberUpdate:
+      type: object
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 100 }
+        role: { $ref: '#/components/schemas/MemberRole' }
+        status: { $ref: '#/components/schemas/MemberStatus' }
+        reassignToUserId:
+          type: string
+          format: uuid
+          nullable: true
+          description: 停用有未完成工单的成员时必填
     OrganizationSummary:
       type: object
       required: [id, code, name]
@@ -1400,7 +1520,7 @@ components:
           properties:
             code:
               type: string
-              enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INVALID_STATE, INVALID_TRANSITION, INTERNAL_ERROR]
+              enum: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, CONFLICT, INVALID_STATE, INVALID_TRANSITION, OPEN_WORK_ORDERS, SELF_DISABLE, LAST_OWNER, INTERNAL_ERROR]
             message: { type: string }
             details: { type: object, nullable: true, additionalProperties: true }
             requestId: { type: string, nullable: true }
@@ -1426,6 +1546,13 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
           example:
             error: { code: NOT_FOUND, message: 资源不存在, requestId: c3d4e5f6 }
+    Conflict:
+      description: 当前业务状态存在冲突
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+          example:
+            error: { code: CONFLICT, message: 当前业务状态不允许该操作 }
     ValidationError:
       description: 参数校验失败
       content:

@@ -25,6 +25,26 @@ class LoginRequest(RequestModel):
     organization_code: str | None = Field(default=None, max_length=64)
 
 
+class MemberCreate(RequestModel):
+    email: str = Field(min_length=3, max_length=255)
+    display_name: str = Field(min_length=1, max_length=100)
+    role: str = Field(default="viewer")
+    initial_password: str | None = Field(default=None, min_length=8, max_length=200)
+
+
+class MemberUpdate(RequestModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+    role: str | None = None
+    status: str | None = None
+    reassign_to_user_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def _require_one_member_field(self) -> "MemberUpdate":
+        if not ({"display_name", "role", "status"} & self.model_fields_set):
+            raise ValueError("至少提供姓名、角色或状态中的一个字段")
+        return self
+
+
 class DiagnosisCreate(RequestModel):
     device_id: str = Field(min_length=1)
     question: str = Field(min_length=1, max_length=2000)

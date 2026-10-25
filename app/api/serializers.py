@@ -19,10 +19,28 @@ from app.models import (
     DeviceParameter,
     Diagnosis,
     MaintenanceRecord,
+    Membership,
     Plant,
     User,
     WorkOrder,
 )
+
+
+def member_to_dict(
+    membership: Membership, user: User, open_work_order_count: int = 0
+) -> dict:
+    return {
+        "id": str(user.id),
+        "membershipId": str(membership.id),
+        "email": user.email,
+        "displayName": user.display_name,
+        "role": membership.role,
+        "status": membership.status,
+        "openWorkOrderCount": open_work_order_count,
+        "lastLoginAt": iso(user.last_login_at),
+        "createdAt": iso(membership.created_at),
+        "updatedAt": iso(membership.updated_at),
+    }
 
 
 def iso(value: datetime | None) -> str | None:

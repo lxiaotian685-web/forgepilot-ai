@@ -14,7 +14,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 
 - FastAPI应用骨架与健康检查；
 - 设备问答请求与响应数据模型，以及明确标记为 mock 的诊断接口；
-- 设备、告警、工单、诊断与人工确认业务 API（分页、筛选、权限、组织隔离、审计、幂等与事务），设备参数 CRUD、历史故障链路查询，工单完成自动回写设备历史，邮箱密码登录与 Bearer 令牌；
+- 设备、告警、工单、诊断与人工确认业务 API（分页、筛选、权限、组织隔离、审计、幂等与事务），设备参数 CRUD、历史故障链路查询，工单完成自动回写设备历史，邮箱密码登录与 Bearer 令牌，以及组织成员的新增、改岗、停用/恢复和工单转派；
 - PostgreSQL 第一版 Alembic 迁移与虚构种子数据；
 - API 自动化测试（pytest）覆盖 CRUD、权限、隔离和状态机。
 
@@ -112,6 +112,9 @@ PostgreSQL 实测记录见 [docs/postgres-verification.md](docs/postgres-verific
 | GET | `/api/v1/devices/{device_id}/faults` | 已实现 | 设备历史故障链路查询 |
 | POST | `/api/v1/auth/login` | 已实现 | 登录并签发 Bearer 令牌 |
 | GET | `/api/v1/auth/me` | 已实现 | 当前用户、组织与角色 |
+| GET | `/api/v1/members` | 已实现 | 组织成员列表、筛选与未完成工单计数（manager+） |
+| POST | `/api/v1/members` | 已实现 | 新增组织成员（admin+） |
+| PATCH | `/api/v1/members/{user_id}` | 已实现 | 改名、改岗、停用/恢复及未完成工单转派（admin+） |
 
 ## 目标业务闭环
 

@@ -3,13 +3,15 @@ import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
 import { diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
 import { confirmDiagnosis, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
+import { loadDeviceParameters } from "./services/api.js";
+import { buildMeasurementQuestion } from "./services/measurementPrompt.js";
 import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
 
-export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", initialQuestion = "" }) {
+export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "" }) {
   const [deviceId, setDeviceId] = useState(initialDeviceId);
-  const [question, setQuestion] = useState(initialQuestion || "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？");
+  const [question, setQuestion] = useState(initialQuestion || (session?.isPreview ? "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？" : ""));
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -46,7 +48,7 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
     setWorkflowBusy(true);
     setWorkflowMessage("");
     try {
-      const saved = await saveDiagnosis({ deviceId, question, result, riskLevel });
+      const saved = await saveDiagnosis({ deviceId, question, result, riskLevel, session });
       setSavedDiagnosis(saved);
       setWorkflowMessage(`诊断 ${saved.id} 已保存，等待人工确认。`);
     } catch (failure) {
@@ -66,12 +68,13 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
         title: `${deviceId} 诊断处理`,
         priority: riskLevel === "high" ? "P1 紧急" : riskLevel === "medium" ? "P2 高" : "P3 中",
         note: "前端诊断工作台人工确认",
+        session,
       });
       setSavedDiagnosis(confirmed.diagnosis);
       setConfirmedOrder(confirmed.workOrder);
       let events = [];
       try {
-        events = await loadDiagnosisAudit({ diagnosisId: savedDiagnosis.id });
+        events = await loadDiagnosisAudit({ diagnosisId: savedDiagnosis.id, session });
       } catch (auditFailure) {
         setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已生成。审计记录暂无法读取：${auditFailure.message}`);
       }
@@ -84,15 +87,14 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
     }
   }
 
-  async function diagnose(event) {
-    event.preventDefault();
+  async function runDiagnosis(nextQuestion) {
     if (busy) return;
     const controller = new AbortController();
     request.current = controller;
     clearResult();
     setBusy(true);
     try {
-      const response = await requestDiagnosis({ deviceId, question, signal: controller.signal });
+      const response = await requestDiagnosis({ deviceId, question: nextQuestion, signal: controller.signal, session });
       if (!controller.signal.aborted) {
         setResult(response);
         setActiveSource(response.sources[0]?.key || null);
@@ -102,6 +104,25 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
+  }
+
+  async function diagnose(event) {
+    event.preventDefault();
+    await runDiagnosis(question);
+  }
+
+  async function diagnoseFromMeasurements() {
+    if (busy || !session?.accessToken) return;
+    setBusy(true);
+    setError("");
+    try {
+      const measurements = await loadDeviceParameters(deviceId, session.accessToken);
+      const nextQuestion = buildMeasurementQuestion(deviceId, measurements);
+      setQuestion(nextQuestion);
+      setContextChecks((current) => ({ ...current, sampledAt: measurements.some((item) => item.recordedAt), measuringPoint: true }));
+      setBusy(false);
+      await runDiagnosis(nextQuestion);
+    } catch (failure) { setBusy(false); setError(failure.message); }
   }
 
   const source = result?.sources.find((item) => item.key === activeSource);
@@ -132,13 +153,13 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
         <form onSubmit={diagnose}>
           <label htmlFor="diagnosis-device">目标设备</label>
           <select id="diagnosis-device" value={deviceId} disabled={busy} onChange={(event) => { setDeviceId(event.target.value); clearResult(); }}>
-            {!devices.some((item) => item.id === "AC-07") && <option value="AC-07">AC-07 · 演示设备</option>}
+            {session?.isPreview && !devices.some((item) => item.id === "AC-07") && <option value="AC-07">AC-07 · 演示设备</option>}
             {devices.map((item) => <option key={item.id} value={item.id}>{item.id} · {item.name}</option>)}
           </select>
           {selectedDevice && <section className="device-context" aria-label="当前设备上下文">
             <div><span>设备位置</span><strong>{selectedDevice.location}</strong></div>
             <div><span>设备类型</span><strong>{selectedDevice.type}</strong></div>
-            <div><span>演示状态</span><strong>{selectedDevice.state} · 健康值 {selectedDevice.health}</strong></div>
+            <div><span>设备状态</span><strong>{selectedDevice.state} · 健康值 {selectedDevice.health ?? "待接入"}</strong></div>
           </section>}
           <label htmlFor="diagnosis-question">现场现象与问题</label>
           <textarea id="diagnosis-question" rows={7} maxLength={2000} required disabled={busy} value={question} onChange={(event) => { setQuestion(event.target.value); clearResult(); }} />
@@ -152,9 +173,10 @@ export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", init
             <small>勾选项仅保存在本页，用于提醒资料是否齐全，不会传给诊断接口。</small>
           </fieldset>
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
+          {!session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromMeasurements}>读取设备测点并诊断</Button>}
           {busy && <Button type="button" onClick={() => { request.current?.abort(); setBusy(false); setError("已取消本次诊断，未生成结论。"); }}>取消请求</Button>}
         </form>
-        <p className="grounded-note">设备型号由服务端档案决定，页面不提交覆盖型号。关联告警与诊断保存将在统一业务接口完成后接入。</p>
+        <p className="grounded-note">设备型号由服务端档案决定，页面不提交覆盖型号。测点自动提问需要实际采集数据；没有阈值时不会断言超限。</p>
       </aside>
       <section className="panel grounded-result" aria-busy={busy}>
         <div className="panel-title"><div><Pulse24Regular /><h2>判断与依据</h2></div><span>{result ? diagnosisStatuses[result.status] : "等待诊断"}</span></div>

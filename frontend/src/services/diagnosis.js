@@ -102,7 +102,7 @@ function demoDiagnosis(deviceId) {
   }, deviceId);
 }
 
-export async function requestDiagnosis({ deviceId, question, signal }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
+export async function requestDiagnosis({ deviceId, question, signal, session }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
   if (!deviceId || !question.trim()) throw new Error("请选择设备并填写现场现象。");
   if (signal?.aborted) throw new DOMException("请求已取消", "AbortError");
   if ((config.VITE_DATA_MODE || "mock") === "mock") {
@@ -110,10 +110,11 @@ export async function requestDiagnosis({ deviceId, question, signal }, config = 
   }
   const base = (config.VITE_DIAGNOSIS_API_BASE_URL || config.VITE_API_BASE_URL || "").replace(/\/$/, "");
   if (!base) throw new Error("尚未配置诊断服务地址，请设置 VITE_DIAGNOSIS_API_BASE_URL。");
+  if (!session?.accessToken || !session?.organization?.id || !session?.user?.id) throw new Error("诊断服务需要当前登录会话");
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
-  if (config.VITE_API_TOKEN) headers.Authorization = `Bearer ${config.VITE_API_TOKEN}`;
-  if (config.VITE_API_ORGANIZATION_ID) headers["X-Organization-Id"] = config.VITE_API_ORGANIZATION_ID;
-  if (config.VITE_API_USER_ID) headers["X-User-Id"] = config.VITE_API_USER_ID;
+  headers.Authorization = `Bearer ${session.accessToken}`;
+  headers["X-Organization-Id"] = session.organization.id;
+  headers["X-User-Id"] = session.user.id;
   const controller = new AbortController();
   const cancel = () => controller.abort();
   signal?.addEventListener("abort", cancel, { once: true });

@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { confirmDiagnosis, diagnosisEvidenceSnapshot, loadDiagnosisAudit, saveDiagnosis } from "../src/services/workflow.js";
 
 const config = {
+  VITE_DATA_MODE: "api",
   VITE_API_BASE_URL: "https://fallback.example.test",
   VITE_BUSINESS_API_BASE_URL: "https://business.example.test/",
   VITE_API_ORGANIZATION_ID: "demo-org",
   VITE_API_USER_ID: "tech@example.com",
 };
+const session = { accessToken: "current-user-token", organization: { id: "org-1" }, user: { id: "user-1" } };
 
 function diagnosis() {
   return {
@@ -33,11 +35,11 @@ test("builds an auditable evidence snapshot without UI-only fields", () => {
 
 test("saves only verified real API diagnosis using the B contract", async () => {
   const saved = await saveDiagnosis({
-    deviceId: "AC-07", question: " 振动异常 ", result: diagnosis(), riskLevel: "high",
+    deviceId: "AC-07", question: " 振动异常 ", result: diagnosis(), riskLevel: "high", session,
   }, config, async (url, options) => {
     assert.equal(url, "https://business.example.test/api/v1/diagnoses");
-    assert.equal(options.headers["X-Organization-Id"], "demo-org");
-    assert.equal(options.headers["X-User-Id"], "tech@example.com");
+    assert.equal(options.headers.Authorization, "Bearer current-user-token");
+    assert.equal(options.headers["X-Organization-Id"], undefined);
     const body = JSON.parse(options.body);
     assert.deepEqual({ deviceId: body.deviceId, question: body.question, riskLevel: body.riskLevel, confidence: body.confidence },
       { deviceId: "AC-07", question: "振动异常", riskLevel: "high", confidence: null });
@@ -51,10 +53,11 @@ test("refuses demo, degraded and unclassified diagnosis saves", async () => {
   await assert.rejects(saveDiagnosis({ deviceId: "AC-07", question: "x", result: { ...diagnosis(), transport: "local-demo" }, riskLevel: "low" }, config), /真实接口/);
   await assert.rejects(saveDiagnosis({ deviceId: "AC-07", question: "x", result: { ...diagnosis(), status: "no_answer" }, riskLevel: "low" }, config), /真实接口/);
   await assert.rejects(saveDiagnosis({ deviceId: "AC-07", question: "x", result: diagnosis(), riskLevel: "" }, config), /风险等级/);
+  await assert.rejects(saveDiagnosis({ deviceId: "AC-07", question: "x", result: diagnosis(), riskLevel: "low" }, config), /登录会话/);
 });
 
 test("confirms idempotently through B and requires both returned records", async () => {
-  const value = await confirmDiagnosis({ diagnosisId: "DIAG-001", priority: "P1 紧急", note: "已现场确认" }, config, async (url, options) => {
+  const value = await confirmDiagnosis({ diagnosisId: "DIAG-001", priority: "P1 紧急", note: "已现场确认", session }, config, async (url, options) => {
     assert.equal(url, "https://business.example.test/api/v1/diagnoses/DIAG-001/confirm");
     assert.deepEqual(JSON.parse(options.body), { priority: "P1 紧急", note: "已现场确认" });
     return { ok: true, json: async () => ({ diagnosis: { id: "DIAG-001" }, workOrder: { id: "WO-001" } }) };
@@ -64,7 +67,7 @@ test("confirms idempotently through B and requires both returned records", async
 });
 
 test("loads diagnosis audit with encoded query and validates pagination", async () => {
-  const items = await loadDiagnosisAudit({ diagnosisEntityId: "4d60b6e7-2f72-4e14-b718-92ac2c7f35b5" }, config, async (url, options) => {
+  const items = await loadDiagnosisAudit({ diagnosisEntityId: "4d60b6e7-2f72-4e14-b718-92ac2c7f35b5", session }, config, async (url, options) => {
     assert.match(url, /entityType=diagnosis/);
     assert.match(url, /entityId=4d60b6e7/);
     assert.equal(options.method, "GET");
@@ -75,7 +78,7 @@ test("loads diagnosis audit with encoded query and validates pagination", async 
 
 test("discovers the internal diagnosis entity id from its business code", async () => {
   const calls = [];
-  const items = await loadDiagnosisAudit({ diagnosisId: "DIAG-001" }, config, async (url) => {
+  const items = await loadDiagnosisAudit({ diagnosisId: "DIAG-001", session }, config, async (url) => {
     calls.push(url);
     if (calls.length === 1) return { ok: true, json: async () => ({ items: [
       { entityId: "4d60b6e7-2f72-4e14-b718-92ac2c7f35b5", after: { code: "DIAG-001" } },
@@ -88,10 +91,10 @@ test("discovers the internal diagnosis entity id from its business code", async 
 });
 
 test("surfaces the B error message and never treats malformed success as confirmation", async () => {
-  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001" }, config, async () => ({
+  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001", session }, config, async () => ({
     ok: false, status: 409, json: async () => ({ error: { message: "诊断已拒绝" } }),
   })), /诊断已拒绝/);
-  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001" }, config, async () => ({
+  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001", session }, config, async () => ({
     ok: true, json: async () => ({ diagnosis: { id: "DIAG-001" } }),
   })), /缺少诊断或工单编号/);
 });

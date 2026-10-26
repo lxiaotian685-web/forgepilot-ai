@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -9,6 +9,7 @@ import {
 import {
   Add24Regular,
   Alert24Regular,
+  ArrowDownload24Regular,
   ArrowSync24Regular,
   Board24Regular,
   BookOpen24Regular,
@@ -21,9 +22,9 @@ import {
   Dismiss24Regular,
   Filter24Regular,
   MoreHorizontal24Regular,
+  PeopleTeam24Regular,
   Play24Regular,
   Pulse24Regular,
-  PeopleTeam24Regular,
   Search24Regular,
   ShieldLock24Regular,
   SignOut24Regular,
@@ -43,7 +44,14 @@ import {
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
 import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
+import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
+import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
 import DiagnosisPage from "./DiagnosisPage";
+import WorkOrdersPage from "./WorkOrdersPage";
+import PeoplePage, { demoPeople } from "./PeoplePage";
+import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
+import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
+import AuditWorkspace from "./AuditWorkspace.jsx";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -52,9 +60,10 @@ const navItems = [
   { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
-  { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
   { id: "people", label: "人员与权限", icon: PeopleTeam24Regular },
+  { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
+const isDemoMode = (import.meta.env.VITE_DATA_MODE || "mock") !== "api";
 
 const dataMode = import.meta.env.VITE_DATA_MODE || "mock";
 
@@ -175,6 +184,11 @@ function TrendChart({ data, compact = false }) {
   );
 }
 
+function DeviceTrendChart({ profile }) {
+  if (!profile?.trend?.length || !profile?.series?.length) return <div className="device-empty">该设备尚未接入趋势数据</div>;
+  return <div className="chart chart-compact" aria-label="当前设备关键指标趋势图"><ResponsiveContainer width="100%" height="100%"><LineChart data={profile.trend} margin={{ top: 12, right: 18, left: -18, bottom: 0 }}><CartesianGrid stroke="#dbe4ef" strokeDasharray="3 4" vertical={false} /><XAxis dataKey="time" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" hide /><Tooltip contentStyle={{ border: "1px solid #cbd6e4", borderRadius: 0, fontSize: 12 }} />{profile.series.map((series, index) => <Line key={series.key} isAnimationActive={false} yAxisId={index ? "right" : "left"} name={series.label} type="monotone" dataKey={series.key} stroke={series.color} strokeWidth={index ? 2 : 3} dot={false} />)}</LineChart></ResponsiveContainer></div>;
+}
+
 function OverviewPage({ navigate, workOrders, trendData }) {
   return (
     <>
@@ -234,77 +248,151 @@ function OverviewPage({ navigate, workOrders, trendData }) {
   );
 }
 
-function DevicePage({ navigate, devices, trendData }) {
-  const [selected, setSelected] = useState(devices[0]);
+function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
+  const fileRef = useRef(null);
+  const [selectedId, setSelectedId] = useState(devices[0]?.id || "");
+  const [filters, setFilters] = useState({ query: "", type: "", state: "", plant: "" });
+  const [importOpen, setImportOpen] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [importResult, setImportResult] = useState(null);
+  const [localDevices, setLocalDevices] = useState(() => {
+    if (!allowLocalImport) return [];
+    try { return JSON.parse(localStorage.getItem("forgepilot.preview.devices") || "[]"); } catch { return []; }
+  });
+  const allDevices = useMemo(() => [...devices, ...localDevices.filter((item) => !devices.some((device) => device.id === item.id))], [devices, localDevices]);
+  const filteredDevices = useMemo(() => filterDevices(allDevices, filters), [allDevices, filters]);
+  const selected = filteredDevices.find((device) => device.id === selectedId) || filteredDevices[0] || null;
+  const profile = selected ? profiles[selected.id] : null;
+  const types = [...new Set(allDevices.map((item) => item.type))];
+  const states = [...new Set(allDevices.map((item) => item.state))];
+  const plants = [...new Set(allDevices.map((item) => item.plant).filter(Boolean))];
+  const resetFilters = () => setFilters({ query: "", type: "", state: "", plant: "" });
+  const downloadTemplate = () => {
+    const url = URL.createObjectURL(new Blob(["\uFEFF", createDeviceImportTemplate()], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "forgepilot-device-import-template.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const readImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportName(file.name);
+    try { setImportResult(parseDeviceImport(await file.text(), allDevices.map((item) => item.id))); }
+    catch (error) { setImportResult({ rows: [], errors: [error.message] }); }
+  };
+  const confirmPreviewImport = () => {
+    const validRows = importResult?.rows?.filter((row) => !row.errors.length).map(({ errors, importRow, ...device }) => device) || [];
+    if (!allowLocalImport || !validRows.length) return;
+    const next = [...localDevices, ...validRows];
+    localStorage.setItem("forgepilot.preview.devices", JSON.stringify(next));
+    setLocalDevices(next);
+    setSelectedId(validRows[0].id);
+    setImportOpen(false);
+    setImportResult(null);
+    notify(`已保存 ${validRows.length} 台本地演示设备；正式入库等待 T03 接口`);
+  };
   return (
     <>
-      <PageHeader title="设备中心" description="统一查看设备身份、健康状态和维护上下文" action="录入设备" />
-      <Toolbar placeholder="搜索设备编号、名称、型号或位置">
-        <select aria-label="厂区"><option>一号装配厂</option></select>
-        <select aria-label="健康状态"><option>全部状态</option><option>需关注</option><option>运行正常</option></select>
-      </Toolbar>
+      <PageHeader title="设备中心" description="统一查看设备身份、专属运行指标和维护上下文" action="导入设备" onAction={() => setImportOpen((value) => !value)} />
+      {importOpen && <section className="panel import-panel"><div className="panel-title"><div><Add24Regular /><h2>CSV 设备导入预检</h2></div><ToneBadge tone={allowLocalImport ? "warning" : "neutral"}>{allowLocalImport ? "仅本地演示" : "等待 T03 接口"}</ToneBadge></div><div className="import-actions"><Button icon={<ArrowDownload24Regular />} onClick={downloadTemplate}>下载模板</Button><Button icon={<Add24Regular />} onClick={() => fileRef.current?.click()}>选择 CSV 文件</Button><input ref={fileRef} type="file" accept=".csv,text/csv" onChange={readImport} hidden /><span>{importName || "尚未选择文件"}</span></div>{importResult?.errors?.length ? <div className="import-errors" role="alert">{importResult.errors.join("；")}</div> : null}{importResult?.rows?.length ? <><div className="import-summary"><strong>{importResult.rows.length} 行</strong><span>可导入 {importResult.rows.filter((row) => !row.errors.length).length} 行</span><span>错误 {importResult.rows.filter((row) => row.errors.length).length} 行</span></div><div className="import-preview"><table className="data-table"><thead><tr><th>行</th><th>设备编号</th><th>名称</th><th>类型</th><th>厂区/位置</th><th>校验结果</th></tr></thead><tbody>{importResult.rows.map((row) => <tr key={`${row.importRow}-${row.id}`}><td>{row.importRow}</td><td><strong>{row.id || "—"}</strong></td><td>{row.name || "—"}</td><td>{row.type || "—"}</td><td>{row.plant || "—"} / {row.location || "—"}</td><td>{row.errors.length ? <ToneBadge tone="danger">{row.errors.join("；")}</ToneBadge> : <ToneBadge tone="success">通过</ToneBadge>}</td></tr>)}</tbody></table></div><div className="import-confirm"><p>{allowLocalImport ? "确认后只保存到当前浏览器的演示数据，刷新可保留；不会写入企业数据库。" : "预检完成。服务器确认导入必须等待林同学交付 T03 接口。"}</p><Button appearance="primary" disabled={!allowLocalImport || !importResult.rows.some((row) => !row.errors.length)} onClick={confirmPreviewImport}>{allowLocalImport ? "保存到本地演示设备" : "服务器导入暂不可用"}</Button></div></> : null}</section>}
+      <div className="toolbar device-toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索设备编号、名称、类型或位置" value={filters.query} onChange={(_, data) => setFilters((value) => ({ ...value, query: data.value }))} /><select aria-label="设备类型" value={filters.type} onChange={(event) => setFilters((value) => ({ ...value, type: event.target.value }))}><option value="">全部类型</option>{types.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="健康状态" value={filters.state} onChange={(event) => setFilters((value) => ({ ...value, state: event.target.value }))}><option value="">全部状态</option>{states.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="厂区" value={filters.plant} onChange={(event) => setFilters((value) => ({ ...value, plant: event.target.value }))}><option value="">全部厂区</option>{plants.map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={resetFilters}>重置</Button><Button icon={<ArrowSync24Regular />} onClick={() => notify("设备列表已刷新")}>刷新</Button></div>
+      <div className="filter-result">当前显示 <strong>{filteredDevices.length}</strong> / {allDevices.length} 台设备</div>
       <div className="split-layout">
         <section className="panel table-panel grow">
           <table className="data-table">
             <thead><tr><th>设备编号</th><th>设备名称</th><th>类型</th><th>所属位置</th><th>健康状态</th><th>告警</th></tr></thead>
-            <tbody>{devices.map((device) => (
-              <tr key={device.id} className={selected.id === device.id ? "selected" : ""} onClick={() => setSelected(device)}>
+            <tbody>{filteredDevices.map((device) => (
+              <tr key={device.id} className={selected?.id === device.id ? "selected" : ""} onClick={() => setSelectedId(device.id)}>
                 <td><strong>{device.id}</strong></td><td><strong>{device.name}</strong></td><td>{device.type}</td><td>{device.location}</td>
-                <td><ToneBadge tone={device.health < 60 ? "danger" : device.health < 90 ? "warning" : "success"}>{device.state} {device.health}</ToneBadge></td>
+                <td><ToneBadge tone={device.health == null ? "neutral" : device.health < 60 ? "danger" : device.health < 90 ? "warning" : "success"}>{device.state}{device.health == null ? "" : ` ${device.health}`}</ToneBadge></td>
                 <td>{device.alert || "无"}</td>
-              </tr>
-            ))}</tbody>
+              </tr>))}{!filteredDevices.length && <tr><td colSpan="6"><div className="device-empty"><strong>没有符合条件的设备</strong><span>请调整筛选条件或重置筛选。</span><Button onClick={resetFilters}>重置筛选</Button></div></td></tr>}</tbody>
           </table>
         </section>
-        <aside className="panel detail-drawer">
+        {selected ? <aside className="panel detail-drawer">
           <div className="drawer-heading"><div><small>设备实时摘要</small><h2>{selected.id} {selected.name}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="关闭预览" /></div>
-          <div className="equipment-identity"><span>{selected.type}</span><strong>{selected.location}</strong></div>
-          <div className="health-callout"><span>综合健康评分</span><strong>{selected.health}/100</strong></div>
-          <h3>关键运行指标</h3>
-          <div className="sensor-list">
-            <div><span>驱动端振动 RMS</span><strong className="text-danger">7.82 mm/s</strong><small>警戒 4.50 mm/s</small></div>
-            <div><span>排气温度</span><strong>88.5 °C</strong><small>预警 85.0 °C</small></div>
-            <div><span>润滑油压差</span><strong>0.28 MPa</strong><small>正常范围</small></div>
-          </div>
-          <TrendChart data={trendData} compact />
+          <div className="equipment-identity"><span>{selected.type} · {selected.plant || "未分配厂区"}</span><strong>{selected.location}</strong></div>
+          <div className="health-callout"><span>综合健康评分</span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
+          {profile ? <><div className="profile-freshness">采集时间：{profile.updatedAt}</div><h3>关键运行指标</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div><DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、")}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，指标尚未接入</strong><span>等待 T03 提供测点模板、当前值和历史曲线接口。</span></div>}
           <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis")}>发起诊断</Button>
-        </aside>
+        </aside> : <aside className="panel detail-drawer"><div className="device-empty">请先选择设备</div></aside>}
       </div>
     </>
   );
 }
 
 function AlertsPage({ navigate, notify, alerts, trendData }) {
-  const [selected, setSelected] = useState(alerts[0]);
+  const [items, setItems] = useState(alerts);
+  const [selectedId, setSelectedId] = useState(alerts[0]?.id || "");
+  const [filters, setFilters] = useState({ query: "", status: "", level: "", owner: "", device: "" });
+  const [assignee, setAssignee] = useState("");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editDraft, setEditDraft] = useState(null);
+  useEffect(() => setItems(alerts), [alerts]);
+  const counts = countAlerts(items);
+  const filtered = filterAlerts(items, filters);
+  const selected = filtered.find((alert) => alert.id === selectedId) || filtered[0] || null;
+  const owners = [...new Set(items.map((item) => item.owner).filter((owner) => owner && owner !== "未指派"))];
+  const updateStatus = (nextStatus) => {
+    if (!selected) return;
+    try {
+      const updated = transitionAlert(selected, nextStatus, assignee || selected.owner);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setAssignee("");
+      notify(`告警 ${updated.id} 已更新为${updated.status}；正式持久化等待 T05 接口`);
+    } catch (error) { notify(error.message); }
+  };
+  const saveAlert = () => {
+    try {
+      const updated = updateAlert(selected, editDraft);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setEditDraft(null);
+      notify(`告警 ${updated.id} 修改已保存（当前会话）`);
+    } catch (error) { notify(error.message); }
+  };
+  const reopen = () => {
+    if (!window.confirm(`确认重新打开告警 ${selected.id}？`)) return;
+    try {
+      const updated = reopenAlert(selected);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setMenuOpen(false);
+      notify(`告警 ${updated.id} 已重新进入处理中`);
+    } catch (error) { notify(error.message); }
+  };
   return (
     <>
-      <PageHeader title="告警中心" description="确认、指派并追踪设备异常处置过程" />
-      <div className="status-tabs"><button className="active">全部 24</button><button>待确认 3</button><button>处理中 5</button><button>已关闭 16</button></div>
-      <Toolbar placeholder="搜索告警编号、设备或规则"><select><option>全部等级</option></select><select><option>全部设备</option></select></Toolbar>
+      <PageHeader title="告警中心" description="确认、指派并追踪设备异常处置过程" action="告警规则" onAction={() => setRulesOpen((value) => !value)} />
+      {rulesOpen && <section className="panel alert-rule-panel"><div><strong>告警规则管理</strong><span>当前可查看规则来源；新增、停用和版本保存等待 B 包 T05 接口。</span></div><ToneBadge tone="warning">只读预览</ToneBadge></section>}
+      <div className="status-tabs">{[["", "全部", "all"], ["待确认", "待确认", "待确认"], ["处理中", "处理中", "处理中"], ["已关闭", "已关闭", "已关闭"]].map(([value, label, key]) => <button key={key} className={filters.status === value ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, status: value }))}>{label} {counts[key] || 0}</button>)}</div>
+      <div className="toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索告警编号、设备、标题或负责人" value={filters.query} onChange={(_, data) => setFilters((current) => ({ ...current, query: data.value }))} /><select aria-label="严重程度" value={filters.level} onChange={(event) => setFilters((current) => ({ ...current, level: event.target.value }))}><option value="">全部等级</option>{[...new Set(items.map((item) => item.level))].map((value) => <option key={value}>{value}</option>)}</select><select aria-label="负责人" value={filters.owner} onChange={(event) => setFilters((current) => ({ ...current, owner: event.target.value }))}><option value="">全部负责人</option><option>未指派</option>{owners.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="设备" value={filters.device} onChange={(event) => setFilters((current) => ({ ...current, device: event.target.value }))}><option value="">全部设备</option>{[...new Set(items.map((item) => item.device))].map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={() => setFilters({ query: "", status: "", level: "", owner: "", device: "" })}>重置</Button></div>
       <div className="split-layout alerts-layout">
         <section className="panel alert-list">
-          {alerts.map((alert) => (
-            <button key={alert.id} className={`alert-item ${selected.id === alert.id ? "selected" : ""}`} onClick={() => setSelected(alert)}>
+          {filtered.map((alert) => (
+            <button key={alert.id} className={`alert-item ${selected?.id === alert.id ? "selected" : ""}`} onClick={() => { setSelectedId(alert.id); setAssignee(""); }}>
               <span className={alert.level.includes("一级") ? "alert-bar critical" : "alert-bar warning"} />
               <span className="alert-copy"><span><ToneBadge tone={alert.level.includes("一级") ? "danger" : "warning"}>{alert.level}</ToneBadge><small>{alert.time}</small></span><strong>{alert.title}</strong><em>{alert.device}</em><span><small>负责人：{alert.owner}</small><small>{alert.status}</small></span></span>
             </button>
-          ))}
+          ))}{!filtered.length && <div className="alert-empty"><strong>没有符合条件的告警</strong><span>请切换页签或重置筛选。</span></div>}
         </section>
-        <section className="panel alert-detail">
+        {selected ? <section className="panel alert-detail">
           <div className="detail-kicker"><ToneBadge tone="danger">{selected.level}</ToneBadge><span>{selected.id}</span></div>
           <h2>{selected.title}</h2>
           <p>{selected.device}</p>
           <div className="action-row">
-            <Button appearance="primary" onClick={() => notify("告警已确认，并记录当前操作人和时间")}>确认告警</Button>
-            <Button onClick={() => notify("已指派给张工")}>指派处理</Button>
-            <Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" />
+            {selected.status === "待确认" && <><select aria-label="指派负责人" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">选择负责人</option>{["张工", "王强", "赵工"].map((owner) => <option key={owner}>{owner}</option>)}</select><Button appearance="primary" onClick={() => updateStatus("处理中")}>确认并指派</Button></>}
+            {selected.status === "处理中" && <Button appearance="primary" onClick={() => updateStatus("已关闭")}>解决并关闭</Button>}
+            <div className="more-menu-wrap"><Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)} />{menuOpen && <div className="more-menu" role="menu"><button onClick={() => { setEditDraft({ title: selected.title, level: selected.level, owner: selected.owner, note: selected.note || "" }); setMenuOpen(false); }}>编辑告警</button><button onClick={() => { setEditDraft({ title: selected.title, level: selected.level, owner: selected.owner, note: selected.note || "" }); setMenuOpen(false); }}>转交负责人</button><button onClick={() => { navigator.clipboard?.writeText(selected.id); setMenuOpen(false); notify(`已复制告警编号 ${selected.id}`); }}>复制告警编号</button>{selected.status === "已关闭" && <button onClick={reopen}>重新打开</button>}</div>}</div>
           </div>
           <div className="reading-grid"><div><span>当前值</span><strong className="text-danger">7.82 mm/s</strong></div><div><span>告警阈值</span><strong>4.50 mm/s</strong></div><div><span>采样频率</span><strong>1,000 Hz</strong></div><div><span>特征频率</span><strong>148.5 Hz</strong></div></div>
           <TrendChart data={trendData} compact />
           <div className="context-note"><strong>规则来源</strong><span>Rule #VIB-RMS-004，连续 3 个采样周期超过 ISO 4.5 mm/s 阈值。</span></div>
-          <Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis")}>进入诊断工作台</Button>
-        </section>
+          <div className="action-row"><Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis", { deviceId: alertDeviceId(selected), alert: selected })}>进入诊断工作台</Button><Button onClick={() => navigate("orders", { deviceId: alertDeviceId(selected), alert: selected })}>创建维修工单</Button></div>
+        </section> : <section className="panel alert-detail"><div className="alert-empty">请选择一条告警</div></section>}
       </div>
+      {editDraft && <div className="modal-backdrop" role="presentation"><section className="panel alert-edit-dialog" role="dialog" aria-modal="true" aria-label="编辑告警"><div className="form-heading"><div><small>{selected.id}</small><h2>编辑告警</h2></div><Button appearance="subtle" onClick={() => setEditDraft(null)}>关闭</Button></div><label>告警标题<Input value={editDraft.title} onChange={(_, data) => setEditDraft((current) => ({ ...current, title: data.value }))} /></label><div className="form-grid"><label>告警等级<select value={editDraft.level} onChange={(event) => setEditDraft((current) => ({ ...current, level: event.target.value }))}>{["一级紧急", "二级警告", "三级提示"].map((level) => <option key={level}>{level}</option>)}</select></label><label>负责人<select value={editDraft.owner} onChange={(event) => setEditDraft((current) => ({ ...current, owner: event.target.value }))}><option>未指派</option>{["张工", "王强", "赵工"].map((owner) => <option key={owner}>{owner}</option>)}</select></label></div><label>处置备注<textarea value={editDraft.note} onChange={(event) => setEditDraft((current) => ({ ...current, note: event.target.value }))} placeholder="记录复核结果、现场情况或转交原因" /></label><div className="form-actions"><Button onClick={() => setEditDraft(null)}>取消</Button><Button appearance="primary" onClick={saveAlert}>保存修改</Button></div><p className="boundary-note">当前保存到前端会话；服务器持久化等待告警更新接口。</p></section></div>}
     </>
   );
 }
@@ -319,9 +407,9 @@ function OrderTable({ rows, onSelect }) {
   return <table className="data-table"><thead><tr><th>工单号</th><th>标题</th><th>优先级</th><th>负责人</th><th>状态</th><th>更新</th></tr></thead><tbody>{rows.map((order) => <tr key={order.id} onClick={() => onSelect?.(order)}><td><strong>{order.id}</strong></td><td>{order.title}</td><td><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></td><td>{order.owner}</td><td>{order.status}</td><td>{order.updated}</td></tr>)}</tbody></table>;
 }
 
-function OrdersPage({ notify, workOrders }) {
+function OrdersPage({ notify, workOrders, sourceAlert }) {
   const [selected, setSelected] = useState(workOrders[0]);
-  return <><PageHeader title="维护工单" description="管理诊断转单、现场执行、计时与验收闭环" action="创建工单" onAction={() => notify("工单草稿已创建")} /><div className="status-tabs"><button className="active">列表视图</button><button>看板视图</button><button>日历排程</button></div><Toolbar placeholder="搜索工单号、标题、设备或负责人"><select><option>全部状态</option></select><select><option>全部优先级</option></select></Toolbar><div className="split-layout orders-layout"><section className="panel order-list">{workOrders.map((order) => <button key={order.id} className={`order-card ${selected.id === order.id ? "selected" : ""}`} onClick={() => setSelected(order)}><span><strong>{order.id}</strong><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></span><h3>{order.title}</h3><small>{order.owner} · {order.status} · {order.updated}</small></button>)}</section><section className="panel order-detail"><div className="drawer-heading"><div><small>{selected.id}</small><h2>{selected.title}</h2></div><Button appearance="primary" onClick={() => notify("工单已提交验收")}>提交验收</Button></div><div className="order-meta"><div><span>负责人</span><strong>{selected.owner}</strong></div><div><span>目标设备</span><strong>AC-07 · Bay03</strong></div><div><span>计划窗口</span><strong>今日 09:30 至 12:00</strong></div></div><div className="timer"><span>现场维保执行计时中</span><strong>01:42:21</strong><ProgressBar value={0.68} /></div><h3>标准化现场检修规程</h3><div className="checklist">{["停机电气闭锁挂牌", "拆卸防护罩并检查轴承", "提取废润滑脂样本", "更换 SKF-6312 轴承", "加注润滑脂并复核振动"].map((step, index) => <label key={step} className={index < 3 ? "checked" : ""}><input type="checkbox" defaultChecked={index < 3} /> <span><strong>步骤 {index + 1}：{step}</strong><small>{index < 3 ? "已由张工确认" : "等待执行"}</small></span></label>)}</div></section></div></>;
+  return <><PageHeader title="维护工单" description="管理诊断转单、现场执行、计时与验收闭环" action="创建工单" onAction={() => notify("工单草稿已创建")} />{sourceAlert && <div className="context-note"><strong>由告警中心带入：{sourceAlert.id}</strong><span>{sourceAlert.device} · {sourceAlert.title}。创建工单时将自动关联该设备和问题。</span></div>}<div className="status-tabs"><button className="active">列表视图</button><button>看板视图</button><button>日历排程</button></div><Toolbar placeholder="搜索工单号、标题、设备或负责人"><select><option>全部状态</option></select><select><option>全部优先级</option></select></Toolbar><div className="split-layout orders-layout"><section className="panel order-list">{workOrders.map((order) => <button key={order.id} className={`order-card ${selected.id === order.id ? "selected" : ""}`} onClick={() => setSelected(order)}><span><strong>{order.id}</strong><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></span><h3>{order.title}</h3><small>{order.owner} · {order.status} · {order.updated}</small></button>)}</section><section className="panel order-detail"><div className="drawer-heading"><div><small>{selected.id}</small><h2>{selected.title}</h2></div><Button appearance="primary" onClick={() => notify("工单已提交验收")}>提交验收</Button></div><div className="order-meta"><div><span>负责人</span><strong>{selected.owner}</strong></div><div><span>目标设备</span><strong>AC-07 · Bay03</strong></div><div><span>计划窗口</span><strong>今日 09:30 至 12:00</strong></div></div><div className="timer"><span>现场维保执行计时中</span><strong>01:42:21</strong><ProgressBar value={0.68} /></div><h3>标准化现场检修规程</h3><div className="checklist">{["停机电气闭锁挂牌", "拆卸防护罩并检查轴承", "提取废润滑脂样本", "更换 SKF-6312 轴承", "加注润滑脂并复核振动"].map((step, index) => <label key={step} className={index < 3 ? "checked" : ""}><input type="checkbox" defaultChecked={index < 3} /> <span><strong>步骤 {index + 1}：{step}</strong><small>{index < 3 ? "已由张工确认" : "等待执行"}</small></span></label>)}</div></section></div></>;
 }
 
 function AuditPage({ auditRows }) {
@@ -329,22 +417,28 @@ function AuditPage({ auditRows }) {
   return <><PageHeader title="审计记录" description="只读、可验证的业务操作与人工决策轨迹" /><div className="metric-strip audit-metrics"><div><span>今日入库记录</span><strong>1,842</strong><small>条</small></div><div><span>签名校验通过率</span><strong className="text-success">100%</strong></div><div><span>被拦截越权操作</span><strong className="text-danger">1</strong><small>起</small></div></div><Toolbar placeholder="搜索请求号、业务对象或操作者"><select><option>全部操作者</option></select><select><option>全部动作</option></select></Toolbar><div className="split-layout"><section className="panel table-panel grow"><table className="data-table"><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>业务对象</th><th>结果</th></tr></thead><tbody>{auditRows.map((row) => <tr key={`${row.time}-${row.action}`} className={selected.time === row.time ? "selected" : ""} onClick={() => setSelected(row)}><td>{row.time}</td><td>{row.user}</td><td><ToneBadge>{row.action}</ToneBadge></td><td>{row.object}</td><td><ToneBadge tone="success">{row.result}</ToneBadge></td></tr>)}</tbody></table></section><aside className="panel audit-detail"><div className="panel-title"><div><ShieldLock24Regular /><h2>审计凭证详情</h2></div><ToneBadge tone="success">签名有效</ToneBadge></div><div className="audit-section"><span>操作人</span><strong>{selected.user}</strong><small>维护主管 · ENG-0819</small></div><div className="audit-section"><span>动作说明</span><strong>{selected.action}</strong><p>操作已写入只读审计流水，并关联业务对象 {selected.object}。</p></div><div className="before-after"><div><span>变更前</span><strong>待人工确认</strong></div><div><span>变更后</span><strong>处理中</strong></div></div><code>REQ-20250518-0944-8812<br />SHA-256: e3b0c44298fc1c149afbf4c8996fb924</code></aside></div></>;
 }
 
-function PeoplePage({ session }) {
+function PermissionOverview({ session }) {
   const roleRows = ["owner", "admin", "manager", "technician", "viewer"];
   return <><PageHeader title="人员与权限" description="核对当前组织身份与各岗位可见范围；成员增删改将在人员接口交付后开放" /><div className="identity-strip"><div><span>当前人员</span><strong>{session.user.displayName}</strong><small>{session.user.email}</small></div><div><span>所属组织</span><strong>{session.organization.name}</strong><small>{session.organization.code}</small></div><div><span>当前岗位</span><strong>{roleLabels[session.role]}</strong><small>{session.role}</small></div></div><section className="panel people-panel"><div className="panel-title"><div><PeopleTeam24Regular /><h2>岗位权限基线</h2></div><ToneBadge tone="warning">待人员接口联调</ToneBadge></div><div className="people-notice"><strong>为什么现在不能新增人员？</strong><span>后端当前只提供登录身份和角色，尚未提供组织成员列表、邀请、停用和改岗接口。这里不使用虚构成员数据；接口交付后再接入真实人员管理。</span></div><table className="data-table permission-table"><thead><tr><th>岗位</th><th>可访问模块</th><th>人员管理</th></tr></thead><tbody>{roleRows.map((role) => <tr key={role}><td><strong>{roleLabels[role]}</strong><small>{role}</small></td><td>{getAllowedPageIds(role).filter((page) => page !== "people").map((page) => navItems.find((item) => item.id === page)?.label).join("、")}</td><td>{canAccessPage(role, "people") ? <ToneBadge tone="success">可查看</ToneBadge> : <ToneBadge>不可见</ToneBadge>}</td></tr>)}</tbody></table></section></>;
 }
 
 function WorkspaceApp({ session, onLogout }) {
   const [activePage, setActivePage] = useState("overview");
+  const [pageContext, setPageContext] = useState({});
   const [toast, setToast] = useState("");
   const [workspaceData, setWorkspaceData] = useState(demoData);
   const [dataSource, setDataSource] = useState("mock");
   const [connectedResources, setConnectedResources] = useState([]);
+  const [managedOrders, setManagedOrders] = useState(null);
+  const [managedPeople, setManagedPeople] = useState(demoPeople);
   const allowedNavItems = useMemo(() => navItems.filter((item) => canAccessPage(session.role, item.id)), [session.role]);
   const activeNav = useMemo(() => allowedNavItems.find((item) => item.id === activePage), [activePage, allowedNavItems]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
-  const navigate = (pageId) => {
-    if (canAccessPage(session.role, pageId)) setActivePage(pageId);
+  const navigate = (pageId, context = {}) => {
+    if (canAccessPage(session.role, pageId)) {
+      setPageContext(context);
+      setActivePage(pageId);
+    }
     else notify("当前岗位没有访问该模块的权限");
   };
 
@@ -364,16 +458,17 @@ function WorkspaceApp({ session, onLogout }) {
     return () => { active = false; };
   }, [session.accessToken, session.isPreview]);
 
-  const { alerts, auditRows, devices, evidence, trendData, workOrders } = workspaceData;
+  const { alerts, auditRows, devices, deviceProfiles = demoData.deviceProfiles, evidence, trendData, workOrders } = workspaceData;
+  const visibleOrders = useMemo(() => managedOrders ?? workOrders.map(normalizeWorkOrder), [managedOrders, workOrders]);
   const pages = {
     overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
-    devices: <DevicePage navigate={navigate} devices={devices} trendData={trendData} />,
+    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
-    diagnosis: <DiagnosisPage devices={devices} />,
-    knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
-    orders: <OrdersPage notify={notify} workOrders={workOrders} />,
-    audit: <AuditPage auditRows={auditRows} />,
-    people: <PeoplePage session={session} />,
+    diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
+    knowledge: <KnowledgeWorkspace notify={notify} evidence={evidence} />,
+    orders: <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />,
+    people: <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />,
+    audit: <AuditWorkspace auditRows={auditRows} />,
   };
   return (
     <div className="app-shell">

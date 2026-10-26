@@ -25,3 +25,18 @@ export function transitionAlert(alert, nextStatus, owner) {
 export function alertDeviceId(alert) {
   return String(alert?.device || "").split(/\s+/)[0] || "";
 }
+
+export function updateAlert(alert, changes) {
+  const title = changes.title?.trim();
+  const level = changes.level?.trim();
+  const owner = changes.owner?.trim();
+  if (!title) throw new Error("告警标题不能为空");
+  if (!level) throw new Error("请选择告警等级");
+  if (!owner) throw new Error("请选择负责人");
+  return { ...alert, ...changes, title, level, owner, updated: "刚刚" };
+}
+
+export function reopenAlert(alert) {
+  if (alert.status !== "已关闭") throw new Error("只有已关闭告警可以重新打开");
+  return { ...alert, status: "处理中", updated: "刚刚" };
+}

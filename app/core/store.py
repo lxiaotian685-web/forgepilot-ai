@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from app.core.chunker import chunk_pages
-from app.core.parser import parse_text
+from app.core.parser import Page, parse_text
 from app.core.search import BM25Index
 from app.schemas.document import Chunk, Document, Evidence
 
@@ -34,8 +34,26 @@ class KnowledgeBase:
         version: str = "1.0",
         source: str = "",
     ) -> tuple[Document, list[Chunk]]:
+        return self.ingest_pages(
+            title=title,
+            equipment_model=equipment_model,
+            pages=parse_text(content),
+            organization_id=organization_id,
+            version=version,
+            source=source,
+        )
+
+    def ingest_pages(
+        self,
+        *,
+        title: str,
+        equipment_model: str,
+        pages: list[Page],
+        organization_id: str = "demo-org",
+        version: str = "1.0",
+        source: str = "",
+    ) -> tuple[Document, list[Chunk]]:
         with self._lock:
-            pages = parse_text(content)
             if not pages:
                 raise ValueError("文档内容为空")
             document = Document(

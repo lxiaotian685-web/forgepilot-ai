@@ -46,7 +46,7 @@ async def request_id(request: Request, call_next):
 
 @app.middleware("http")
 async def body_size_limit(request: Request, call_next):
-    max_bytes = env_int("MAX_REQUEST_BYTES", 1_000_000, minimum=1)
+    max_bytes = env_int("MAX_REQUEST_BYTES", 6_000_000, minimum=1)
     content_length = request.headers.get("content-length")
     if content_length:
         try:

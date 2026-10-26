@@ -13,7 +13,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 已实现：
 
 - FastAPI应用骨架与健康检查接口；
-- 说明书RAG知识库：文档入库、BM25检索、带页码/分块证据引用；
+- 说明书RAG知识库：TXT/MD/PDF 上传、解析、入库、BM25检索、带页码/分块证据引用；
 - 真实模型适配器：OpenAI兼容接口、JSON结构化输出、Pydantic校验；
 - 诊断接口：区分事实/推断/待确认，过滤非法引用，处理无答案与模型不可用；
 - 设备事实提供方抽象：`static`离线演示与`http`调用B包设备接口；
@@ -23,8 +23,8 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - 默认关闭文档入库写接口，生产环境禁止 `static` 设备提供方与 Mock 模型；
 - CORS、请求体上限、按 IP 限流、请求 ID 与可关闭的 OpenAPI 文档；
 - 设备事实、引用来源、冲突来源均做校验，模型返回非法 JSON 时明确降级；
-- 3 份虚构演示手册与 20 条评测集；
-- 83 项自动化测试；
+- 3 份虚构演示手册、1 份演示上传文档与 20 条评测集；
+- 103 项自动化测试；
 - 已用 B 侧 SQLite 种子数据完成 AC-07 真实设备事实联调（模型仍为 Mock，真实模型待密钥复测）。
 
 尚未实现：
@@ -34,7 +34,7 @@ ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备
 - Agent工具调用与工单闭环；
 - 备件、权限、审计和生产部署。
 
-完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。AC-07 的 C↔B 联调记录见 [docs/integration-ac07.md](docs/integration-ac07.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。AC-07 的 C↔B 联调记录见 [docs/integration-ac07.md](docs/integration-ac07.md)，文档上传与检索演示见 [docs/demo-ac07.md](docs/demo-ac07.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 本地运行
 
@@ -64,6 +64,21 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m scripts.ingest_demo
 .\.venv\Scripts\python.exe -m scripts.evaluate
 ```
+
+### 文档上传（演示环境）
+
+上传接口默认关闭。仅本地演示时临时开启：
+
+```powershell
+$env:C_ENABLE_INGEST = "true"
+$env:C_API_BASE_URL = "http://127.0.0.1:8000"
+# 如经过网关，可设置 C_API_TOKEN
+.\.venv\Scripts\python.exe -m scripts.upload_demo
+```
+
+支持 PDF、TXT、MD；组织从 `X-Organization-Id` 取，文件名只作为元数据，不落盘。
+`MAX_UPLOAD_BYTES` 控制单文件上限，`MAX_REQUEST_BYTES` 必须大于上传上限。
+生产环境必须保持 `C_ENABLE_INGEST=false`，只允许受控后台导入。
 
 ### 模型配置（可选）
 
@@ -106,7 +121,8 @@ $env:DEVICE_API_TIMEOUT = "5"
 | GET | `/health` | 已实现 | 服务健康检查与当前 provider 模式 |
 | POST | `/api/v1/chat` | 已实现 | 接收设备ID和问题，返回带证据的诊断结果 |
 | POST | `/api/v1/search` | 已实现 | 检索当前组织文档，返回带页码的证据 |
-| POST | `/api/v1/documents/ingest` | 受控 | 文档入库，默认关闭（`C_ENABLE_INGEST=false`） |
+| POST | `/api/v1/documents/upload` | 受控 | 上传 PDF/TXT/MD，解析后入库；默认关闭（`C_ENABLE_INGEST=false`） |
+| POST | `/api/v1/documents/ingest` | 受控 | 文本内容入库，默认关闭（`C_ENABLE_INGEST=false`） |
 | GET | `/api/v1/documents` | 已实现 | 列出当前组织文档，支持 `limit/offset` |
 
 除 `/health` 外，接口需要 `X-Organization-Id`；生产环境建议由网关注入，并同时透传 Bearer token。
@@ -136,7 +152,8 @@ $env:DEVICE_API_TIMEOUT = "5"
 | `C_ENABLE_INGEST` | `false` | 是否开放文档写接口 |
 | `CORS_ORIGINS` | 本地 Vite 地址 | 允许的前端来源，逗号分隔 |
 | `RATE_LIMIT_PER_MINUTE` | `60` | 每 IP 每分钟请求上限；`0` 为关闭 |
-| `MAX_REQUEST_BYTES` | `1000000` | 请求体上限 |
+| `MAX_REQUEST_BYTES` | `6000000` | 请求体上限 |
+| `MAX_UPLOAD_BYTES` | `5000000` | 单文件上传上限，应小于请求体上限 |
 | `DOCS_ENABLED` | `true` | 是否开放 `/docs` 和 OpenAPI |
 | `LLM_MAX_TOKENS` | `1024` | 模型输出上限 |
 | `HTTP_TRUST_ENV` | `false` | 是否读取系统代理环境变量 |
@@ -145,6 +162,8 @@ $env:DEVICE_API_TIMEOUT = "5"
 
 - 本仓库只包含C侧检索诊断服务，不包含前端、数据库写入和工单流程。
 - 默认BM25检索，尚未接入向量检索；适用于小型演示知识库。
+- PDF 仅提取可复制文本，扫描件/纯图片 PDF 需要 OCR，当前不支持。
+- 文档上传写接口仅在 `C_ENABLE_INGEST=true` 时开放，生产环境必须关闭。
 - `static`设备提供方只用于离线演示，生产必须配置`http`；生产启动会拒绝 static。
 - 真实模型需要兼容OpenAI的`/chat/completions`与JSON模式；不支持时返回`model_unavailable`。
 - 设备型号到知识库文档域仍需受控映射，待B包直接返回`knowledgeModel`后可移除。

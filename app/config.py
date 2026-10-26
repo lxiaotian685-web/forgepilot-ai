@@ -43,3 +43,7 @@ def auth_required() -> bool:
 
 def ingest_enabled() -> bool:
     return env_bool("C_ENABLE_INGEST", False)
+
+
+def max_upload_bytes() -> int:
+    return env_int("MAX_UPLOAD_BYTES", 5_000_000, minimum=1)

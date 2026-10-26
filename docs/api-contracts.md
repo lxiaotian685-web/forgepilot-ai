@@ -63,7 +63,44 @@ HTTP 状态映射：
 
 - `POST /api/v1/search`：检索当前组织文档，需要 `X-Organization-Id`。
 - `GET /api/v1/documents`：列出当前组织文档，支持 `limit`（1–500）和 `offset`。
-- `POST /api/v1/documents/ingest`：文档入库，需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`），生产不得开放无鉴权写入。
+- `POST /api/v1/documents/upload`：上传 PDF/TXT/MD，解析后入库；需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`）。
+- `POST /api/v1/documents/ingest`：文本内容入库，需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`），生产不得开放无鉴权写入。
+
+### 3.2.1 文档上传 `POST /api/v1/documents/upload`
+
+`Content-Type: multipart/form-data`
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `file` | 是 | PDF、TXT 或 MD，单文件大小受 `MAX_UPLOAD_BYTES` 限制 |
+| `title` | 否 | 缺省使用文件名（不含扩展名） |
+| `equipment_model` | 是 | 知识域，例如 `compressor-002` |
+| `version` | 否 | 默认 `1.0`，最长 50 |
+| `source` | 否 | 缺省使用文件名，最长 500 |
+
+响应：
+
+```json
+{
+  "document_id": "a1b2c3d4",
+  "title": "空压机维修规范",
+  "equipment_model": "compressor-002",
+  "version": "1.0",
+  "source": "manual.pdf",
+  "page_count": 4,
+  "chunk_count": 9
+}
+```
+
+错误：
+
+- 403：`C_ENABLE_INGEST=false`
+- 413：文件或请求体超过上限
+- 415：扩展名不支持，或 PDF 文件头不合法
+- 422：缺少字段、空白字段、文件为空、PDF 损坏/无可提取文本、文本编码无法识别
+- 401：`C_REQUIRE_AUTH=true` 且缺少 `X-Organization-Id`
+
+组织编号只从请求上下文获取，不能由表单或文件内容指定。PDF 仅支持可提取文本，扫描件需要 OCR，当前不处理。
 
 ### 3.3 设备事实接入（C 已实现）
 
@@ -99,7 +136,8 @@ C_DEFAULT_ORGANIZATION_ID=demo-org
 C_ENABLE_INGEST=false
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 RATE_LIMIT_PER_MINUTE=60
-MAX_REQUEST_BYTES=1000000
+MAX_REQUEST_BYTES=6000000
+MAX_UPLOAD_BYTES=5000000
 DOCS_ENABLED=true
 LLM_MAX_TOKENS=1024
 HTTP_TRUST_ENV=false
@@ -226,3 +264,5 @@ C 的 `/api/v1/chat` 返回结果后，由 B 保存；字段映射：
 ## 10. 联调记录
 
 2026-10-22 已使用 B 侧 SQLite 种子数据完成 AC-07 设备事实、身份透传、跨组织隔离与模型不可用降级联调。命令、请求和实测结果见 [docs/integration-ac07.md](integration-ac07.md)。真实模型仍需配置密钥后复测。
+
+C 侧文档上传、解析、检索与诊断演示见 [docs/demo-ac07.md](demo-ac07.md)，使用虚构演示文档，`is_demo=true`。

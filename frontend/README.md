@@ -40,6 +40,8 @@ npm run dev
 ```env
 VITE_DATA_MODE=api
 VITE_API_BASE_URL=http://localhost:8000
+VITE_BUSINESS_API_BASE_URL=http://localhost:8000
+VITE_DIAGNOSIS_API_BASE_URL=http://localhost:8001
 VITE_API_ORGANIZATION_ID=demo-org
 VITE_API_USER_ID=demo@example.com
 ```
@@ -61,15 +63,15 @@ npm run build
 
 `npm test` 验证诊断适配器；`npm run build` 检查生产构建。
 
-诊断页已按 C 包 `/api/v1/chat` 接入，支持文档陈述、模型推断、待验证项与证据片段切换。
-当前旧契约用 `《标题》第N页` 匹配引用，无法唯一匹配时明确显示未匹配，不猜测来源。
-服务端未提供文档版本和原文 URL，页面不编造，也不声称展示全文。
+诊断页已按 C 包 `/api/v1/chat` 最新契约准备，支持稳定 `source_ids`、文档版本、分块编号、冲突和补采建议。未知页码明确显示“页码未知”，页面不编造位置或原文 URL。
+前端会拒绝重复/未知引用 ID，以及缺少有效事实引用却标记为 `ok` 的响应，不把契约异常展示为成功诊断。
 
 - `VITE_DATA_MODE=mock`：只展示固定界面样例，明确提示没有分析输入或调用模型。
 - `VITE_DATA_MODE=api`：POST 到 `VITE_DIAGNOSIS_API_BASE_URL`，留空时使用 `VITE_API_BASE_URL`。接口失败显示错误，不悄悄回退为成功诊断。
 - 服务器的 `is_mock=true` 始终标为模拟或降级；`false` 仅显示为服务端标记的真实模型，仍需人工核验。
 - 支持取消与 30 秒超时；重新输入、换设备后清除旧结论，避免把旧诊断绑定到新设备。
-- 工单生成目前禁用，等待 B 的诊断保存与确认接口。结果不持久化，不能声称已完成端到端闭环。
+- `src/services/workflow.js` 已按 B 包契约准备诊断保存、人工确认建单和审计查询适配器，并拒绝保存本地样例、模拟结果、降级结果或未人工选择风险等级的结果。
+- 工单生成按钮目前仍禁用。适配器已经过纯函数/请求契约测试，但在 C PR #17 修复并冻结契约前不接线，不声称已完成端到端闭环。
 
 本地可分开启动 B 与 C 服务并分别配置 URL；浏览器跨域需要服务端 CORS 或同源代理。
 不得把模型密钥放入任何 `VITE_` 环境变量。生产认证与公开写入保护需 B 包完成后再开放。

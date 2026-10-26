@@ -16,12 +16,20 @@ export const alerts = [
 ];
 
 export const devices = [
-  { id: "AC-07", name: "螺杆空气压缩机", type: "动力与流体机械", location: "压缩站 Bay03", health: 72.4, state: "需关注", alert: 1 },
-  { id: "P-102", name: "高压离心注水泵", type: "流体动力系统", location: "冷却循环水站", health: 84.2, state: "需关注", alert: 1 },
-  { id: "CNC-04", name: "数控龙门铣床", type: "精密加工单元", location: "重载加工岛 #3", health: 41, state: "告警异常", alert: 2 },
-  { id: "WR-09", name: "自动焊接机器人", type: "工业机器人", location: "车身拼装线 #2", health: 98.2, state: "运行正常", alert: 0 },
-  { id: "CV-01", name: "重型板链输送线", type: "仓储物流输送", location: "物流转运通道", health: 95, state: "运行正常", alert: 0 },
+  { id: "AC-07", name: "螺杆空气压缩机", type: "动力与流体机械", plant: "一号装配厂", location: "压缩站 Bay03", health: 72.4, state: "需关注", alert: 1 },
+  { id: "P-102", name: "高压离心注水泵", type: "流体动力系统", plant: "一号装配厂", location: "冷却循环水站", health: 84.2, state: "需关注", alert: 1 },
+  { id: "CNC-04", name: "数控龙门铣床", type: "精密加工单元", plant: "二号装配厂", location: "重载加工岛 #3", health: 41, state: "告警异常", alert: 2 },
+  { id: "WR-09", name: "自动焊接机器人", type: "工业机器人", plant: "二号装配厂", location: "车身拼装线 #2", health: 98.2, state: "运行正常", alert: 0 },
+  { id: "CV-01", name: "重型板链输送线", type: "仓储物流输送", plant: "一号装配厂", location: "物流转运通道", health: 95, state: "运行正常", alert: 0 },
 ];
+
+export const deviceProfiles = {
+  "AC-07": { updatedAt: "2026-10-23 09:42", metrics: [{ label: "驱动端振动 RMS", value: "7.82", unit: "mm/s", limit: "警戒 4.50", tone: "danger" }, { label: "排气温度", value: "88.5", unit: "°C", limit: "预警 85.0", tone: "warning" }, { label: "润滑油压差", value: "0.28", unit: "MPa", limit: "正常 0.20–0.35", tone: "success" }], series: [{ key: "vibration", label: "振动 mm/s", color: "#0f5a91" }, { key: "temperature", label: "温度 °C", color: "#d45522" }], trend: trendData, alertSummary: "驱动端振动持续超限，1 条待确认告警", documents: ["GX11 用户手册 RevC", "ISO 10816-3 振动标准"] },
+  "P-102": { updatedAt: "2026-10-23 09:40", metrics: [{ label: "入口压力", value: "0.34", unit: "MPa", limit: "正常 0.28–0.40", tone: "success" }, { label: "出口压力", value: "6.18", unit: "MPa", limit: "额定 6.30", tone: "success" }, { label: "轴承温度", value: "76.2", unit: "°C", limit: "预警 75.0", tone: "warning" }], series: [{ key: "pressure", label: "出口压力 MPa", color: "#0f5a91" }, { key: "bearingTemperature", label: "轴承温度 °C", color: "#d45522" }], trend: [{ time: "08:00", pressure: 6.31, bearingTemperature: 68 }, { time: "08:30", pressure: 6.28, bearingTemperature: 70 }, { time: "09:00", pressure: 6.24, bearingTemperature: 73 }, { time: "09:40", pressure: 6.18, bearingTemperature: 76.2 }], alertSummary: "轴承温度接近阈值，1 条处理中告警", documents: ["P-102X 离心泵操作手册", "机械密封检修规程"] },
+  "CNC-04": { updatedAt: "2026-10-23 09:38", metrics: [{ label: "主轴负载", value: "91.6", unit: "%", limit: "预警 85.0", tone: "danger" }, { label: "主轴转速", value: "6,200", unit: "rpm", limit: "程序设定 6,000", tone: "warning" }, { label: "冷却液温度", value: "24.8", unit: "°C", limit: "正常 20–28", tone: "success" }], series: [{ key: "spindleLoad", label: "主轴负载 %", color: "#0f5a91" }, { key: "coolantTemperature", label: "冷却液温度 °C", color: "#d45522" }], trend: [{ time: "08:00", spindleLoad: 62, coolantTemperature: 22.1 }, { time: "08:30", spindleLoad: 74, coolantTemperature: 23.2 }, { time: "09:00", spindleLoad: 88, coolantTemperature: 24.1 }, { time: "09:38", spindleLoad: 91.6, coolantTemperature: 24.8 }], alertSummary: "主轴负载异常，2 条待处理告警", documents: ["CNC-04 主轴维护手册", "加工中心点检规程"] },
+  "WR-09": { updatedAt: "2026-10-23 09:41", metrics: [{ label: "焊接电流", value: "218", unit: "A", limit: "工艺 210–225", tone: "success" }, { label: "六轴扭矩", value: "42", unit: "%", limit: "正常 < 70", tone: "success" }, { label: "循环节拍", value: "48.2", unit: "s", limit: "目标 50.0", tone: "success" }], series: [{ key: "current", label: "焊接电流 A", color: "#0f5a91" }, { key: "cycle", label: "循环节拍 s", color: "#d45522" }], trend: [{ time: "08:00", current: 214, cycle: 49.2 }, { time: "08:30", current: 220, cycle: 48.8 }, { time: "09:00", current: 216, cycle: 48.5 }, { time: "09:41", current: 218, cycle: 48.2 }], alertSummary: "当前无活动告警", documents: ["WR-09 机器人维护手册"] },
+  "CV-01": { updatedAt: "2026-10-23 09:39", metrics: [{ label: "链速", value: "12.4", unit: "m/min", limit: "设定 12.5", tone: "success" }, { label: "电机电流", value: "18.6", unit: "A", limit: "正常 < 24", tone: "success" }, { label: "张紧行程", value: "63", unit: "%", limit: "正常 40–75", tone: "success" }], series: [{ key: "speed", label: "链速 m/min", color: "#0f5a91" }, { key: "current", label: "电机电流 A", color: "#d45522" }], trend: [{ time: "08:00", speed: 12.3, current: 17.8 }, { time: "08:30", speed: 12.5, current: 18.2 }, { time: "09:00", speed: 12.4, current: 18.9 }, { time: "09:39", speed: 12.4, current: 18.6 }], alertSummary: "当前无活动告警", documents: ["CV-01 输送线保养规程"] },
+};
 
 export const workOrders = [
   { id: "WO-20250518-01", title: "AC-07 驱动端深沟球轴承紧急更换与润滑脂加注", priority: "P1 紧急", owner: "张工", status: "处理中", updated: "8 分钟前" },

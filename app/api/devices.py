@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequestContext, get_context
+from app.api.audit import write_audit
+from app.api.deps import RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import DEVICE_STATE_LABELS, label_to_code
 from app.api.serializers import (
@@ -14,8 +16,73 @@ from app.api.serializers import (
 )
 from app.db import get_db
 from app.models import Alert, Device, Plant
+from app.schemas.requests import DeviceImportRequest
 
 router = APIRouter(prefix="/api/v1/devices", tags=["devices"])
+
+
+@router.post("/import", status_code=201)
+def import_devices(
+    payload: DeviceImportRequest,
+    context: RequestContext = Depends(get_context),
+    db: Session = Depends(get_db),
+):
+    require_role(context, "manager")
+    normalized = [item.id.strip().casefold() for item in payload.items]
+    if len(set(normalized)) != len(normalized):
+        raise api_error(422, "VALIDATION_ERROR", "导入文件内设备编号重复")
+
+    existing = db.scalars(select(Device).where(
+        Device.organization_id == context.organization_id,
+        Device.deleted_at.is_(None),
+    )).all()
+    if any(device.code.casefold() in normalized for device in existing):
+        raise api_error(409, "CONFLICT", "设备编号已存在")
+
+    plants = db.scalars(select(Plant).where(
+        Plant.organization_id == context.organization_id,
+        Plant.status == "active",
+        Plant.deleted_at.is_(None),
+    )).all()
+    plant_by_name = {plant.name.casefold(): plant for plant in plants}
+    plant_by_code = {plant.code.casefold(): plant for plant in plants}
+    rows = []
+    for item in payload.items:
+        plant_key = item.plant.strip().casefold()
+        plant = plant_by_code.get(plant_key) or plant_by_name.get(plant_key)
+        if plant is None:
+            raise api_error(422, "VALIDATION_ERROR", "厂区不存在或不属于当前组织", {"plant": item.plant})
+        rows.append((Device(
+            organization_id=context.organization_id,
+            plant_id=plant.id,
+            code=item.id.strip(),
+            name=item.name.strip(),
+            type=item.type.strip(),
+            location=item.location.strip(),
+            state="offline",
+            health=100,
+            created_by=context.user_id,
+            updated_by=context.user_id,
+        ), plant))
+
+    try:
+        db.add_all([device for device, _ in rows])
+        db.flush()
+        for device, plant in rows:
+            write_audit(
+                db,
+                organization_id=context.organization_id,
+                actor_user_id=context.user_id,
+                action="device.import",
+                entity_type="device",
+                entity_id=device.id,
+                after={"code": device.code, "plant": plant.code, "state": "offline"},
+            )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise api_error(409, "CONFLICT", "设备编号已存在，请刷新后重试") from exc
+    return {"created": len(rows), "items": [device_to_dict(device, 0, plant) for device, plant in rows]}
 
 
 def _alert_counts(db: Session, device_ids: list) -> dict:
@@ -88,7 +155,9 @@ def list_devices(
         stmt.offset((page - 1) * page_size).limit(page_size)
     ).all()
     counts = _alert_counts(db, [device.id for device in rows])
-    items = [device_to_dict(device, counts.get(device.id, 0)) for device in rows]
+    plant_ids = {device.plant_id for device in rows if device.plant_id}
+    plants = {plant.id: plant for plant in db.scalars(select(Plant).where(Plant.id.in_(plant_ids), Plant.organization_id == context.organization_id)).all()} if plant_ids else {}
+    items = [device_to_dict(device, counts.get(device.id, 0), plants.get(device.plant_id)) for device in rows]
     return page_response(items, page, page_size, total)
 
 

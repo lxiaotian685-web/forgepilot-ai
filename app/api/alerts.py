@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
-from app.api.deps import RequestContext, get_context, require_role
+from app.api.deps import ROLE_LEVELS, RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import (
     ALERT_LEVEL_LABELS,
@@ -14,10 +16,118 @@ from app.api.labels import (
 )
 from app.api.serializers import alert_to_dict, page_response
 from app.db import get_db
-from app.models import Alert, Device, User, utcnow
-from app.schemas.requests import AlertAcknowledgeRequest
+from app.models import Alert, Device, Membership, User, utcnow
+from app.schemas.requests import AlertAcknowledgeRequest, AlertCreate, AlertUpdate
 
 router = APIRouter(prefix="/api/v1/alerts", tags=["alerts"])
+ALERT_TRANSITIONS = {
+    "pending": {"processing", "acknowledged", "closed"},
+    "processing": {"closed"},
+    "acknowledged": {"processing", "closed"},
+    "closed": {"processing"},
+}
+
+
+def _active_owner(db: Session, organization_id: uuid.UUID, user_id: uuid.UUID) -> User:
+    membership = db.scalar(select(Membership).where(
+        Membership.organization_id == organization_id,
+        Membership.user_id == user_id,
+        Membership.status == "active",
+    ))
+    user = db.get(User, user_id)
+    if membership is None or user is None or user.status != "active" or ROLE_LEVELS.get(membership.role, -1) < ROLE_LEVELS["technician"]:
+        raise api_error(422, "VALIDATION_ERROR", "负责人必须是当前组织的在岗维修人员或更高岗位")
+    return user
+
+
+@router.post("", status_code=201)
+def create_alert(
+    payload: AlertCreate,
+    context: RequestContext = Depends(get_context),
+    db: Session = Depends(get_db),
+):
+    require_role(context, "manager")
+    device = db.scalar(select(Device).where(
+        Device.organization_id == context.organization_id,
+        Device.code == payload.device_id,
+        Device.deleted_at.is_(None),
+    ))
+    if device is None:
+        raise api_error(404, "NOT_FOUND", "设备不存在")
+    level = label_to_code(payload.level, ALERT_LEVEL_LABELS, "level")
+    owner = _active_owner(db, context.organization_id, payload.owner_id) if payload.owner_id else None
+    alert = Alert(
+        organization_id=context.organization_id,
+        device_id=device.id,
+        code=f"ALT-{uuid.uuid4().hex[:12].upper()}",
+        title=payload.title.strip(),
+        description=payload.description,
+        level=level,
+        status="pending",
+        owner_user_id=owner.id if owner else None,
+        source="manual",
+        created_by=context.user_id,
+        updated_by=context.user_id,
+    )
+    db.add(alert)
+    db.flush()
+    write_audit(db, organization_id=context.organization_id, actor_user_id=context.user_id,
+                action="alert.create", entity_type="alert", entity_id=alert.id,
+                after={"code": alert.code, "deviceId": device.code, "level": level, "ownerId": str(owner.id) if owner else None})
+    db.commit()
+    return alert_to_dict(alert, device, owner)
+
+
+@router.patch("/{alert_id}")
+def update_alert(
+    alert_id: str,
+    payload: AlertUpdate,
+    context: RequestContext = Depends(get_context),
+    db: Session = Depends(get_db),
+):
+    require_role(context, "technician")
+    alert = db.scalar(select(Alert).where(
+        Alert.organization_id == context.organization_id,
+        Alert.code == alert_id,
+        Alert.deleted_at.is_(None),
+    ))
+    if alert is None:
+        raise api_error(404, "NOT_FOUND", "告警不存在")
+    fields = payload.model_fields_set
+    if fields & {"title", "level", "description", "owner_id"}:
+        require_role(context, "manager")
+    before = {"title": alert.title, "level": alert.level, "status": alert.status,
+              "ownerId": str(alert.owner_user_id) if alert.owner_user_id else None}
+    if "title" in fields and payload.title is not None:
+        alert.title = payload.title.strip()
+    if "level" in fields and payload.level is not None:
+        alert.level = label_to_code(payload.level, ALERT_LEVEL_LABELS, "level")
+    if "description" in fields:
+        alert.description = payload.description
+    if "owner_id" in fields:
+        alert.owner_user_id = _active_owner(db, context.organization_id, payload.owner_id).id if payload.owner_id else None
+    if "status" in fields and payload.status is not None:
+        new_status = label_to_code(payload.status, ALERT_STATUS_LABELS, "status")
+        if new_status != alert.status:
+            if new_status not in ALERT_TRANSITIONS[alert.status]:
+                raise api_error(409, "INVALID_TRANSITION", "告警状态流转不合法")
+            if alert.status == "closed" or new_status == "closed":
+                require_role(context, "manager")
+            if new_status == "processing" and alert.owner_user_id is None:
+                raise api_error(422, "VALIDATION_ERROR", "进入处理中前必须指派负责人")
+            alert.status = new_status
+            if new_status == "acknowledged":
+                alert.acknowledged_at = utcnow()
+                alert.acknowledged_by = context.user_id
+    alert.updated_by = context.user_id
+    after = {"title": alert.title, "level": alert.level, "status": alert.status,
+             "ownerId": str(alert.owner_user_id) if alert.owner_user_id else None}
+    write_audit(db, organization_id=context.organization_id, actor_user_id=context.user_id,
+                action="alert.update", entity_type="alert", entity_id=alert.id, before=before, after=after)
+    db.commit()
+    device = db.get(Device, alert.device_id)
+    owner = db.get(User, alert.owner_user_id) if alert.owner_user_id else None
+    return alert_to_dict(alert, device, owner)
 
 
 def _load_related(db: Session, alerts: list[Alert]):

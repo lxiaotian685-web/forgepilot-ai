@@ -19,6 +19,28 @@ class AlertAcknowledgeRequest(RequestModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class AlertCreate(RequestModel):
+    device_id: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=255)
+    level: str = Field(default="p2")
+    description: str | None = Field(default=None, max_length=2000)
+    owner_id: UUID | None = None
+
+
+class AlertUpdate(RequestModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    level: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    owner_id: UUID | None = None
+    status: str | None = None
+
+    @model_validator(mode="after")
+    def _require_one_field(self) -> "AlertUpdate":
+        if not self.model_fields_set:
+            raise ValueError("至少提供一个可更新字段")
+        return self
+
+
 class LoginRequest(RequestModel):
     email: str = Field(min_length=3, max_length=255)
     password: str = Field(min_length=1, max_length=200)
@@ -43,6 +65,18 @@ class MemberUpdate(RequestModel):
         if not ({"display_name", "role", "status"} & self.model_fields_set):
             raise ValueError("至少提供姓名、角色或状态中的一个字段")
         return self
+
+
+class DeviceImportRow(RequestModel):
+    id: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=200)
+    type: str = Field(min_length=1, max_length=120)
+    plant: str = Field(min_length=1, max_length=200)
+    location: str = Field(min_length=1, max_length=255)
+
+
+class DeviceImportRequest(RequestModel):
+    items: list[DeviceImportRow] = Field(min_length=1, max_length=100)
 
 
 class DiagnosisCreate(RequestModel):
@@ -108,6 +142,7 @@ class WorkOrderUpdate(RequestModel):
     owner_id: UUID | None = None
     description: str | None = Field(default=None, max_length=2000)
     due_at: datetime | None = None
+    cancel_reason: str | None = Field(default=None, min_length=1, max_length=500)
 
     @model_validator(mode="after")
     def _require_one_field(self) -> "WorkOrderUpdate":

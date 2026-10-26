@@ -189,6 +189,23 @@ def test_create_work_order_unknown_device(api):
     assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
+def test_work_order_cannot_be_assigned_to_read_only_member(api):
+    client, ids, _ = api
+    viewer_id = str(ids["users"]["viewer@example.com"])
+    created = client.post(
+        "/api/v1/work-orders",
+        json={"title": "不能指派访客", "deviceId": "AC-07", "ownerId": viewer_id},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert created.status_code == 422
+    updated = client.patch(
+        "/api/v1/work-orders/WO-20250518-01",
+        json={"ownerId": viewer_id},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert updated.status_code == 422
+
+
 def test_create_work_order_rejects_alert_from_other_device(api):
     client, ids, _ = api
     response = client.post(
@@ -255,10 +272,17 @@ def test_work_order_patch_transitions(api):
     assert to_verifying.status_code == 200
     assert to_verifying.json()["status"] == "待验收"
 
-    to_completed = client.patch(
+    denied_completion = client.patch(
         "/api/v1/work-orders/WO-20250518-01",
         json={"status": "已完成"},
         headers=headers,
+    )
+    assert denied_completion.status_code == 403
+
+    to_completed = client.patch(
+        "/api/v1/work-orders/WO-20250518-01",
+        json={"status": "已完成"},
+        headers=auth(ids, user="manager@example.com"),
     )
     assert to_completed.status_code == 200
     assert to_completed.json()["status"] == "已完成"
@@ -277,10 +301,24 @@ def test_work_order_patch_rejects_cross_org_owner(api):
     response = client.patch(
         "/api/v1/work-orders/WO-20250518-01",
         json={"ownerId": str(USER_OTHER_ID)},
-        headers=auth(ids, user="tech@example.com"),
+        headers=auth(ids, user="manager@example.com"),
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_technician_cannot_edit_or_cancel_order(api):
+    client, ids, _ = api
+    headers = auth(ids, user="tech@example.com")
+    for body in ({"title": "擅自改名"}, {"ownerId": str(ids["users"]["manager@example.com"])}, {"status": "已取消", "cancelReason": "无"}):
+        response = client.patch("/api/v1/work-orders/WO-20250518-01", json=body, headers=headers)
+        assert response.status_code == 403
+    missing_reason = client.patch(
+        "/api/v1/work-orders/WO-20250518-01",
+        json={"status": "已取消"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert missing_reason.status_code == 422
 
 
 def test_cross_org_work_order_patch_not_found(api):

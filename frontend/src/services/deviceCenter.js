@@ -80,6 +80,6 @@ export function parseDeviceImport(text, existingIds = []) {
   return { rows: parsed, errors: [] };
 }
 
-export function createDeviceImportTemplate() {
-  return `${DEVICE_IMPORT_HEADERS.join(",")}\nM-001,示例电机,电机,一号装配厂,动力站 Bay01\n`;
+export function createDeviceImportTemplate(plant = "一号装配厂") {
+  return `${DEVICE_IMPORT_HEADERS.join(",")}\nM-001,示例电机,电机,${plant},动力站 Bay01\n`;
 }

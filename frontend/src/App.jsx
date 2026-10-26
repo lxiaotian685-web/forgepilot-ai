@@ -41,6 +41,7 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
+import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "./services/alertCenter";
 import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
 import DiagnosisPage from "./DiagnosisPage";
 
@@ -246,35 +247,54 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
 }
 
 function AlertsPage({ navigate, notify, alerts, trendData }) {
-  const [selected, setSelected] = useState(alerts[0]);
+  const [items, setItems] = useState(alerts);
+  const [selectedId, setSelectedId] = useState(alerts[0]?.id || "");
+  const [filters, setFilters] = useState({ query: "", status: "", level: "", owner: "", device: "" });
+  const [assignee, setAssignee] = useState("");
+  const [rulesOpen, setRulesOpen] = useState(false);
+  useEffect(() => setItems(alerts), [alerts]);
+  const counts = countAlerts(items);
+  const filtered = filterAlerts(items, filters);
+  const selected = filtered.find((alert) => alert.id === selectedId) || filtered[0] || null;
+  const owners = [...new Set(items.map((item) => item.owner).filter((owner) => owner && owner !== "未指派"))];
+  const updateStatus = (nextStatus) => {
+    if (!selected) return;
+    try {
+      const updated = transitionAlert(selected, nextStatus, assignee || selected.owner);
+      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setAssignee("");
+      notify(`告警 ${updated.id} 已更新为${updated.status}；正式持久化等待 T05 接口`);
+    } catch (error) { notify(error.message); }
+  };
   return (
     <>
-      <PageHeader title="告警中心" description="确认、指派并追踪设备异常处置过程" />
-      <div className="status-tabs"><button className="active">全部 24</button><button>待确认 3</button><button>处理中 5</button><button>已关闭 16</button></div>
-      <Toolbar placeholder="搜索告警编号、设备或规则"><select><option>全部等级</option></select><select><option>全部设备</option></select></Toolbar>
+      <PageHeader title="告警中心" description="确认、指派并追踪设备异常处置过程" action="告警规则" onAction={() => setRulesOpen((value) => !value)} />
+      {rulesOpen && <section className="panel alert-rule-panel"><div><strong>告警规则管理</strong><span>当前可查看规则来源；新增、停用和版本保存等待 B 包 T05 接口。</span></div><ToneBadge tone="warning">只读预览</ToneBadge></section>}
+      <div className="status-tabs">{[["", "全部", "all"], ["待确认", "待确认", "待确认"], ["处理中", "处理中", "处理中"], ["已关闭", "已关闭", "已关闭"]].map(([value, label, key]) => <button key={key} className={filters.status === value ? "active" : ""} onClick={() => setFilters((current) => ({ ...current, status: value }))}>{label} {counts[key] || 0}</button>)}</div>
+      <div className="toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索告警编号、设备、标题或负责人" value={filters.query} onChange={(_, data) => setFilters((current) => ({ ...current, query: data.value }))} /><select aria-label="严重程度" value={filters.level} onChange={(event) => setFilters((current) => ({ ...current, level: event.target.value }))}><option value="">全部等级</option>{[...new Set(items.map((item) => item.level))].map((value) => <option key={value}>{value}</option>)}</select><select aria-label="负责人" value={filters.owner} onChange={(event) => setFilters((current) => ({ ...current, owner: event.target.value }))}><option value="">全部负责人</option><option>未指派</option>{owners.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="设备" value={filters.device} onChange={(event) => setFilters((current) => ({ ...current, device: event.target.value }))}><option value="">全部设备</option>{[...new Set(items.map((item) => item.device))].map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={() => setFilters({ query: "", status: "", level: "", owner: "", device: "" })}>重置</Button></div>
       <div className="split-layout alerts-layout">
         <section className="panel alert-list">
-          {alerts.map((alert) => (
-            <button key={alert.id} className={`alert-item ${selected.id === alert.id ? "selected" : ""}`} onClick={() => setSelected(alert)}>
+          {filtered.map((alert) => (
+            <button key={alert.id} className={`alert-item ${selected?.id === alert.id ? "selected" : ""}`} onClick={() => { setSelectedId(alert.id); setAssignee(""); }}>
               <span className={alert.level.includes("一级") ? "alert-bar critical" : "alert-bar warning"} />
               <span className="alert-copy"><span><ToneBadge tone={alert.level.includes("一级") ? "danger" : "warning"}>{alert.level}</ToneBadge><small>{alert.time}</small></span><strong>{alert.title}</strong><em>{alert.device}</em><span><small>负责人：{alert.owner}</small><small>{alert.status}</small></span></span>
             </button>
-          ))}
+          ))}{!filtered.length && <div className="alert-empty"><strong>没有符合条件的告警</strong><span>请切换页签或重置筛选。</span></div>}
         </section>
-        <section className="panel alert-detail">
+        {selected ? <section className="panel alert-detail">
           <div className="detail-kicker"><ToneBadge tone="danger">{selected.level}</ToneBadge><span>{selected.id}</span></div>
           <h2>{selected.title}</h2>
           <p>{selected.device}</p>
           <div className="action-row">
-            <Button appearance="primary" onClick={() => notify("告警已确认，并记录当前操作人和时间")}>确认告警</Button>
-            <Button onClick={() => notify("已指派给张工")}>指派处理</Button>
+            {selected.status === "待确认" && <><select aria-label="指派负责人" value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="">选择负责人</option>{["张工", "王强", "赵工"].map((owner) => <option key={owner}>{owner}</option>)}</select><Button appearance="primary" onClick={() => updateStatus("处理中")}>确认并指派</Button></>}
+            {selected.status === "处理中" && <Button appearance="primary" onClick={() => updateStatus("已关闭")}>解决并关闭</Button>}
             <Button icon={<MoreHorizontal24Regular />} aria-label="更多操作" />
           </div>
           <div className="reading-grid"><div><span>当前值</span><strong className="text-danger">7.82 mm/s</strong></div><div><span>告警阈值</span><strong>4.50 mm/s</strong></div><div><span>采样频率</span><strong>1,000 Hz</strong></div><div><span>特征频率</span><strong>148.5 Hz</strong></div></div>
           <TrendChart data={trendData} compact />
           <div className="context-note"><strong>规则来源</strong><span>Rule #VIB-RMS-004，连续 3 个采样周期超过 ISO 4.5 mm/s 阈值。</span></div>
-          <Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis")}>进入诊断工作台</Button>
-        </section>
+          <div className="action-row"><Button appearance="primary" icon={<Pulse24Regular />} onClick={() => navigate("diagnosis", { deviceId: alertDeviceId(selected), alert: selected })}>进入诊断工作台</Button><Button onClick={() => navigate("orders", { deviceId: alertDeviceId(selected), alert: selected })}>创建维修工单</Button></div>
+        </section> : <section className="panel alert-detail"><div className="alert-empty">请选择一条告警</div></section>}
       </div>
     </>
   );
@@ -290,9 +310,9 @@ function OrderTable({ rows, onSelect }) {
   return <table className="data-table"><thead><tr><th>工单号</th><th>标题</th><th>优先级</th><th>负责人</th><th>状态</th><th>更新</th></tr></thead><tbody>{rows.map((order) => <tr key={order.id} onClick={() => onSelect?.(order)}><td><strong>{order.id}</strong></td><td>{order.title}</td><td><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></td><td>{order.owner}</td><td>{order.status}</td><td>{order.updated}</td></tr>)}</tbody></table>;
 }
 
-function OrdersPage({ notify, workOrders }) {
+function OrdersPage({ notify, workOrders, sourceAlert }) {
   const [selected, setSelected] = useState(workOrders[0]);
-  return <><PageHeader title="维护工单" description="管理诊断转单、现场执行、计时与验收闭环" action="创建工单" onAction={() => notify("工单草稿已创建")} /><div className="status-tabs"><button className="active">列表视图</button><button>看板视图</button><button>日历排程</button></div><Toolbar placeholder="搜索工单号、标题、设备或负责人"><select><option>全部状态</option></select><select><option>全部优先级</option></select></Toolbar><div className="split-layout orders-layout"><section className="panel order-list">{workOrders.map((order) => <button key={order.id} className={`order-card ${selected.id === order.id ? "selected" : ""}`} onClick={() => setSelected(order)}><span><strong>{order.id}</strong><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></span><h3>{order.title}</h3><small>{order.owner} · {order.status} · {order.updated}</small></button>)}</section><section className="panel order-detail"><div className="drawer-heading"><div><small>{selected.id}</small><h2>{selected.title}</h2></div><Button appearance="primary" onClick={() => notify("工单已提交验收")}>提交验收</Button></div><div className="order-meta"><div><span>负责人</span><strong>{selected.owner}</strong></div><div><span>目标设备</span><strong>AC-07 · Bay03</strong></div><div><span>计划窗口</span><strong>今日 09:30 至 12:00</strong></div></div><div className="timer"><span>现场维保执行计时中</span><strong>01:42:21</strong><ProgressBar value={0.68} /></div><h3>标准化现场检修规程</h3><div className="checklist">{["停机电气闭锁挂牌", "拆卸防护罩并检查轴承", "提取废润滑脂样本", "更换 SKF-6312 轴承", "加注润滑脂并复核振动"].map((step, index) => <label key={step} className={index < 3 ? "checked" : ""}><input type="checkbox" defaultChecked={index < 3} /> <span><strong>步骤 {index + 1}：{step}</strong><small>{index < 3 ? "已由张工确认" : "等待执行"}</small></span></label>)}</div></section></div></>;
+  return <><PageHeader title="维护工单" description="管理诊断转单、现场执行、计时与验收闭环" action="创建工单" onAction={() => notify("工单草稿已创建")} />{sourceAlert && <div className="context-note"><strong>由告警中心带入：{sourceAlert.id}</strong><span>{sourceAlert.device} · {sourceAlert.title}。创建工单时将自动关联该设备和问题。</span></div>}<div className="status-tabs"><button className="active">列表视图</button><button>看板视图</button><button>日历排程</button></div><Toolbar placeholder="搜索工单号、标题、设备或负责人"><select><option>全部状态</option></select><select><option>全部优先级</option></select></Toolbar><div className="split-layout orders-layout"><section className="panel order-list">{workOrders.map((order) => <button key={order.id} className={`order-card ${selected.id === order.id ? "selected" : ""}`} onClick={() => setSelected(order)}><span><strong>{order.id}</strong><ToneBadge tone={order.priority.includes("P1") ? "danger" : "neutral"}>{order.priority}</ToneBadge></span><h3>{order.title}</h3><small>{order.owner} · {order.status} · {order.updated}</small></button>)}</section><section className="panel order-detail"><div className="drawer-heading"><div><small>{selected.id}</small><h2>{selected.title}</h2></div><Button appearance="primary" onClick={() => notify("工单已提交验收")}>提交验收</Button></div><div className="order-meta"><div><span>负责人</span><strong>{selected.owner}</strong></div><div><span>目标设备</span><strong>AC-07 · Bay03</strong></div><div><span>计划窗口</span><strong>今日 09:30 至 12:00</strong></div></div><div className="timer"><span>现场维保执行计时中</span><strong>01:42:21</strong><ProgressBar value={0.68} /></div><h3>标准化现场检修规程</h3><div className="checklist">{["停机电气闭锁挂牌", "拆卸防护罩并检查轴承", "提取废润滑脂样本", "更换 SKF-6312 轴承", "加注润滑脂并复核振动"].map((step, index) => <label key={step} className={index < 3 ? "checked" : ""}><input type="checkbox" defaultChecked={index < 3} /> <span><strong>步骤 {index + 1}：{step}</strong><small>{index < 3 ? "已由张工确认" : "等待执行"}</small></span></label>)}</div></section></div></>;
 }
 
 function AuditPage({ auditRows }) {
@@ -302,12 +322,17 @@ function AuditPage({ auditRows }) {
 
 function App() {
   const [activePage, setActivePage] = useState("overview");
+  const [pageContext, setPageContext] = useState({});
   const [toast, setToast] = useState("");
   const [workspaceData, setWorkspaceData] = useState(demoData);
   const [dataSource, setDataSource] = useState("mock");
   const [connectedResources, setConnectedResources] = useState([]);
   const activeNav = useMemo(() => navItems.find((item) => item.id === activePage), [activePage]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
+  const navigate = (pageId, context = {}) => {
+    setPageContext(context);
+    setActivePage(pageId);
+  };
 
   useEffect(() => {
     let active = true;
@@ -324,19 +349,19 @@ function App() {
 
   const { alerts, auditRows, devices, deviceProfiles = demoData.deviceProfiles, evidence, trendData, workOrders } = workspaceData;
   const pages = {
-    overview: <OverviewPage navigate={setActivePage} workOrders={workOrders} trendData={trendData} />,
-    devices: <DevicePage navigate={setActivePage} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
-    alerts: <AlertsPage navigate={setActivePage} notify={notify} alerts={alerts} trendData={trendData} />,
-    diagnosis: <DiagnosisPage devices={devices} />,
+    overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
+    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
+    alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
+    diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
-    orders: <OrdersPage notify={notify} workOrders={workOrders} />,
+    orders: <OrdersPage notify={notify} workOrders={workOrders} sourceAlert={pageContext.alert} />,
     audit: <AuditPage auditRows={auditRows} />,
   };
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><Wrench24Regular /></span><span><strong>制造领航</strong><small>ForgePilot</small></span></div>
-        <nav aria-label="主导航">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => setActivePage(item.id)}><Icon /><span>{item.label}</span>{item.count ? <em>{item.count}</em> : null}</button>; })}</nav>
+        <nav aria-label="主导航">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{item.count ? <em>{item.count}</em> : null}</button>; })}</nav>
         <div className="sidebar-foot"><span>比赛演示环境</span><small>请勿录入真实敏感数据</small></div>
       </aside>
       <div className="app-main">

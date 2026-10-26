@@ -7,9 +7,9 @@ import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
 
-export default function DiagnosisPage({ devices }) {
-  const [deviceId, setDeviceId] = useState("AC-07");
-  const [question, setQuestion] = useState("现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？");
+export default function DiagnosisPage({ devices, initialDeviceId = "AC-07", initialQuestion = "" }) {
+  const [deviceId, setDeviceId] = useState(initialDeviceId);
+  const [question, setQuestion] = useState(initialQuestion || "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？");
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,6 +24,10 @@ export default function DiagnosisPage({ devices }) {
   const [workflowMessage, setWorkflowMessage] = useState("");
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
+  useEffect(() => {
+    if (initialDeviceId) setDeviceId(initialDeviceId);
+    if (initialQuestion) setQuestion(initialQuestion);
+  }, [initialDeviceId, initialQuestion]);
 
   function clearResult() {
     setResult(null);

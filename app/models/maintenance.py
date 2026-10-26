@@ -233,6 +233,78 @@ class WorkOrder(AuditMixin, SoftDeleteMixin, Base):
     )
 
 
+class MaintenanceRecord(AuditMixin, SoftDeleteMixin, Base):
+    __tablename__ = "maintenance_records"
+    __table_args__ = (
+        Index(
+            "ix_maintenance_records_org_device_recorded",
+            "organization_id",
+            "device_id",
+            "recorded_at",
+        ),
+        Index(
+            "uq_maintenance_records_work_order_active",
+            "work_order_id",
+            unique=True,
+            postgresql_where=text(
+                "work_order_id IS NOT NULL AND deleted_at IS NULL"
+            ),
+            sqlite_where=text(
+                "work_order_id IS NOT NULL AND deleted_at IS NULL"
+            ),
+        ),
+        Index("ix_maintenance_records_work_order_id", "work_order_id"),
+        CheckConstraint(
+            "record_type IN ('maintenance', 'inspection', 'repair', "
+            "'replacement', 'other')",
+            name="ck_maintenance_records_type",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("devices.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    work_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("work_orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    diagnosis_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("diagnoses.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    alert_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("alerts.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    record_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="maintenance"
+    )
+    summary: Mapped[str] = mapped_column(String(255), nullable=False)
+    root_cause: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_taken: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recorded_by: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow
+    )
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
     __table_args__ = (

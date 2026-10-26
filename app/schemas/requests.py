@@ -19,6 +19,12 @@ class AlertAcknowledgeRequest(RequestModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class LoginRequest(RequestModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=1, max_length=200)
+    organization_code: str | None = Field(default=None, max_length=64)
+
+
 class DiagnosisCreate(RequestModel):
     device_id: str = Field(min_length=1)
     question: str = Field(min_length=1, max_length=2000)
@@ -37,6 +43,31 @@ class DiagnosisConfirm(RequestModel):
     owner_id: UUID | None = None
     due_at: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
+
+
+class DeviceParameterCreate(RequestModel):
+    name: str = Field(min_length=1, max_length=120)
+    value: float
+    unit: str | None = Field(default=None, max_length=32)
+    source: str = Field(default="sensor")
+    source_ref: str | None = Field(default=None, max_length=255)
+    is_authoritative: bool | None = None
+    recorded_at: datetime | None = None
+
+
+class DeviceParameterUpdate(RequestModel):
+    value: float | None = None
+    unit: str | None = Field(default=None, max_length=32)
+    source: str | None = None
+    source_ref: str | None = Field(default=None, max_length=255)
+    is_authoritative: bool | None = None
+    recorded_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def _require_one_field(self) -> "DeviceParameterUpdate":
+        if not self.model_fields_set:
+            raise ValueError("至少提供一个可更新字段")
+        return self
 
 
 class WorkOrderCreate(RequestModel):

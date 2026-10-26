@@ -7,11 +7,22 @@ from app.api.labels import (
     ALERT_STATUS_LABELS,
     DEVICE_STATE_LABELS,
     DIAGNOSIS_STATUS_LABELS,
+    RECORD_TYPE_LABELS,
     RISK_LEVEL_LABELS,
     WORK_ORDER_PRIORITY_LABELS,
     WORK_ORDER_STATUS_LABELS,
 )
-from app.models import Alert, AuditLog, Device, Diagnosis, Plant, User, WorkOrder
+from app.models import (
+    Alert,
+    AuditLog,
+    Device,
+    DeviceParameter,
+    Diagnosis,
+    MaintenanceRecord,
+    Plant,
+    User,
+    WorkOrder,
+)
 
 
 def iso(value: datetime | None) -> str | None:
@@ -31,6 +42,23 @@ def device_to_dict(device: Device, alert_count: int) -> dict:
         "health": float(device.health),
         "state": DEVICE_STATE_LABELS.get(device.state, device.state),
         "alert": alert_count,
+    }
+
+
+def device_parameter_to_dict(
+    parameter: DeviceParameter, device: Device | None
+) -> dict:
+    return {
+        "id": str(parameter.id),
+        "deviceId": device.code if device else None,
+        "name": parameter.name,
+        "value": float(parameter.value),
+        "unit": parameter.unit,
+        "source": parameter.source,
+        "sourceRef": parameter.source_ref,
+        "isAuthoritative": parameter.is_authoritative,
+        "recordedAt": iso(parameter.recorded_at),
+        "createdAt": iso(parameter.created_at),
     }
 
 
@@ -151,6 +179,36 @@ def audit_event_to_dict(entry: AuditLog, actor: User | None) -> dict:
         "result": "成功",
         "before": entry.before,
         "after": entry.after,
+    }
+
+
+def maintenance_record_to_dict(
+    record: MaintenanceRecord,
+    device: Device | None,
+    work_order: WorkOrder | None,
+    diagnosis: Diagnosis | None,
+    alert: Alert | None,
+    actor: User | None,
+) -> dict:
+    return {
+        "id": str(record.id),
+        "deviceId": device.code if device else None,
+        "workOrderId": work_order.code if work_order else None,
+        "diagnosisId": diagnosis.code if diagnosis else None,
+        "alertId": alert.code if alert else None,
+        "recordType": RECORD_TYPE_LABELS.get(
+            record.record_type, record.record_type
+        ),
+        "recordTypeCode": record.record_type,
+        "summary": record.summary,
+        "rootCause": record.root_cause,
+        "actionTaken": record.action_taken,
+        "recordedBy": actor.display_name if actor else None,
+        "recordedById": (
+            str(record.recorded_by) if record.recorded_by else None
+        ),
+        "recordedAt": iso(record.recorded_at),
+        "createdAt": iso(record.created_at),
     }
 
 

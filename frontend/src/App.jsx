@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Avatar,
   Badge,
@@ -9,6 +9,7 @@ import {
 import {
   Add24Regular,
   Alert24Regular,
+  ArrowDownload24Regular,
   ArrowSync24Regular,
   Board24Regular,
   BookOpen24Regular,
@@ -41,6 +42,7 @@ import {
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
 import { alertDeviceId, countAlerts, filterAlerts, transitionAlert } from "./services/alertCenter";
+import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
 import DiagnosisPage from "./DiagnosisPage";
 
 const navItems = [
@@ -52,6 +54,7 @@ const navItems = [
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
+const isDemoMode = (import.meta.env.VITE_DATA_MODE || "mock") !== "api";
 
 function ToneBadge({ children, tone = "neutral" }) {
   return <span className={`tone-badge tone-${tone}`}>{children}</span>;
@@ -102,6 +105,11 @@ function TrendChart({ data, compact = false }) {
       </ResponsiveContainer>
     </div>
   );
+}
+
+function DeviceTrendChart({ profile }) {
+  if (!profile?.trend?.length || !profile?.series?.length) return <div className="device-empty">该设备尚未接入趋势数据</div>;
+  return <div className="chart chart-compact" aria-label="当前设备关键指标趋势图"><ResponsiveContainer width="100%" height="100%"><LineChart data={profile.trend} margin={{ top: 12, right: 18, left: -18, bottom: 0 }}><CartesianGrid stroke="#dbe4ef" strokeDasharray="3 4" vertical={false} /><XAxis dataKey="time" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" hide /><Tooltip contentStyle={{ border: "1px solid #cbd6e4", borderRadius: 0, fontSize: 12 }} />{profile.series.map((series, index) => <Line key={series.key} isAnimationActive={false} yAxisId={index ? "right" : "left"} name={series.label} type="monotone" dataKey={series.key} stroke={series.color} strokeWidth={index ? 2 : 3} dot={false} />)}</LineChart></ResponsiveContainer></div>;
 }
 
 function OverviewPage({ navigate, workOrders, trendData }) {
@@ -163,41 +171,76 @@ function OverviewPage({ navigate, workOrders, trendData }) {
   );
 }
 
-function DevicePage({ navigate, devices, trendData }) {
-  const [selected, setSelected] = useState(devices[0]);
+function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
+  const fileRef = useRef(null);
+  const [selectedId, setSelectedId] = useState(devices[0]?.id || "");
+  const [filters, setFilters] = useState({ query: "", type: "", state: "", plant: "" });
+  const [importOpen, setImportOpen] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [importResult, setImportResult] = useState(null);
+  const [localDevices, setLocalDevices] = useState(() => {
+    if (!allowLocalImport) return [];
+    try { return JSON.parse(localStorage.getItem("forgepilot.preview.devices") || "[]"); } catch { return []; }
+  });
+  const allDevices = useMemo(() => [...devices, ...localDevices.filter((item) => !devices.some((device) => device.id === item.id))], [devices, localDevices]);
+  const filteredDevices = useMemo(() => filterDevices(allDevices, filters), [allDevices, filters]);
+  const selected = filteredDevices.find((device) => device.id === selectedId) || filteredDevices[0] || null;
+  const profile = selected ? profiles[selected.id] : null;
+  const types = [...new Set(allDevices.map((item) => item.type))];
+  const states = [...new Set(allDevices.map((item) => item.state))];
+  const plants = [...new Set(allDevices.map((item) => item.plant).filter(Boolean))];
+  const resetFilters = () => setFilters({ query: "", type: "", state: "", plant: "" });
+  const downloadTemplate = () => {
+    const url = URL.createObjectURL(new Blob(["\uFEFF", createDeviceImportTemplate()], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "forgepilot-device-import-template.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+  const readImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportName(file.name);
+    try { setImportResult(parseDeviceImport(await file.text(), allDevices.map((item) => item.id))); }
+    catch (error) { setImportResult({ rows: [], errors: [error.message] }); }
+  };
+  const confirmPreviewImport = () => {
+    const validRows = importResult?.rows?.filter((row) => !row.errors.length).map(({ errors, importRow, ...device }) => device) || [];
+    if (!allowLocalImport || !validRows.length) return;
+    const next = [...localDevices, ...validRows];
+    localStorage.setItem("forgepilot.preview.devices", JSON.stringify(next));
+    setLocalDevices(next);
+    setSelectedId(validRows[0].id);
+    setImportOpen(false);
+    setImportResult(null);
+    notify(`已保存 ${validRows.length} 台本地演示设备；正式入库等待 T03 接口`);
+  };
   return (
     <>
-      <PageHeader title="设备中心" description="统一查看设备身份、健康状态和维护上下文" action="录入设备" />
-      <Toolbar placeholder="搜索设备编号、名称、型号或位置">
-        <select aria-label="厂区"><option>一号装配厂</option></select>
-        <select aria-label="健康状态"><option>全部状态</option><option>需关注</option><option>运行正常</option></select>
-      </Toolbar>
+      <PageHeader title="设备中心" description="统一查看设备身份、专属运行指标和维护上下文" action="导入设备" onAction={() => setImportOpen((value) => !value)} />
+      {importOpen && <section className="panel import-panel"><div className="panel-title"><div><Add24Regular /><h2>CSV 设备导入预检</h2></div><ToneBadge tone={allowLocalImport ? "warning" : "neutral"}>{allowLocalImport ? "仅本地演示" : "等待 T03 接口"}</ToneBadge></div><div className="import-actions"><Button icon={<ArrowDownload24Regular />} onClick={downloadTemplate}>下载模板</Button><Button icon={<Add24Regular />} onClick={() => fileRef.current?.click()}>选择 CSV 文件</Button><input ref={fileRef} type="file" accept=".csv,text/csv" onChange={readImport} hidden /><span>{importName || "尚未选择文件"}</span></div>{importResult?.errors?.length ? <div className="import-errors" role="alert">{importResult.errors.join("；")}</div> : null}{importResult?.rows?.length ? <><div className="import-summary"><strong>{importResult.rows.length} 行</strong><span>可导入 {importResult.rows.filter((row) => !row.errors.length).length} 行</span><span>错误 {importResult.rows.filter((row) => row.errors.length).length} 行</span></div><div className="import-preview"><table className="data-table"><thead><tr><th>行</th><th>设备编号</th><th>名称</th><th>类型</th><th>厂区/位置</th><th>校验结果</th></tr></thead><tbody>{importResult.rows.map((row) => <tr key={`${row.importRow}-${row.id}`}><td>{row.importRow}</td><td><strong>{row.id || "—"}</strong></td><td>{row.name || "—"}</td><td>{row.type || "—"}</td><td>{row.plant || "—"} / {row.location || "—"}</td><td>{row.errors.length ? <ToneBadge tone="danger">{row.errors.join("；")}</ToneBadge> : <ToneBadge tone="success">通过</ToneBadge>}</td></tr>)}</tbody></table></div><div className="import-confirm"><p>{allowLocalImport ? "确认后只保存到当前浏览器的演示数据，刷新可保留；不会写入企业数据库。" : "预检完成。服务器确认导入必须等待林同学交付 T03 接口。"}</p><Button appearance="primary" disabled={!allowLocalImport || !importResult.rows.some((row) => !row.errors.length)} onClick={confirmPreviewImport}>{allowLocalImport ? "保存到本地演示设备" : "服务器导入暂不可用"}</Button></div></> : null}</section>}
+      <div className="toolbar device-toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索设备编号、名称、类型或位置" value={filters.query} onChange={(_, data) => setFilters((value) => ({ ...value, query: data.value }))} /><select aria-label="设备类型" value={filters.type} onChange={(event) => setFilters((value) => ({ ...value, type: event.target.value }))}><option value="">全部类型</option>{types.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="健康状态" value={filters.state} onChange={(event) => setFilters((value) => ({ ...value, state: event.target.value }))}><option value="">全部状态</option>{states.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="厂区" value={filters.plant} onChange={(event) => setFilters((value) => ({ ...value, plant: event.target.value }))}><option value="">全部厂区</option>{plants.map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={resetFilters}>重置</Button><Button icon={<ArrowSync24Regular />} onClick={() => notify("设备列表已刷新")}>刷新</Button></div>
+      <div className="filter-result">当前显示 <strong>{filteredDevices.length}</strong> / {allDevices.length} 台设备</div>
       <div className="split-layout">
         <section className="panel table-panel grow">
           <table className="data-table">
             <thead><tr><th>设备编号</th><th>设备名称</th><th>类型</th><th>所属位置</th><th>健康状态</th><th>告警</th></tr></thead>
-            <tbody>{devices.map((device) => (
-              <tr key={device.id} className={selected.id === device.id ? "selected" : ""} onClick={() => setSelected(device)}>
+            <tbody>{filteredDevices.map((device) => (
+              <tr key={device.id} className={selected?.id === device.id ? "selected" : ""} onClick={() => setSelectedId(device.id)}>
                 <td><strong>{device.id}</strong></td><td><strong>{device.name}</strong></td><td>{device.type}</td><td>{device.location}</td>
-                <td><ToneBadge tone={device.health < 60 ? "danger" : device.health < 90 ? "warning" : "success"}>{device.state} {device.health}</ToneBadge></td>
+                <td><ToneBadge tone={device.health == null ? "neutral" : device.health < 60 ? "danger" : device.health < 90 ? "warning" : "success"}>{device.state}{device.health == null ? "" : ` ${device.health}`}</ToneBadge></td>
                 <td>{device.alert || "无"}</td>
-              </tr>
-            ))}</tbody>
+              </tr>))}{!filteredDevices.length && <tr><td colSpan="6"><div className="device-empty"><strong>没有符合条件的设备</strong><span>请调整筛选条件或重置筛选。</span><Button onClick={resetFilters}>重置筛选</Button></div></td></tr>}</tbody>
           </table>
         </section>
-        <aside className="panel detail-drawer">
+        {selected ? <aside className="panel detail-drawer">
           <div className="drawer-heading"><div><small>设备实时摘要</small><h2>{selected.id} {selected.name}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="关闭预览" /></div>
-          <div className="equipment-identity"><span>{selected.type}</span><strong>{selected.location}</strong></div>
-          <div className="health-callout"><span>综合健康评分</span><strong>{selected.health}/100</strong></div>
-          <h3>关键运行指标</h3>
-          <div className="sensor-list">
-            <div><span>驱动端振动 RMS</span><strong className="text-danger">7.82 mm/s</strong><small>警戒 4.50 mm/s</small></div>
-            <div><span>排气温度</span><strong>88.5 °C</strong><small>预警 85.0 °C</small></div>
-            <div><span>润滑油压差</span><strong>0.28 MPa</strong><small>正常范围</small></div>
-          </div>
-          <TrendChart data={trendData} compact />
+          <div className="equipment-identity"><span>{selected.type} · {selected.plant || "未分配厂区"}</span><strong>{selected.location}</strong></div>
+          <div className="health-callout"><span>综合健康评分</span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
+          {profile ? <><div className="profile-freshness">采集时间：{profile.updatedAt}</div><h3>关键运行指标</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div><DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、")}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，指标尚未接入</strong><span>等待 T03 提供测点模板、当前值和历史曲线接口。</span></div>}
           <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis")}>发起诊断</Button>
-        </aside>
+        </aside> : <aside className="panel detail-drawer"><div className="device-empty">请先选择设备</div></aside>}
       </div>
     </>
   );
@@ -304,10 +347,10 @@ function App() {
     return () => { active = false; };
   }, []);
 
-  const { alerts, auditRows, devices, evidence, trendData, workOrders } = workspaceData;
+  const { alerts, auditRows, devices, deviceProfiles = demoData.deviceProfiles, evidence, trendData, workOrders } = workspaceData;
   const pages = {
     overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
-    devices: <DevicePage navigate={navigate} devices={devices} trendData={trendData} />,
+    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgePage notify={notify} evidence={evidence} />,

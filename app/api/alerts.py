@@ -47,6 +47,8 @@ def create_alert(
     db: Session = Depends(get_db),
 ):
     require_role(context, "manager")
+    if not payload.title.strip():
+        raise api_error(422, "VALIDATION_ERROR", "告警标题不能为空")
     device = db.scalar(select(Device).where(
         Device.organization_id == context.organization_id,
         Device.code == payload.device_id,
@@ -94,11 +96,15 @@ def update_alert(
     if alert is None:
         raise api_error(404, "NOT_FOUND", "告警不存在")
     fields = payload.model_fields_set
+    if ROLE_LEVELS.get(context.role, -1) < ROLE_LEVELS["manager"] and alert.owner_user_id != context.user_id:
+        raise api_error(403, "FORBIDDEN", "只能处理指派给自己的告警")
     if fields & {"title", "level", "description", "owner_id"}:
         require_role(context, "manager")
     before = {"title": alert.title, "level": alert.level, "status": alert.status,
               "ownerId": str(alert.owner_user_id) if alert.owner_user_id else None}
     if "title" in fields and payload.title is not None:
+        if not payload.title.strip():
+            raise api_error(422, "VALIDATION_ERROR", "告警标题不能为空")
         alert.title = payload.title.strip()
     if "level" in fields and payload.level is not None:
         alert.level = label_to_code(payload.level, ALERT_LEVEL_LABELS, "level")

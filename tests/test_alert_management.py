@@ -50,3 +50,7 @@ def test_alert_rejects_viewer_assignment_and_illegal_transition(api):
     assert outsider.status_code == 422
     unauthorized = client.post("/api/v1/alerts", json={"deviceId": "AC-07", "title": "无权限"}, headers=auth(ids, user="tech@example.com"))
     assert unauthorized.status_code == 403
+    unassigned_tech = client.patch(f"/api/v1/alerts/{alert_id}", json={"status": "处理中"}, headers=auth(ids, user="tech@example.com"))
+    assert unassigned_tech.status_code == 403
+    blank = client.post("/api/v1/alerts", json={"deviceId": "AC-07", "title": "   "}, headers=manager)
+    assert blank.status_code == 422

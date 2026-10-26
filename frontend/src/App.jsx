@@ -42,7 +42,7 @@ import {
   YAxis,
 } from "recharts";
 import * as demoData from "./data";
-import { loadWorkspaceData } from "./services/api";
+import { importDevices, loadDeviceParameters, loadWorkspaceData } from "./services/api";
 import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
 import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
@@ -50,6 +50,8 @@ import DiagnosisPage from "./DiagnosisPage";
 import WorkOrdersPage from "./WorkOrdersPage";
 import PeoplePage, { demoPeople } from "./PeoplePage";
 import ApiPeoplePage from "./ApiPeoplePage.jsx";
+import ApiAlertsPage from "./ApiAlertsPage.jsx";
+import ApiWorkOrdersPage from "./ApiWorkOrdersPage.jsx";
 import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
 import AuditWorkspace from "./AuditWorkspace.jsx";
@@ -249,13 +251,15 @@ function OverviewPage({ navigate, workOrders, trendData }) {
   );
 }
 
-function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
+function DevicePage({ navigate, devices, profiles, allowLocalImport, accessToken, onImported, notify }) {
   const fileRef = useRef(null);
   const [selectedId, setSelectedId] = useState(devices[0]?.id || "");
   const [filters, setFilters] = useState({ query: "", type: "", state: "", plant: "" });
   const [importOpen, setImportOpen] = useState(false);
   const [importName, setImportName] = useState("");
   const [importResult, setImportResult] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [liveProfile, setLiveProfile] = useState(null);
   const [localDevices, setLocalDevices] = useState(() => {
     if (!allowLocalImport) return [];
     try { return JSON.parse(localStorage.getItem("forgepilot.preview.devices") || "[]"); } catch { return []; }
@@ -263,13 +267,28 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
   const allDevices = useMemo(() => [...devices, ...localDevices.filter((item) => !devices.some((device) => device.id === item.id))], [devices, localDevices]);
   const filteredDevices = useMemo(() => filterDevices(allDevices, filters), [allDevices, filters]);
   const selected = filteredDevices.find((device) => device.id === selectedId) || filteredDevices[0] || null;
-  const profile = selected ? profiles[selected.id] : null;
+  const profile = allowLocalImport ? (selected ? profiles[selected.id] : null) : (liveProfile?.id === selected?.id ? liveProfile.profile : null);
+  useEffect(() => {
+    if (allowLocalImport || !selected?.id) return;
+    let active = true;
+    setLiveProfile(null);
+    loadDeviceParameters(selected.id, accessToken).then((items) => {
+      if (!active) return;
+      setLiveProfile({ id: selected.id, profile: items.length ? {
+        updatedAt: items[0].recordedAt || "尚未记录采集时间",
+        metrics: items.map((item) => ({ label: item.name, value: item.value, unit: item.unit || "", limit: "未配置阈值", tone: "neutral" })),
+        trend: [], series: [], alertSummary: "查看告警中心", documents: [],
+      } : null });
+    }).catch((error) => { if (active) notify(`设备测点读取失败：${error.message}`); });
+    return () => { active = false; };
+  }, [selected?.id, accessToken, allowLocalImport]);
   const types = [...new Set(allDevices.map((item) => item.type))];
   const states = [...new Set(allDevices.map((item) => item.state))];
   const plants = [...new Set(allDevices.map((item) => item.plant).filter(Boolean))];
   const resetFilters = () => setFilters({ query: "", type: "", state: "", plant: "" });
   const downloadTemplate = () => {
-    const url = URL.createObjectURL(new Blob(["\uFEFF", createDeviceImportTemplate()], { type: "text/csv;charset=utf-8" }));
+    const templatePlant = allowLocalImport ? "一号装配厂" : (devices.find((device) => device.plant)?.plant || "请填写已有厂区");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", createDeviceImportTemplate(templatePlant)], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = "forgepilot-device-import-template.csv";
@@ -283,21 +302,36 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, notify }) {
     try { setImportResult(parseDeviceImport(await file.text(), allDevices.map((item) => item.id))); }
     catch (error) { setImportResult({ rows: [], errors: [error.message] }); }
   };
-  const confirmPreviewImport = () => {
+  const confirmPreviewImport = async () => {
     const validRows = importResult?.rows?.filter((row) => !row.errors.length).map(({ errors, importRow, ...device }) => device) || [];
-    if (!allowLocalImport || !validRows.length) return;
-    const next = [...localDevices, ...validRows];
-    localStorage.setItem("forgepilot.preview.devices", JSON.stringify(next));
-    setLocalDevices(next);
-    setSelectedId(validRows[0].id);
-    setImportOpen(false);
-    setImportResult(null);
-    notify(`已保存 ${validRows.length} 台本地演示设备；正式入库等待 T03 接口`);
+    if (!validRows.length || importResult.rows.some((row) => row.errors.length) || importBusy) return;
+    setImportBusy(true);
+    try {
+      if (allowLocalImport) {
+        const next = [...localDevices, ...validRows];
+        localStorage.setItem("forgepilot.preview.devices", JSON.stringify(next));
+        setLocalDevices(next);
+        notify(`已保存 ${validRows.length} 台本地演示设备`);
+      } else {
+        const result = await importDevices(validRows, accessToken);
+        await onImported?.();
+        notify(`已将 ${result.created} 台设备保存到服务器`);
+      }
+      setSelectedId(validRows[0].id);
+      setImportOpen(false);
+      setImportResult(null);
+    } catch (error) { notify(error.message); }
+    finally { setImportBusy(false); }
   };
   return (
     <>
       <PageHeader title="设备中心" description="统一查看设备身份、专属运行指标和维护上下文" action="导入设备" onAction={() => setImportOpen((value) => !value)} />
-      {importOpen && <section className="panel import-panel"><div className="panel-title"><div><Add24Regular /><h2>CSV 设备导入预检</h2></div><ToneBadge tone={allowLocalImport ? "warning" : "neutral"}>{allowLocalImport ? "仅本地演示" : "等待 T03 接口"}</ToneBadge></div><div className="import-actions"><Button icon={<ArrowDownload24Regular />} onClick={downloadTemplate}>下载模板</Button><Button icon={<Add24Regular />} onClick={() => fileRef.current?.click()}>选择 CSV 文件</Button><input ref={fileRef} type="file" accept=".csv,text/csv" onChange={readImport} hidden /><span>{importName || "尚未选择文件"}</span></div>{importResult?.errors?.length ? <div className="import-errors" role="alert">{importResult.errors.join("；")}</div> : null}{importResult?.rows?.length ? <><div className="import-summary"><strong>{importResult.rows.length} 行</strong><span>可导入 {importResult.rows.filter((row) => !row.errors.length).length} 行</span><span>错误 {importResult.rows.filter((row) => row.errors.length).length} 行</span></div><div className="import-preview"><table className="data-table"><thead><tr><th>行</th><th>设备编号</th><th>名称</th><th>类型</th><th>厂区/位置</th><th>校验结果</th></tr></thead><tbody>{importResult.rows.map((row) => <tr key={`${row.importRow}-${row.id}`}><td>{row.importRow}</td><td><strong>{row.id || "—"}</strong></td><td>{row.name || "—"}</td><td>{row.type || "—"}</td><td>{row.plant || "—"} / {row.location || "—"}</td><td>{row.errors.length ? <ToneBadge tone="danger">{row.errors.join("；")}</ToneBadge> : <ToneBadge tone="success">通过</ToneBadge>}</td></tr>)}</tbody></table></div><div className="import-confirm"><p>{allowLocalImport ? "确认后只保存到当前浏览器的演示数据，刷新可保留；不会写入企业数据库。" : "预检完成。服务器确认导入必须等待林同学交付 T03 接口。"}</p><Button appearance="primary" disabled={!allowLocalImport || !importResult.rows.some((row) => !row.errors.length)} onClick={confirmPreviewImport}>{allowLocalImport ? "保存到本地演示设备" : "服务器导入暂不可用"}</Button></div></> : null}</section>}
+      {importOpen && <section className="panel import-panel">
+        <div className="panel-title"><div><Add24Regular /><h2>CSV 设备导入预检</h2></div><ToneBadge tone={allowLocalImport ? "warning" : "success"}>{allowLocalImport ? "仅本地演示" : "服务器入库"}</ToneBadge></div>
+        <div className="import-actions"><Button icon={<ArrowDownload24Regular />} onClick={downloadTemplate}>下载模板</Button><Button icon={<Add24Regular />} onClick={() => fileRef.current?.click()}>选择 CSV 文件</Button><input ref={fileRef} type="file" accept=".csv,text/csv" onChange={readImport} hidden /><span>{importName || "尚未选择文件"}</span></div>
+        {importResult?.errors?.length ? <div className="import-errors" role="alert">{importResult.errors.join("；")}</div> : null}
+        {importResult?.rows?.length ? <><div className="import-summary"><strong>{importResult.rows.length} 行</strong><span>可导入 {importResult.rows.filter((row) => !row.errors.length).length} 行</span><span>错误 {importResult.rows.filter((row) => row.errors.length).length} 行</span></div><div className="import-preview"><table className="data-table"><thead><tr><th>行</th><th>设备编号</th><th>名称</th><th>类型</th><th>厂区/位置</th><th>校验结果</th></tr></thead><tbody>{importResult.rows.map((row) => <tr key={`${row.importRow}-${row.id}`}><td>{row.importRow}</td><td><strong>{row.id || "—"}</strong></td><td>{row.name || "—"}</td><td>{row.type || "—"}</td><td>{row.plant || "—"} / {row.location || "—"}</td><td>{row.errors.length ? <ToneBadge tone="danger">{row.errors.join("；")}</ToneBadge> : <ToneBadge tone="success">通过</ToneBadge>}</td></tr>)}</tbody></table></div><div className="import-confirm"><p>{allowLocalImport ? "确认后只保存到当前浏览器的演示数据。" : "确认后整批写入服务器；厂区须使用当前组织已有的厂区名称或编号，导入设备在接入测点前显示离线。"}</p><Button appearance="primary" disabled={importBusy || importResult.rows.some((row) => row.errors.length) || !importResult.rows.length} onClick={confirmPreviewImport}>{importBusy ? "正在导入" : allowLocalImport ? "保存到本地演示设备" : "确认导入服务器"}</Button></div></> : null}
+      </section>}
       <div className="toolbar device-toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索设备编号、名称、类型或位置" value={filters.query} onChange={(_, data) => setFilters((value) => ({ ...value, query: data.value }))} /><select aria-label="设备类型" value={filters.type} onChange={(event) => setFilters((value) => ({ ...value, type: event.target.value }))}><option value="">全部类型</option>{types.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="健康状态" value={filters.state} onChange={(event) => setFilters((value) => ({ ...value, state: event.target.value }))}><option value="">全部状态</option>{states.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="厂区" value={filters.plant} onChange={(event) => setFilters((value) => ({ ...value, plant: event.target.value }))}><option value="">全部厂区</option>{plants.map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={resetFilters}>重置</Button><Button icon={<ArrowSync24Regular />} onClick={() => notify("设备列表已刷新")}>刷新</Button></div>
       <div className="filter-result">当前显示 <strong>{filteredDevices.length}</strong> / {allDevices.length} 台设备</div>
       <div className="split-layout">
@@ -470,11 +504,15 @@ function WorkspaceApp({ session, onLogout }) {
   };
   const pages = {
     overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
-    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
-    alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
+    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
+    alerts: isDemoMode
+      ? <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />
+      : <ApiAlertsPage session={session} devices={devices} navigate={navigate} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgeWorkspace notify={notify} evidence={evidence} />,
-    orders: <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />,
+    orders: isDemoMode
+      ? <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />
+      : <ApiWorkOrdersPage session={session} notify={notify} devices={devices} sourceAlert={pageContext.alert} onLogout={onLogout} onChanged={refreshBusinessData} />,
     people: isDemoMode
       ? <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />
       : <ApiPeoplePage session={session} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,

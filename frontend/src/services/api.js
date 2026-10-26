@@ -46,6 +46,29 @@ async function request(path, accessToken) {
   return response.json();
 }
 
+export async function importDevices(items, accessToken, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
+  if (!apiBaseUrl || !accessToken) throw new ApiRequestError(401, "/api/v1/devices/import");
+  const response = await fetchImpl(`${apiBaseUrl}/api/v1/devices/import`, {
+    method: "POST",
+    headers: { ...buildRequestHeaders({ accessToken, dataMode: "api" }), "Content-Type": "application/json" },
+    body: JSON.stringify({ items: items.map(({ id, name, type, plant, location }) => ({ id, name, type, plant, location })) }),
+  });
+  if (!response.ok) {
+    let message = `设备导入失败（${response.status}）`;
+    try { message = (await response.json())?.error?.message || message; } catch { /* retain status */ }
+    const error = new ApiRequestError(response.status, "/api/v1/devices/import");
+    error.message = message;
+    throw error;
+  }
+  return response.json();
+}
+
+export async function loadDeviceParameters(deviceId, accessToken) {
+  const result = await request(`/api/v1/devices/${encodeURIComponent(deviceId)}/parameters?pageSize=100`, accessToken);
+  if (!Array.isArray(result.items)) throw new Error("设备测点响应格式不正确");
+  return result.items;
+}
+
 function formatTimestamp(value) {
   if (!value) return "暂无更新";
   const date = new Date(value);

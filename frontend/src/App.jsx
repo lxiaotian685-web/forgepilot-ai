@@ -52,6 +52,9 @@ import PeoplePage, { demoPeople } from "./PeoplePage";
 import ApiPeoplePage from "./ApiPeoplePage.jsx";
 import ApiAlertsPage from "./ApiAlertsPage.jsx";
 import ApiWorkOrdersPage from "./ApiWorkOrdersPage.jsx";
+import ApiKnowledgePage from "./ApiKnowledgePage.jsx";
+import ApiAuditPage from "./ApiAuditPage.jsx";
+import ApiOverviewPage from "./ApiOverviewPage.jsx";
 import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
 import AuditWorkspace from "./AuditWorkspace.jsx";
@@ -461,8 +464,9 @@ function WorkspaceApp({ session, onLogout }) {
   const [activePage, setActivePage] = useState("overview");
   const [pageContext, setPageContext] = useState({});
   const [toast, setToast] = useState("");
-  const [workspaceData, setWorkspaceData] = useState(demoData);
-  const [dataSource, setDataSource] = useState("mock");
+  const [workspaceData, setWorkspaceData] = useState(isDemoMode ? demoData : { ...demoData, devices: [], alerts: [], workOrders: [], auditRows: [], evidence: [], trendData: [], deviceProfiles: {} });
+  const [dataSource, setDataSource] = useState(isDemoMode ? "mock" : "loading");
+  const [businessError, setBusinessError] = useState("");
   const [connectedResources, setConnectedResources] = useState([]);
   const [managedOrders, setManagedOrders] = useState(null);
   const [managedPeople, setManagedPeople] = useState(demoPeople);
@@ -484,11 +488,10 @@ function WorkspaceApp({ session, onLogout }) {
       setWorkspaceData(data);
       setDataSource(source);
       setConnectedResources(connected);
-      if (source === "fallback") notify("业务接口暂不可用，已切换为演示数据");
-      if (source === "hybrid") notify("设备、告警和工单已按可用接口接入，其他模块保留演示数据");
+      setBusinessError("");
     }).catch((error) => {
       if (error.status === 401 || error.status === 403) onLogout("登录已过期或权限已变更，请重新登录");
-      else notify("业务接口暂不可用，请稍后重试");
+      else { setBusinessError(`业务接口暂不可用：${error.message}`); setDataSource("error"); }
     });
     return () => { active = false; };
   }, [session.accessToken, session.isPreview]);
@@ -501,22 +504,27 @@ function WorkspaceApp({ session, onLogout }) {
     setDataSource(result.source);
     setConnectedResources(result.connectedResources);
     setManagedOrders(null);
+    setBusinessError("");
   };
   const pages = {
-    overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
+    overview: isDemoMode
+      ? <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />
+      : <ApiOverviewPage navigate={navigate} devices={devices} alerts={alerts} workOrders={workOrders} error={businessError} />,
     devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
     alerts: isDemoMode
       ? <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />
       : <ApiAlertsPage session={session} devices={devices} navigate={navigate} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
-    knowledge: <KnowledgeWorkspace notify={notify} evidence={evidence} />,
+    knowledge: isDemoMode
+      ? <KnowledgeWorkspace notify={notify} evidence={evidence} />
+      : <ApiKnowledgePage session={session} notify={notify} onLogout={onLogout} />,
     orders: isDemoMode
       ? <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />
       : <ApiWorkOrdersPage session={session} notify={notify} devices={devices} sourceAlert={pageContext.alert} onLogout={onLogout} onChanged={refreshBusinessData} />,
     people: isDemoMode
       ? <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />
       : <ApiPeoplePage session={session} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
-    audit: <AuditWorkspace auditRows={auditRows} />,
+    audit: isDemoMode ? <AuditWorkspace auditRows={auditRows} /> : <ApiAuditPage session={session} onLogout={onLogout} />,
   };
   return (
     <div className="app-shell">
@@ -529,10 +537,10 @@ function WorkspaceApp({ session, onLogout }) {
         <header className="topbar">
           <button className="plant-select"><Building24Regular /><span>{session.organization.name}</span><small>{session.organization.code}</small></button>
           <div className="breadcrumb">运行中心 / <strong>{activeNav?.label}</strong></div>
-          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint" title={connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "当前使用内置演示数据"}>{dataSource === "hybrid" ? "业务 API + 演示" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name={session.user.displayName} color="colorful" /><span className="user-name"><strong>{session.user.displayName}</strong><small>{roleLabels[session.role]}</small></span><Button appearance="subtle" icon={<SignOut24Regular />} onClick={() => onLogout()} aria-label="退出登录">退出</Button></div>
+          <div className="top-actions"><Badge appearance="tint" title={businessError || (connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "正在连接业务接口")}>{isDemoMode ? "演示数据" : dataSource === "api" ? "业务接口已连接" : dataSource === "error" ? "业务接口异常" : "连接中"}</Badge><Avatar name={session.user.displayName} color="colorful" /><span className="user-name"><strong>{session.user.displayName}</strong><small>{roleLabels[session.role]}</small></span><Button appearance="subtle" icon={<SignOut24Regular />} onClick={() => onLogout()} aria-label="退出登录">退出</Button></div>
         </header>
         <main className="page-content">{pages[activePage]}</main>
-        <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>数据延迟 12ms · 自动刷新</span></footer>
+        <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>{isDemoMode ? "演示环境" : "业务数据来自已配置服务"}</span></footer>
       </div>
       {toast && <div className="toast" role="status"><CheckmarkCircle24Regular />{toast}</div>}
     </div>

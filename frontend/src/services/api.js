@@ -1,9 +1,10 @@
-import * as mockData from "../data";
+import * as mockData from "../data.js";
 
-const mode = import.meta.env.VITE_DATA_MODE || "mock";
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
-const organizationId = import.meta.env.VITE_API_ORGANIZATION_ID || "";
-const userId = import.meta.env.VITE_API_USER_ID || "";
+const runtimeEnv = import.meta.env || {};
+const mode = runtimeEnv.VITE_DATA_MODE || "mock";
+const baseUrl = (runtimeEnv.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const organizationId = runtimeEnv.VITE_API_ORGANIZATION_ID || "";
+const userId = runtimeEnv.VITE_API_USER_ID || "";
 
 const businessResources = {
   devices: "/api/v1/devices",
@@ -11,17 +12,35 @@ const businessResources = {
   workOrders: "/api/v1/work-orders",
 };
 
-async function request(path) {
+export class ApiRequestError extends Error {
+  constructor(status, path) {
+    super(`API request failed: ${status}`);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.path = path;
+  }
+}
+
+export function buildRequestHeaders({ accessToken, dataMode = mode, demoOrganizationId = organizationId, demoUserId = userId } = {}) {
+  if (dataMode === "api" && !accessToken) throw new ApiRequestError(401, "authentication");
   const headers = { Accept: "application/json" };
-  if (organizationId) headers["X-Organization-Id"] = organizationId;
-  if (userId) headers["X-User-Id"] = userId;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  else if (dataMode !== "api") {
+    if (demoOrganizationId) headers["X-Organization-Id"] = demoOrganizationId;
+    if (demoUserId) headers["X-User-Id"] = demoUserId;
+  }
+  return headers;
+}
+
+async function request(path, accessToken) {
+  const headers = buildRequestHeaders({ accessToken });
 
   const response = await fetch(`${baseUrl}${path}`, {
     headers,
   });
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    throw new ApiRequestError(response.status, path);
   }
 
   return response.json();
@@ -64,7 +83,7 @@ function normalizeCollection(key, payload) {
   return payload.items;
 }
 
-export async function loadWorkspaceData() {
+export async function loadWorkspaceData({ accessToken } = {}) {
   if (mode !== "api" || !baseUrl) {
     return { data: mockData, source: "mock", connectedResources: [] };
   }
@@ -72,13 +91,16 @@ export async function loadWorkspaceData() {
   const results = await Promise.allSettled(
     Object.entries(businessResources).map(async ([key, path]) => [
       key,
-      normalizeCollection(key, await request(path)),
+      normalizeCollection(key, await request(path, accessToken)),
     ]),
   );
   const connectedEntries = results
     .filter((result) => result.status === "fulfilled")
     .map((result) => result.value);
   const failedResults = results.filter((result) => result.status === "rejected");
+
+  const authFailure = failedResults.find(({ reason }) => reason?.status === 401 || reason?.status === 403);
+  if (authFailure) throw authFailure.reason;
 
   if (failedResults.length) {
     console.warn(

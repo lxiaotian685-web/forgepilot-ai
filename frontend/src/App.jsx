@@ -27,6 +27,7 @@ import {
   Pulse24Regular,
   Search24Regular,
   ShieldLock24Regular,
+  SignOut24Regular,
   Wrench24Regular,
 } from "@fluentui/react-icons";
 import {
@@ -42,6 +43,7 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { loadWorkspaceData } from "./services/api";
+import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
 import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
 import DiagnosisPage from "./DiagnosisPage";
@@ -58,10 +60,78 @@ const navItems = [
   { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
   { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
-  { id: "people", label: "人员管理", icon: PeopleTeam24Regular },
+  { id: "people", label: "人员与权限", icon: PeopleTeam24Regular },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
 const isDemoMode = (import.meta.env.VITE_DATA_MODE || "mock") !== "api";
+
+const dataMode = import.meta.env.VITE_DATA_MODE || "mock";
+
+function createDemoSession(role) {
+  return {
+    accessToken: "local-preview-only",
+    tokenType: "Preview",
+    expiresIn: 0,
+    user: { id: `preview-${role}`, email: `${role}@preview.local`, displayName: "演示用户" },
+    organization: { id: "preview-org", code: "preview", name: "一号装配厂（演示）" },
+    role,
+    isPreview: true,
+  };
+}
+
+function LoginPage({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [organizationCode, setOrganizationCode] = useState("");
+  const [previewRole, setPreviewRole] = useState("manager");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const previewMode = dataMode !== "api";
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      onLogin(await authService.login({ email, password, organizationCode }));
+    } catch (loginError) {
+      setError(loginError.message || "登录失败，请稍后重试");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="login-page">
+      <section className="login-intro">
+        <span className="login-kicker">FORGEPILOT · INDUSTRIAL OPERATIONS</span>
+        <h1>制造领航</h1>
+        <p>面向设备诊断与维修闭环的工业协同工作台。</p>
+        <div className="login-safety"><ShieldLock24Regular /><span><strong>按组织与岗位授权</strong><small>登录后只显示当前角色允许访问的模块。</small></span></div>
+      </section>
+      <section className="login-card">
+        <div><small>ACCOUNT ACCESS</small><h2>登录工作台</h2><p>使用企业账号进入所属工厂。</p></div>
+        {previewMode ? (
+          <div className="preview-login">
+            <ToneBadge tone="warning">本地演示模式</ToneBadge>
+            <p>当前未连接身份服务。可选择角色检查界面权限；该入口不代表真实认证。</p>
+            <label>演示角色<select value={previewRole} onChange={(event) => setPreviewRole(event.target.value)}>{["owner", "admin", "manager", "technician", "viewer"].map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}</select></label>
+            <Button appearance="primary" onClick={() => onLogin(createDemoSession(previewRole))}>进入权限演示</Button>
+          </div>
+        ) : (
+          <form onSubmit={submit}>
+            <label>企业邮箱<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required /></label>
+            <label>密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required /></label>
+            <label>组织代码（选填）<input value={organizationCode} onChange={(event) => setOrganizationCode(event.target.value)} autoComplete="organization" /></label>
+            {error && <p className="login-error" role="alert">{error}</p>}
+            <Button appearance="primary" type="submit" disabled={submitting}>{submitting ? "正在验证…" : "登录"}</Button>
+          </form>
+        )}
+        <small className="login-footnote">请勿在演示环境录入真实生产秘密或个人敏感信息。</small>
+      </section>
+    </main>
+  );
+}
 
 function ToneBadge({ children, tone = "neutral" }) {
   return <span className={`tone-badge tone-${tone}`}>{children}</span>;
@@ -347,7 +417,12 @@ function AuditPage({ auditRows }) {
   return <><PageHeader title="审计记录" description="只读、可验证的业务操作与人工决策轨迹" /><div className="metric-strip audit-metrics"><div><span>今日入库记录</span><strong>1,842</strong><small>条</small></div><div><span>签名校验通过率</span><strong className="text-success">100%</strong></div><div><span>被拦截越权操作</span><strong className="text-danger">1</strong><small>起</small></div></div><Toolbar placeholder="搜索请求号、业务对象或操作者"><select><option>全部操作者</option></select><select><option>全部动作</option></select></Toolbar><div className="split-layout"><section className="panel table-panel grow"><table className="data-table"><thead><tr><th>时间</th><th>操作者</th><th>动作</th><th>业务对象</th><th>结果</th></tr></thead><tbody>{auditRows.map((row) => <tr key={`${row.time}-${row.action}`} className={selected.time === row.time ? "selected" : ""} onClick={() => setSelected(row)}><td>{row.time}</td><td>{row.user}</td><td><ToneBadge>{row.action}</ToneBadge></td><td>{row.object}</td><td><ToneBadge tone="success">{row.result}</ToneBadge></td></tr>)}</tbody></table></section><aside className="panel audit-detail"><div className="panel-title"><div><ShieldLock24Regular /><h2>审计凭证详情</h2></div><ToneBadge tone="success">签名有效</ToneBadge></div><div className="audit-section"><span>操作人</span><strong>{selected.user}</strong><small>维护主管 · ENG-0819</small></div><div className="audit-section"><span>动作说明</span><strong>{selected.action}</strong><p>操作已写入只读审计流水，并关联业务对象 {selected.object}。</p></div><div className="before-after"><div><span>变更前</span><strong>待人工确认</strong></div><div><span>变更后</span><strong>处理中</strong></div></div><code>REQ-20250518-0944-8812<br />SHA-256: e3b0c44298fc1c149afbf4c8996fb924</code></aside></div></>;
 }
 
-function App() {
+function PermissionOverview({ session }) {
+  const roleRows = ["owner", "admin", "manager", "technician", "viewer"];
+  return <><PageHeader title="人员与权限" description="核对当前组织身份与各岗位可见范围；成员增删改将在人员接口交付后开放" /><div className="identity-strip"><div><span>当前人员</span><strong>{session.user.displayName}</strong><small>{session.user.email}</small></div><div><span>所属组织</span><strong>{session.organization.name}</strong><small>{session.organization.code}</small></div><div><span>当前岗位</span><strong>{roleLabels[session.role]}</strong><small>{session.role}</small></div></div><section className="panel people-panel"><div className="panel-title"><div><PeopleTeam24Regular /><h2>岗位权限基线</h2></div><ToneBadge tone="warning">待人员接口联调</ToneBadge></div><div className="people-notice"><strong>为什么现在不能新增人员？</strong><span>后端当前只提供登录身份和角色，尚未提供组织成员列表、邀请、停用和改岗接口。这里不使用虚构成员数据；接口交付后再接入真实人员管理。</span></div><table className="data-table permission-table"><thead><tr><th>岗位</th><th>可访问模块</th><th>人员管理</th></tr></thead><tbody>{roleRows.map((role) => <tr key={role}><td><strong>{roleLabels[role]}</strong><small>{role}</small></td><td>{getAllowedPageIds(role).filter((page) => page !== "people").map((page) => navItems.find((item) => item.id === page)?.label).join("、")}</td><td>{canAccessPage(role, "people") ? <ToneBadge tone="success">可查看</ToneBadge> : <ToneBadge>不可见</ToneBadge>}</td></tr>)}</tbody></table></section></>;
+}
+
+function WorkspaceApp({ session, onLogout }) {
   const [activePage, setActivePage] = useState("overview");
   const [pageContext, setPageContext] = useState({});
   const [toast, setToast] = useState("");
@@ -356,25 +431,32 @@ function App() {
   const [connectedResources, setConnectedResources] = useState([]);
   const [managedOrders, setManagedOrders] = useState(null);
   const [managedPeople, setManagedPeople] = useState(demoPeople);
-  const activeNav = useMemo(() => navItems.find((item) => item.id === activePage), [activePage]);
+  const allowedNavItems = useMemo(() => navItems.filter((item) => canAccessPage(session.role, item.id)), [session.role]);
+  const activeNav = useMemo(() => allowedNavItems.find((item) => item.id === activePage), [activePage, allowedNavItems]);
   const notify = (message) => { setToast(message); window.setTimeout(() => setToast(""), 2600); };
   const navigate = (pageId, context = {}) => {
-    setPageContext(context);
-    setActivePage(pageId);
+    if (canAccessPage(session.role, pageId)) {
+      setPageContext(context);
+      setActivePage(pageId);
+    }
+    else notify("当前岗位没有访问该模块的权限");
   };
 
   useEffect(() => {
     let active = true;
-    loadWorkspaceData().then(({ data, source, connectedResources: connected }) => {
+    loadWorkspaceData({ accessToken: session.isPreview ? undefined : session.accessToken }).then(({ data, source, connectedResources: connected }) => {
       if (!active) return;
       setWorkspaceData(data);
       setDataSource(source);
       setConnectedResources(connected);
       if (source === "fallback") notify("业务接口暂不可用，已切换为演示数据");
       if (source === "hybrid") notify("设备、告警和工单已按可用接口接入，其他模块保留演示数据");
+    }).catch((error) => {
+      if (error.status === 401 || error.status === 403) onLogout("登录已过期或权限已变更，请重新登录");
+      else notify("业务接口暂不可用，请稍后重试");
     });
     return () => { active = false; };
-  }, []);
+  }, [session.accessToken, session.isPreview]);
 
   const { alerts, auditRows, devices, deviceProfiles = demoData.deviceProfiles, evidence, trendData, workOrders } = workspaceData;
   const visibleOrders = useMemo(() => managedOrders ?? workOrders.map(normalizeWorkOrder), [managedOrders, workOrders]);
@@ -392,14 +474,14 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><Wrench24Regular /></span><span><strong>制造领航</strong><small>ForgePilot</small></span></div>
-        <nav aria-label="主导航">{navItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{item.count ? <em>{item.count}</em> : null}</button>; })}</nav>
+        <nav aria-label="主导航">{allowedNavItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{item.count ? <em>{item.count}</em> : null}</button>; })}</nav>
         <div className="sidebar-foot"><span>比赛演示环境</span><small>请勿录入真实敏感数据</small></div>
       </aside>
       <div className="app-main">
         <header className="topbar">
-          <button className="plant-select"><Building24Regular /><span>一号装配厂</span><small>Plant #1</small></button>
+          <button className="plant-select"><Building24Regular /><span>{session.organization.name}</span><small>{session.organization.code}</small></button>
           <div className="breadcrumb">运行中心 / <strong>{activeNav?.label}</strong></div>
-          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint" title={connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "当前使用内置演示数据"}>{dataSource === "hybrid" ? "业务 API + 演示" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name="李振华" color="colorful" /><span className="user-name"><strong>李振华</strong><small>维护主管</small></span></div>
+          <div className="top-actions"><span className="sync-state"><i />系统运行正常</span><Badge appearance="tint" title={connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "当前使用内置演示数据"}>{dataSource === "hybrid" ? "业务 API + 演示" : "演示数据"}</Badge><Button appearance="subtle" icon={<Alert24Regular />} aria-label="通知" /><Avatar name={session.user.displayName} color="colorful" /><span className="user-name"><strong>{session.user.displayName}</strong><small>{roleLabels[session.role]}</small></span><Button appearance="subtle" icon={<SignOut24Regular />} onClick={() => onLogout()} aria-label="退出登录">退出</Button></div>
         </header>
         <main className="page-content">{pages[activePage]}</main>
         <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>数据延迟 12ms · 自动刷新</span></footer>
@@ -407,6 +489,36 @@ function App() {
       {toast && <div className="toast" role="status"><CheckmarkCircle24Regular />{toast}</div>}
     </div>
   );
+}
+
+function App() {
+  const [session, setSession] = useState(() => selectStoredSession(authService, dataMode));
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!session || session.isPreview) return;
+    let active = true;
+    authService.refresh(session).then((value) => { if (active) setSession(value); }).catch((error) => {
+      if (!active) return;
+      if (error.status === 401 || error.status === 403) {
+        authService.clear();
+        setSession(null);
+        setMessage(error.message || "登录状态已失效");
+      } else {
+        setMessage("暂时无法校验登录状态，已保留当前会话");
+      }
+    });
+    return () => { active = false; };
+  }, []);
+
+  const logout = (reason = "") => {
+    authService.clear();
+    setSession(null);
+    setMessage(reason);
+  };
+
+  if (!session) return <><LoginPage onLogin={(value) => { setMessage(""); setSession(value); }} />{message && <div className="toast" role="status"><Alert24Regular />{message}</div>}</>;
+  return <><WorkspaceApp session={session} onLogout={logout} />{message && <div className="toast" role="status"><Alert24Regular />{message}</div>}</>;
 }
 
 export default App;

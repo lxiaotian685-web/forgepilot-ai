@@ -23,6 +23,7 @@ venv/
 # Runtime and business data
 data/*
 !data/demo_docs/
+!data/demo_uploads/
 uploads/
 storage/
 *.db

@@ -58,6 +58,9 @@ class IngestRequest(BaseModel):
 class IngestResponse(BaseModel):
     document_id: str
     title: str
+    equipment_model: str = ""
+    version: str = "1.0"
+    source: str = ""
     page_count: int
     chunk_count: int
 

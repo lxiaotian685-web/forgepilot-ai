@@ -414,13 +414,15 @@ def test_cors_preflight_allows_configured_origin():
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
-def test_body_size_limit_returns_413():
+def test_body_size_limit_returns_413(monkeypatch):
+    monkeypatch.setenv("MAX_REQUEST_BYTES", "1000")
+
     response = client.post(
         "/api/v1/documents/ingest",
         json={
             "title": "超大请求",
             "equipment_model": "compressor-002",
-            "content": "x" * 1_100_000,
+            "content": "x" * 2_000,
         },
     )
 

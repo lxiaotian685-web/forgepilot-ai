@@ -55,6 +55,7 @@ import ApiWorkOrdersPage from "./ApiWorkOrdersPage.jsx";
 import ApiKnowledgePage from "./ApiKnowledgePage.jsx";
 import ApiAuditPage from "./ApiAuditPage.jsx";
 import ApiOverviewPage from "./ApiOverviewPage.jsx";
+import DeviceScanImport from "./DeviceScanImport.jsx";
 import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
 import AuditWorkspace from "./AuditWorkspace.jsx";
@@ -254,7 +255,7 @@ function OverviewPage({ navigate, workOrders, trendData }) {
   );
 }
 
-function DevicePage({ navigate, devices, profiles, allowLocalImport, accessToken, onImported, notify }) {
+function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, accessToken, onImported, notify }) {
   const fileRef = useRef(null);
   const [selectedId, setSelectedId] = useState(devices[0]?.id || "");
   const [filters, setFilters] = useState({ query: "", type: "", state: "", plant: "" });
@@ -262,6 +263,7 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, accessToken
   const [importName, setImportName] = useState("");
   const [importResult, setImportResult] = useState(null);
   const [importBusy, setImportBusy] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [liveProfile, setLiveProfile] = useState(null);
   const [localDevices, setLocalDevices] = useState(() => {
     if (!allowLocalImport) return [];
@@ -328,14 +330,16 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, accessToken
   };
   return (
     <>
-      <PageHeader title="设备中心" description="统一查看设备身份、专属运行指标和维护上下文" action="导入设备" onAction={() => setImportOpen((value) => !value)} />
+      <PageHeader title="设备中心" description="统一查看设备身份、专属运行指标和维护上下文" action={canImport ? "导入设备" : undefined} onAction={() => setImportOpen((value) => !value)} />
+      {canImport && !allowLocalImport && <Button onClick={() => setScanOpen(true)}>扫码导入</Button>}
+      {scanOpen && <DeviceScanImport existingIds={allDevices.map((item) => item.id)} defaultPlant={plants[0] || ""} onClose={() => setScanOpen(false)} onImport={async (item) => { await importDevices([item], accessToken); await onImported?.(); setSelectedId(item.id); notify("扫码设备已保存到服务器"); }} />}
       {importOpen && <section className="panel import-panel">
         <div className="panel-title"><div><Add24Regular /><h2>CSV 设备导入预检</h2></div><ToneBadge tone={allowLocalImport ? "warning" : "success"}>{allowLocalImport ? "仅本地演示" : "服务器入库"}</ToneBadge></div>
         <div className="import-actions"><Button icon={<ArrowDownload24Regular />} onClick={downloadTemplate}>下载模板</Button><Button icon={<Add24Regular />} onClick={() => fileRef.current?.click()}>选择 CSV 文件</Button><input ref={fileRef} type="file" accept=".csv,text/csv" onChange={readImport} hidden /><span>{importName || "尚未选择文件"}</span></div>
         {importResult?.errors?.length ? <div className="import-errors" role="alert">{importResult.errors.join("；")}</div> : null}
         {importResult?.rows?.length ? <><div className="import-summary"><strong>{importResult.rows.length} 行</strong><span>可导入 {importResult.rows.filter((row) => !row.errors.length).length} 行</span><span>错误 {importResult.rows.filter((row) => row.errors.length).length} 行</span></div><div className="import-preview"><table className="data-table"><thead><tr><th>行</th><th>设备编号</th><th>名称</th><th>类型</th><th>厂区/位置</th><th>校验结果</th></tr></thead><tbody>{importResult.rows.map((row) => <tr key={`${row.importRow}-${row.id}`}><td>{row.importRow}</td><td><strong>{row.id || "—"}</strong></td><td>{row.name || "—"}</td><td>{row.type || "—"}</td><td>{row.plant || "—"} / {row.location || "—"}</td><td>{row.errors.length ? <ToneBadge tone="danger">{row.errors.join("；")}</ToneBadge> : <ToneBadge tone="success">通过</ToneBadge>}</td></tr>)}</tbody></table></div><div className="import-confirm"><p>{allowLocalImport ? "确认后只保存到当前浏览器的演示数据。" : "确认后整批写入服务器；厂区须使用当前组织已有的厂区名称或编号，导入设备在接入测点前显示离线。"}</p><Button appearance="primary" disabled={importBusy || importResult.rows.some((row) => row.errors.length) || !importResult.rows.length} onClick={confirmPreviewImport}>{importBusy ? "正在导入" : allowLocalImport ? "保存到本地演示设备" : "确认导入服务器"}</Button></div></> : null}
       </section>}
-      <div className="toolbar device-toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索设备编号、名称、类型或位置" value={filters.query} onChange={(_, data) => setFilters((value) => ({ ...value, query: data.value }))} /><select aria-label="设备类型" value={filters.type} onChange={(event) => setFilters((value) => ({ ...value, type: event.target.value }))}><option value="">全部类型</option>{types.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="健康状态" value={filters.state} onChange={(event) => setFilters((value) => ({ ...value, state: event.target.value }))}><option value="">全部状态</option>{states.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="厂区" value={filters.plant} onChange={(event) => setFilters((value) => ({ ...value, plant: event.target.value }))}><option value="">全部厂区</option>{plants.map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={resetFilters}>重置</Button><Button icon={<ArrowSync24Regular />} onClick={() => notify("设备列表已刷新")}>刷新</Button></div>
+      <div className="toolbar device-toolbar"><Input className="search-input" contentBefore={<Search24Regular />} placeholder="搜索设备编号、名称、类型或位置" value={filters.query} onChange={(_, data) => setFilters((value) => ({ ...value, query: data.value }))} /><select aria-label="设备类型" value={filters.type} onChange={(event) => setFilters((value) => ({ ...value, type: event.target.value }))}><option value="">全部类型</option>{types.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="健康状态" value={filters.state} onChange={(event) => setFilters((value) => ({ ...value, state: event.target.value }))}><option value="">全部状态</option>{states.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="厂区" value={filters.plant} onChange={(event) => setFilters((value) => ({ ...value, plant: event.target.value }))}><option value="">全部厂区</option>{plants.map((value) => <option key={value}>{value}</option>)}</select><Button icon={<Dismiss24Regular />} onClick={resetFilters}>重置</Button>{!allowLocalImport && <Button icon={<ArrowSync24Regular />} onClick={() => onImported?.().catch((error) => notify(error.message))}>刷新</Button>}</div>
       <div className="filter-result">当前显示 <strong>{filteredDevices.length}</strong> / {allDevices.length} 台设备</div>
       <div className="split-layout">
         <section className="panel table-panel grow">
@@ -353,8 +357,8 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, accessToken
           <div className="drawer-heading"><div><small>设备实时摘要</small><h2>{selected.id} {selected.name}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="关闭预览" /></div>
           <div className="equipment-identity"><span>{selected.type} · {selected.plant || "未分配厂区"}</span><strong>{selected.location}</strong></div>
           <div className="health-callout"><span>综合健康评分</span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
-          {profile ? <><div className="profile-freshness">采集时间：{profile.updatedAt}</div><h3>关键运行指标</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div><DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、")}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，指标尚未接入</strong><span>等待 T03 提供测点模板、当前值和历史曲线接口。</span></div>}
-          <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis")}>发起诊断</Button>
+          {profile ? <><div className="profile-freshness">采集时间：{profile.updatedAt}</div><h3>关键运行指标</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div><DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、")}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，指标尚未接入</strong><span>该设备暂无已上报测点；可在设备参数接口配置和采集。</span></div>}
+          <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis", { deviceId: selected.id })}>发起诊断</Button>
         </aside> : <aside className="panel detail-drawer"><div className="device-empty">请先选择设备</div></aside>}
       </div>
     </>
@@ -510,7 +514,7 @@ function WorkspaceApp({ session, onLogout }) {
     overview: isDemoMode
       ? <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />
       : <ApiOverviewPage navigate={navigate} devices={devices} alerts={alerts} workOrders={workOrders} error={businessError} />,
-    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
+    devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} canImport={["manager", "admin", "owner"].includes(session.role)} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
     alerts: isDemoMode
       ? <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />
       : <ApiAlertsPage session={session} devices={devices} navigate={navigate} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
@@ -530,7 +534,7 @@ function WorkspaceApp({ session, onLogout }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><Wrench24Regular /></span><span><strong>制造领航</strong><small>ForgePilot</small></span></div>
-        <nav aria-label="主导航">{allowedNavItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{item.count ? <em>{item.count}</em> : null}</button>; })}</nav>
+        <nav aria-label="主导航">{allowedNavItems.map((item) => { const Icon = item.icon; const count = isDemoMode ? item.count : item.id === "alerts" ? alerts.filter((alert) => alert.status !== "已关闭").length : item.id === "orders" ? workOrders.filter((order) => !["已完成", "已取消"].includes(order.status)).length : 0; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{count ? <em>{count}</em> : null}</button>; })}</nav>
         <div className="sidebar-foot"><span>比赛演示环境</span><small>请勿录入真实敏感数据</small></div>
       </aside>
       <div className="app-main">

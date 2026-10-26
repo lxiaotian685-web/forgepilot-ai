@@ -106,6 +106,18 @@ function normalizeCollection(key, payload) {
   return payload.items;
 }
 
+async function loadBusinessCollection(key, path, accessToken) {
+  const items = [];
+  for (let page = 1; ; page += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const payload = await request(`${path}${separator}page=${page}&pageSize=100`, accessToken);
+    if (!Number.isInteger(payload.total)) throw new Error(`${key} API response is missing total`);
+    const batch = normalizeCollection(key, payload);
+    items.push(...batch);
+    if (items.length >= payload.total || batch.length === 0) return items;
+  }
+}
+
 export async function loadWorkspaceData({ accessToken } = {}) {
   if (mode !== "api") {
     return { data: mockData, source: "mock", connectedResources: [] };
@@ -115,7 +127,7 @@ export async function loadWorkspaceData({ accessToken } = {}) {
   const connectedEntries = await Promise.all(
     Object.entries(businessResources).map(async ([key, path]) => [
       key,
-      normalizeCollection(key, await request(path, accessToken)),
+      await loadBusinessCollection(key, path, accessToken),
     ]),
   );
 

@@ -1,0 +1,20 @@
+export function filterEvidence(items, { query = "", type = "", state = "" } = {}) {
+  const term = query.trim().toLowerCase();
+  return items.filter((item) => (!type || item.type === type)
+    && (!state || item.state === state)
+    && (!term || [item.name, item.device, item.source].some((value) => String(value || "").toLowerCase().includes(term))));
+}
+
+export function validateEvidenceFile(file, existingNames) {
+  if (!file) throw new Error("请选择文件");
+  if (!/\.(pdf|txt|md)$/i.test(file.name)) throw new Error("仅支持 PDF、TXT 或 Markdown 文件");
+  if (file.size > 10 * 1024 * 1024) throw new Error("文件不能超过 10 MB");
+  if (existingNames.some((name) => name.toLowerCase() === file.name.toLowerCase())) throw new Error("同名资料已存在");
+}
+
+export function filterAuditRows(rows, { query = "", actor = "", action = "" } = {}) {
+  const term = query.trim().toLowerCase();
+  return rows.filter((row) => (!actor || row.user === actor)
+    && (!action || row.action === action)
+    && (!term || [row.time, row.user, row.action, row.object, row.result].some((value) => String(value || "").toLowerCase().includes(term))));
+}

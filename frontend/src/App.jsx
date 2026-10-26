@@ -48,6 +48,8 @@ import DiagnosisPage from "./DiagnosisPage";
 import WorkOrdersPage from "./WorkOrdersPage";
 import PeoplePage, { demoPeople } from "./PeoplePage";
 import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
+import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
+import AuditWorkspace from "./AuditWorkspace.jsx";
 
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
@@ -381,10 +383,10 @@ function App() {
     devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
     alerts: <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />,
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
-    knowledge: <KnowledgePage notify={notify} evidence={evidence} />,
+    knowledge: <KnowledgeWorkspace notify={notify} evidence={evidence} />,
     orders: <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />,
     people: <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />,
-    audit: <AuditPage auditRows={auditRows} />,
+    audit: <AuditWorkspace auditRows={auditRows} />,
   };
   return (
     <div className="app-shell">

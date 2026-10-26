@@ -7,6 +7,8 @@ const payload = () => ({ device_id: "AC-07", answer: "需核验", is_mock: true,
 ], sources: [{ id: "doc-1@v1#p2c0", document_id: "doc-1", version: "v1", title: "演示手册", page: 2, chunk_index: 0, snippet: "原文", score: 1.5 }], conflicts: [], verification_suggestions: [] });
 const input = { deviceId: "AC-07", question: " 振动异常 " };
 const config = { VITE_DATA_MODE: "api", VITE_API_BASE_URL: "https://api.example.test/" };
+const session = { accessToken: "current-user-token", organization: { id: "org-1" }, user: { id: "user-1" } };
+const apiInput = { ...input, session };
 
 test("links a unique exact reference, keeps retrieval score unscaled", () => {
   const result = normalizeDiagnosis(payload(), "AC-07");
@@ -64,35 +66,37 @@ test("mock is an explicit fixed sample, never calls network", async () => {
   assert.equal(other.status, "no_knowledge"); assert.deepEqual(other.sources, []);
 });
 test("POSTs current C contract without overriding equipment model", async () => {
-  const result = await requestDiagnosis(input, { ...config, VITE_DIAGNOSIS_API_BASE_URL: "https://rag.example.test/", VITE_API_USER_ID: "demo" }, async (url, options) => {
+  const result = await requestDiagnosis(apiInput, { ...config, VITE_DIAGNOSIS_API_BASE_URL: "https://rag.example.test/", VITE_API_USER_ID: "demo" }, async (url, options) => {
     assert.equal(url, "https://rag.example.test/api/v1/chat");
-    assert.equal(options.method, "POST"); assert.equal(options.headers["X-User-Id"], "demo");
+    assert.equal(options.method, "POST"); assert.equal(options.headers["X-User-Id"], "user-1");
+    assert.equal(options.headers["X-Organization-Id"], "org-1");
     assert.deepEqual(JSON.parse(options.body), { device_id: "AC-07", question: "振动异常" });
     return { ok: true, json: async () => ({ ...payload(), is_mock: false }) };
   });
   assert.equal(result.transport, "api"); assert.equal(result.is_mock, false);
 });
 
-test("forwards a configured bearer token to C", async () => {
-  await requestDiagnosis({ deviceId: "AC-07", question: "x" }, {
+test("forwards the current session bearer token to C", async () => {
+  await requestDiagnosis({ deviceId: "AC-07", question: "x", session }, {
     VITE_DATA_MODE: "api", VITE_DIAGNOSIS_API_BASE_URL: "https://rag.test", VITE_API_TOKEN: "demo-token",
   }, async (_url, options) => {
-    assert.equal(options.headers.Authorization, "Bearer demo-token");
+    assert.equal(options.headers.Authorization, "Bearer current-user-token");
     return { ok: true, json: async () => payload() };
   });
 });
 test("missing config or blank input fail explicitly", async () => {
   await assert.rejects(requestDiagnosis(input, { VITE_DATA_MODE: "api" }), /尚未配置/);
+  await assert.rejects(requestDiagnosis(input, config), /登录会话/);
   await assert.rejects(requestDiagnosis({ ...input, question: "  " }, {}), /填写/);
 });
 test("HTTP, network and JSON errors do not become fake success", async () => {
-  await assert.rejects(requestDiagnosis(input, config, async () => ({ ok: false, status: 503 })), /503/);
-  await assert.rejects(requestDiagnosis(input, config, async () => { throw new Error("offline"); }), /offline/);
-  await assert.rejects(requestDiagnosis(input, config, async () => ({ ok: true, json: async () => { throw new Error("bad json"); } })), /bad json/);
+  await assert.rejects(requestDiagnosis(apiInput, config, async () => ({ ok: false, status: 503 })), /503/);
+  await assert.rejects(requestDiagnosis(apiInput, config, async () => { throw new Error("offline"); }), /offline/);
+  await assert.rejects(requestDiagnosis(apiInput, config, async () => ({ ok: true, json: async () => { throw new Error("bad json"); } })), /bad json/);
 });
 test("propagates cancellation", async () => {
   const controller = new AbortController();
-  const promise = requestDiagnosis({ ...input, signal: controller.signal }, config, async (_, options) => new Promise((resolve, reject) => {
+  const promise = requestDiagnosis({ ...apiInput, signal: controller.signal }, config, async (_, options) => new Promise((resolve, reject) => {
     options.signal.addEventListener("abort", () => reject(new DOMException("cancelled", "AbortError")));
   }));
   controller.abort();

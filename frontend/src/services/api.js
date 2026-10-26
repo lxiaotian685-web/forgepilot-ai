@@ -64,7 +64,7 @@ export async function importDevices(items, accessToken, fetchImpl = globalThis.f
 }
 
 export async function loadDeviceParameters(deviceId, accessToken) {
-  const result = await request(`/api/v1/devices/${encodeURIComponent(deviceId)}/parameters?pageSize=100`, accessToken);
+  const result = await request(`/api/v1/devices/${encodeURIComponent(deviceId)}/parameters?latest=true&pageSize=100`, accessToken);
   if (!Array.isArray(result.items)) throw new Error("设备测点响应格式不正确");
   return result.items;
 }

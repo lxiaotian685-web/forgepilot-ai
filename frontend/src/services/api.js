@@ -107,38 +107,21 @@ function normalizeCollection(key, payload) {
 }
 
 export async function loadWorkspaceData({ accessToken } = {}) {
-  if (mode !== "api" || !baseUrl) {
+  if (mode !== "api") {
     return { data: mockData, source: "mock", connectedResources: [] };
   }
+  if (!baseUrl) throw new Error("未配置业务 API 地址");
 
-  const results = await Promise.allSettled(
+  const connectedEntries = await Promise.all(
     Object.entries(businessResources).map(async ([key, path]) => [
       key,
       normalizeCollection(key, await request(path, accessToken)),
     ]),
   );
-  const connectedEntries = results
-    .filter((result) => result.status === "fulfilled")
-    .map((result) => result.value);
-  const failedResults = results.filter((result) => result.status === "rejected");
-
-  const authFailure = failedResults.find(({ reason }) => reason?.status === 401 || reason?.status === 403);
-  if (authFailure) throw authFailure.reason;
-
-  if (failedResults.length) {
-    console.warn(
-      "Some ForgePilot business APIs are unavailable; keeping demo data for those resources.",
-      failedResults.map((result) => result.reason),
-    );
-  }
-
-  if (!connectedEntries.length) {
-    return { data: mockData, source: "fallback", connectedResources: [] };
-  }
 
   return {
-    data: { ...mockData, ...Object.fromEntries(connectedEntries) },
-    source: "hybrid",
+    data: { ...mockData, ...Object.fromEntries(connectedEntries), trendData: [], deviceProfiles: {}, evidence: [], auditRows: [] },
+    source: "api",
     connectedResources: connectedEntries.map(([key]) => key),
   };
 }

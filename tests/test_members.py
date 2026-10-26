@@ -121,6 +121,47 @@ def test_disable_requires_reassignment_and_moves_open_orders(api):
         assert any(order.owner_user_id == recipient_id for order in active_orders)
         audit = session.scalar(select(AuditLog).where(AuditLog.action == "member.update"))
         assert audit is not None
+        assert audit.after["reassignedToUserId"] == str(recipient_id)
+        assert audit.after["reassignedOpenWorkOrderCount"] > 0
+        assert audit.after["reassignedWorkOrderIds"]
+
+
+def test_disable_rejects_viewer_recipient(api):
+    client, ids, _ = api
+    response = client.patch(
+        f'/api/v1/members/{ids["users"]["tech@example.com"]}',
+        json={
+            "status": "disabled",
+            "reassignToUserId": str(ids["users"]["viewer@example.com"]),
+        },
+        headers=auth(ids),
+    )
+    assert response.status_code == 422
+    assert "维修人员权限" in response.json()["error"]["message"]
+
+
+def test_last_owner_cannot_be_demoted(api):
+    client, ids, _ = api
+    response = client.patch(
+        f'/api/v1/members/{ids["users"]["demo@example.com"]}',
+        json={"role": "manager"},
+        headers=auth(ids),
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "LAST_OWNER"
+
+
+def test_reassignment_is_only_valid_during_disable(api):
+    client, ids, _ = api
+    response = client.patch(
+        f'/api/v1/members/{ids["users"]["tech@example.com"]}',
+        json={
+            "displayName": "张师傅",
+            "reassignToUserId": str(ids["users"]["zhao@example.com"]),
+        },
+        headers=auth(ids),
+    )
+    assert response.status_code == 422
 
 
 def test_member_update_rejects_cross_org_and_self_disable(api):

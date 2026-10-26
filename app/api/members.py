@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
@@ -55,6 +55,18 @@ def _open_order_count(db: Session, organization_id: uuid.UUID, user_id: uuid.UUI
             WorkOrder.deleted_at.is_(None),
         )
     ) or 0
+
+
+def _lock_active_owners(db: Session, organization_id: uuid.UUID) -> list[Membership]:
+    return db.scalars(
+        select(Membership)
+        .where(
+            Membership.organization_id == organization_id,
+            Membership.role == "owner",
+            Membership.status == "active",
+        )
+        .with_for_update()
+    ).all()
 
 
 @router.get("")
@@ -174,17 +186,18 @@ def update_member(
     _assert_can_manage(context, membership.role)
     fields = payload.model_fields_set
     before = {"displayName": user.display_name, "role": membership.role, "status": membership.status}
+    reassignment = None
+
+    if "reassign_to_user_id" in fields and not (
+        payload.status == "disabled" and membership.status != "disabled"
+    ):
+        raise api_error(422, "VALIDATION_ERROR", "转派人员只能在停用成员时指定")
 
     if "role" in fields and payload.role is not None:
         _validate_role(payload.role)
         _assert_can_manage(context, payload.role)
         if membership.role == "owner" and payload.role != "owner":
-            active_owners = db.scalar(select(func.count()).select_from(Membership).where(
-                Membership.organization_id == context.organization_id,
-                Membership.role == "owner",
-                Membership.status == "active",
-            )) or 0
-            if active_owners <= 1:
+            if len(_lock_active_owners(db, context.organization_id)) <= 1:
                 raise api_error(409, "LAST_OWNER", "组织必须保留至少一名启用的所有者")
         membership.role = payload.role
 
@@ -195,12 +208,7 @@ def update_member(
             if user.id == context.user_id:
                 raise api_error(409, "SELF_DISABLE", "不能停用当前登录成员")
             if membership.role == "owner":
-                active_owners = db.scalar(select(func.count()).select_from(Membership).where(
-                    Membership.organization_id == context.organization_id,
-                    Membership.role == "owner",
-                    Membership.status == "active",
-                )) or 0
-                if active_owners <= 1:
+                if len(_lock_active_owners(db, context.organization_id)) <= 1:
                     raise api_error(409, "LAST_OWNER", "组织必须保留至少一名启用的所有者")
             open_count = _open_order_count(db, context.organization_id, user.id)
             if open_count:
@@ -211,20 +219,36 @@ def update_member(
                 recipient_membership, recipient = _member(db, context.organization_id, payload.reassign_to_user_id)
                 if recipient_membership.status != "active" or recipient.status != "active":
                     raise api_error(422, "VALIDATION_ERROR", "转派人员必须是当前组织的启用成员")
-                db.execute(update(WorkOrder).where(
-                    WorkOrder.organization_id == context.organization_id,
-                    WorkOrder.owner_user_id == user.id,
-                    WorkOrder.status.in_(OPEN_ORDER_STATUSES),
-                    WorkOrder.deleted_at.is_(None),
-                ).values(owner_user_id=recipient.id, updated_by=context.user_id))
+                if ROLE_LEVELS.get(recipient_membership.role, -1) < ROLE_LEVELS["technician"]:
+                    raise api_error(422, "VALIDATION_ERROR", "转派人员至少需要维修人员权限")
+                open_orders = db.scalars(
+                    select(WorkOrder).where(
+                        WorkOrder.organization_id == context.organization_id,
+                        WorkOrder.owner_user_id == user.id,
+                        WorkOrder.status.in_(OPEN_ORDER_STATUSES),
+                        WorkOrder.deleted_at.is_(None),
+                    ).with_for_update()
+                ).all()
+                for order in open_orders:
+                    order.owner_user_id = recipient.id
+                    order.updated_by = context.user_id
+                reassignment = {
+                    "reassignedToUserId": str(recipient.id),
+                    "reassignedOpenWorkOrderCount": len(open_orders),
+                    "reassignedWorkOrderIds": [order.code for order in open_orders],
+                }
             membership.status = "disabled"
         elif payload.status == "active":
+            if user.status != "active":
+                raise api_error(409, "CONFLICT", "用户账号已停用，不能恢复组织成员")
             membership.status = "active"
 
     if "display_name" in fields and payload.display_name is not None:
         user.display_name = payload.display_name.strip()
 
     after = {"displayName": user.display_name, "role": membership.role, "status": membership.status}
+    if reassignment:
+        after.update(reassignment)
     write_audit(
         db,
         organization_id=context.organization_id,

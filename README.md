@@ -47,6 +47,8 @@ cd ..
 
 打开 `http://127.0.0.1:5180/forgepilot/`，使用仅限本地的虚构账号 `demo@example.com` / `ForgePilot123!`。停止：`.\scripts\stop-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库。它只用于评审本地复现，不能原样公开部署。
 
+Linux/macOS 的三终端命令见 [docs/RUN_LINUX.md](docs/RUN_LINUX.md)。
+
 服务接口：业务 `http://127.0.0.1:8001/docs`、知识 `http://127.0.0.1:8002/docs`。各服务配置模板在 `services/business/.env.example`、`services/knowledge/.env.example`，前端配置模板在 `frontend/.env.example`；**模板值不能直接用于生产**。部署时后端设置独立密钥、受控 CORS、HTTPS 与身份校验，前端仅配置公开 API 地址，不包含模型密钥。
 
 ## 验证

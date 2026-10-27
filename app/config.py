@@ -41,6 +41,10 @@ def auth_required() -> bool:
     return env_bool("C_REQUIRE_AUTH", True)
 
 
+def identity_api_base_url() -> str:
+    return os.getenv("C_IDENTITY_API_BASE_URL", "").strip().rstrip("/")
+
+
 def ingest_enabled() -> bool:
     return env_bool("C_ENABLE_INGEST", False)
 

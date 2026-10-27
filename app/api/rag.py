@@ -115,6 +115,8 @@ def upload_document(
 ):
     if not ingest_enabled():
         raise HTTPException(status_code=403, detail="文档入库接口已禁用")
+    if context.role is not None and context.role not in {"manager", "admin", "owner"}:
+        raise HTTPException(status_code=403, detail="当前岗位无权上传知识文档")
 
     filename = safe_filename(file.filename or "")
     if not filename:

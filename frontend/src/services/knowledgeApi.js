@@ -1,5 +1,5 @@
 const runtimeEnv = import.meta.env || {};
-const baseUrl = (runtimeEnv.VITE_DIAGNOSIS_API_BASE_URL || runtimeEnv.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const baseUrl = (runtimeEnv.VITE_DIAGNOSIS_API_BASE_URL || "").replace(/\/$/, "");
 
 function headers(session, apiBaseUrl) {
   if (!apiBaseUrl || !session?.accessToken || !session?.organization?.id) throw new Error("知识库服务或登录信息未配置");

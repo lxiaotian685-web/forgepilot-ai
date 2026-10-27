@@ -108,7 +108,7 @@ export async function requestDiagnosis({ deviceId, question, signal, session }, 
   if ((config.VITE_DATA_MODE || "mock") === "mock") {
     return { ...demoDiagnosis(deviceId), transport: "local-demo" };
   }
-  const base = (config.VITE_DIAGNOSIS_API_BASE_URL || config.VITE_API_BASE_URL || "").replace(/\/$/, "");
+  const base = (config.VITE_DIAGNOSIS_API_BASE_URL || "").replace(/\/$/, "");
   if (!base) throw new Error("尚未配置诊断服务地址，请设置 VITE_DIAGNOSIS_API_BASE_URL。");
   if (!session?.accessToken || !session?.organization?.id || !session?.user?.id) throw new Error("诊断服务需要当前登录会话");
   const headers = { Accept: "application/json", "Content-Type": "application/json" };

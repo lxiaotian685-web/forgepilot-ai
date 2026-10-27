@@ -6,7 +6,7 @@ const payload = () => ({ device_id: "AC-07", answer: "需核验", is_mock: true,
   { type: "fact", text: "文档片段", source: "《演示手册》第2页", source_ids: ["doc-1@v1#p2c0"] },
 ], sources: [{ id: "doc-1@v1#p2c0", document_id: "doc-1", version: "v1", title: "演示手册", page: 2, chunk_index: 0, snippet: "原文", score: 1.5 }], conflicts: [], verification_suggestions: [] });
 const input = { deviceId: "AC-07", question: " 振动异常 " };
-const config = { VITE_DATA_MODE: "api", VITE_API_BASE_URL: "https://api.example.test/" };
+const config = { VITE_DATA_MODE: "api", VITE_API_BASE_URL: "https://api.example.test/", VITE_DIAGNOSIS_API_BASE_URL: "https://rag.example.test/" };
 const session = { accessToken: "current-user-token", organization: { id: "org-1" }, user: { id: "user-1" } };
 const apiInput = { ...input, session };
 

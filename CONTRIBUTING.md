@@ -38,6 +38,13 @@ test: cover work order transitions
 ## 本地质量检查
 
 ```powershell
+cd frontend
+npm test
+npm run build
+cd ../services/business
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+cd ../knowledge
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
 ```

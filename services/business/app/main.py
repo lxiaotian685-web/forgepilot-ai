@@ -23,7 +23,6 @@ from app.api import (
     work_orders,
 )
 from app.api.errors import ERROR_CODES
-from app.schemas.chat import ChatRequest, ChatResponse
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -118,16 +117,6 @@ async def validation_exception_handler(
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-
-@app.post("/api/v1/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    return ChatResponse(
-        device_id=request.device_id,
-        answer="这是第 1 周的模拟诊断回答。",
-        sources=[],
-        is_mock=True,
-    )
 
 
 app.include_router(devices.router)

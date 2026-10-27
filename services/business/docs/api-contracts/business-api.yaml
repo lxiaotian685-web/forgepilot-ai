@@ -9,7 +9,7 @@ info:
     - 资源对外标识使用业务编码（设备编号、告警号、工单号），与前端 `frontend/src/data.js` 字段对齐。
     - 错误统一为 `{"error": {"code", "message", "details", "requestId"}}`。
     - 契约状态：诊断、审计与工单来源字段为本轮 v0.1 **待确认契约**，需与 C 联调确认后冻结。
-    - `/api/v1/chat` 仍是 mock，不代表已持久化；持久化诊断请使用 `/api/v1/diagnoses`。
+    - 辅助诊断由独立 C 知识服务 `/api/v1/chat` 提供；本业务服务只负责诊断保存与人工确认。
 servers:
   - url: http://127.0.0.1:8000
     description: 本地开发

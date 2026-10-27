@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
 from app.api.codes import next_work_order_code
-from app.api.deps import RequestContext, get_context, require_role
+from app.api.deps import ROLE_LEVELS, RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import (
     WORK_ORDER_PRIORITY_LABELS,
@@ -61,6 +61,13 @@ def _validate_owner(
             422,
             "VALIDATION_ERROR",
             "负责人不存在、已停用或不属于当前组织",
+            {"ownerId": str(user_id)},
+        )
+    if ROLE_LEVELS.get(membership.role, -1) < ROLE_LEVELS["technician"]:
+        raise api_error(
+            422,
+            "VALIDATION_ERROR",
+            "工单负责人至少需要维修人员权限",
             {"ownerId": str(user_id)},
         )
     return user
@@ -359,6 +366,16 @@ def update_work_order(
         "ownerId": str(order.owner_user_id) if order.owner_user_id else None,
     }
     fields = payload.model_fields_set
+    is_manager = ROLE_LEVELS.get(context.role, -1) >= ROLE_LEVELS["manager"]
+    if not is_manager:
+        if fields - {"status"}:
+            raise api_error(403, "FORBIDDEN", "维修人员只能更新本人工单的执行状态")
+        if order.owner_user_id != context.user_id:
+            raise api_error(403, "FORBIDDEN", "只能处理指派给自己的工单")
+        if payload.status in {"已完成", "已取消", "completed", "cancelled"}:
+            raise api_error(403, "FORBIDDEN", "验收和取消工单需要主管权限")
+    if payload.status in {"已取消", "cancelled"} and not payload.cancel_reason:
+        raise api_error(422, "VALIDATION_ERROR", "取消工单必须填写原因")
 
     if "status" in fields and payload.status:
         new_status = label_to_code(
@@ -393,6 +410,9 @@ def update_work_order(
             elif new_status in {"completed", "cancelled"}:
                 order.closed_at = utcnow()
 
+    if "cancel_reason" in fields and order.status != "cancelled":
+        raise api_error(422, "VALIDATION_ERROR", "取消原因只能在取消工单时填写")
+
     if "owner_id" in fields:
         if payload.owner_id is None:
             order.owner_user_id = None
@@ -426,6 +446,7 @@ def update_work_order(
             "status": order.status,
             "priority": order.priority,
             "ownerId": str(order.owner_user_id) if order.owner_user_id else None,
+            **({"cancelReason": payload.cancel_reason} if payload.cancel_reason else {}),
         },
     )
     device = db.get(Device, order.device_id)

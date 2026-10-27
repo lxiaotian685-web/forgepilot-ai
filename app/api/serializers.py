@@ -51,15 +51,16 @@ def iso(value: datetime | None) -> str | None:
     return value.isoformat()
 
 
-def device_to_dict(device: Device, alert_count: int) -> dict:
+def device_to_dict(device: Device, alert_count: int, plant: Plant | None = None) -> dict:
     return {
         "id": device.code,
         "name": device.name,
         "type": device.type,
         "location": device.location,
-        "health": float(device.health),
+        "health": None if device.state == "offline" else float(device.health),
         "state": DEVICE_STATE_LABELS.get(device.state, device.state),
         "alert": alert_count,
+        "plant": plant.name if plant else None,
     }
 
 
@@ -83,7 +84,7 @@ def device_parameter_to_dict(
 def device_detail_to_dict(
     device: Device, alert_count: int, plant: Plant | None
 ) -> dict:
-    data = device_to_dict(device, alert_count)
+    data = device_to_dict(device, alert_count, plant)
     data.update(
         {
             "plantId": plant.code if plant else None,

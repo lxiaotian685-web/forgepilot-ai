@@ -35,3 +35,14 @@ export async function uploadKnowledgeDocument(session, file, fields, fetchImpl =
   body.append("source", fields.source.trim() || file.name);
   return checked(await fetchImpl(`${apiBaseUrl}/api/v1/documents/upload`, { method: "POST", headers: headers(session, apiBaseUrl), body }));
 }
+
+export async function getKnowledgeDocument(session, documentId, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
+  if (!documentId) throw new Error("缺少文档编号");
+  return checked(await fetchImpl(`${apiBaseUrl}/api/v1/documents/${encodeURIComponent(documentId)}`, { headers: headers(session, apiBaseUrl) }));
+}
+
+export async function deleteKnowledgeDocument(session, documentId, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
+  if (!documentId) throw new Error("缺少文档编号");
+  const response = await fetchImpl(`${apiBaseUrl}/api/v1/documents/${encodeURIComponent(documentId)}`, { method: "DELETE", headers: headers(session, apiBaseUrl) });
+  if (!response.ok) await checked(response);
+}

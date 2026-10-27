@@ -10,12 +10,18 @@ export function normalizeWorkOrder(order) {
   const deviceId = order.deviceId || order.title?.match(/[A-Z]+-\d+/)?.[0] || "未关联";
   return {
     description: "",
+    startDate: order.startDate || order.plannedStartAt?.slice(0, 10) || "",
     dueDate: order.dueDate || order.dueAt?.slice(0, 10) || "",
     draft: false,
     checklist: [false, false, false],
     ...order,
     deviceId,
   };
+}
+
+export function formatWorkOrderSchedule(order) {
+  if (!order?.dueDate) return "未排期";
+  return order.startDate ? `${order.startDate} 至 ${order.dueDate}` : `截至 ${order.dueDate}`;
 }
 
 export function openOrdersFor(orders, owner) {
@@ -56,6 +62,8 @@ export function validateWorkOrder(form) {
   if (!form.title?.trim()) errors.title = "请输入工单标题";
   if (!form.deviceId) errors.deviceId = "请选择设备";
   if (!form.owner) errors.owner = "请选择负责人";
-  if (!form.dueDate) errors.dueDate = "请选择计划日期";
+  if (!form.startDate) errors.startDate = "请选择开始日期";
+  if (!form.dueDate) errors.dueDate = "请选择结束日期";
+  if (form.startDate && form.dueDate && form.startDate > form.dueDate) errors.dueDate = "结束日期不能早于开始日期";
   return errors;
 }

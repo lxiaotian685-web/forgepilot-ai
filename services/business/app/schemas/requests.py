@@ -130,6 +130,7 @@ class WorkOrderCreate(RequestModel):
     priority: str | None = None
     description: str | None = Field(default=None, max_length=2000)
     owner_id: UUID | None = None
+    planned_start_at: datetime | None = None
     due_at: datetime | None = None
     alert_id: str | None = None
     diagnosis_id: str | None = None
@@ -141,6 +142,7 @@ class WorkOrderUpdate(RequestModel):
     status: str | None = None
     owner_id: UUID | None = None
     description: str | None = Field(default=None, max_length=2000)
+    planned_start_at: datetime | None = None
     due_at: datetime | None = None
     cancel_reason: str | None = Field(default=None, min_length=1, max_length=500)
 

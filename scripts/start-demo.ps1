@@ -27,15 +27,13 @@ foreach ($port in @($FrontendPort, $BusinessPort, $KnowledgePort)) {
 }
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 
-if (-not (Test-Path -LiteralPath (Join-Path $businessRoot "forgepilot-demo.db"))) {
-    $oldDatabaseUrl = $env:DATABASE_URL
-    try {
-        $env:DATABASE_URL = $previewDb
-        Push-Location $businessRoot
-        try { & $businessPython -m app.seed | Out-Null; if ($LASTEXITCODE -ne 0) { throw "演示数据库初始化失败" } }
-        finally { Pop-Location }
-    } finally { $env:DATABASE_URL = $oldDatabaseUrl }
-}
+$oldDatabaseUrl = $env:DATABASE_URL
+try {
+    $env:DATABASE_URL = $previewDb
+    Push-Location $businessRoot
+    try { & $businessPython -m app.seed | Out-Null; if ($LASTEXITCODE -ne 0) { throw "演示数据库初始化失败" } }
+    finally { Pop-Location }
+} finally { $env:DATABASE_URL = $oldDatabaseUrl }
 
 $previewSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $origin = "http://127.0.0.1:$FrontendPort"

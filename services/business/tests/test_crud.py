@@ -178,6 +178,44 @@ def test_create_work_order_permission_and_success(api):
         assert entry is not None
 
 
+def test_work_order_schedule_range_persists_and_rejects_reverse_dates(api):
+    client, ids, _ = api
+    headers = auth(ids, user="manager@example.com")
+    created = client.post(
+        "/api/v1/work-orders",
+        json={
+            "title": "AC-07 计划复检",
+            "deviceId": "AC-07",
+            "plannedStartAt": "2026-10-28T12:00:00+08:00",
+            "dueAt": "2026-10-30T12:00:00+08:00",
+        },
+        headers=headers,
+    )
+    assert created.status_code == 201
+    code = created.json()["id"]
+    assert created.json()["plannedStartAt"] is not None
+
+    updated = client.patch(
+        f"/api/v1/work-orders/{code}",
+        json={"dueAt": "2026-11-02T12:00:00+08:00"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["dueAt"].startswith("2026-11-02")
+
+    invalid = client.patch(
+        f"/api/v1/work-orders/{code}",
+        json={"dueAt": "2026-10-27T12:00:00+08:00"},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+
+    listed = client.get("/api/v1/work-orders", headers=headers).json()["items"]
+    saved = next(item for item in listed if item["id"] == code)
+    assert saved["plannedStartAt"] is not None
+    assert saved["dueAt"].startswith("2026-11-02")
+
+
 def test_create_work_order_unknown_device(api):
     client, ids, _ = api
     response = client.post(

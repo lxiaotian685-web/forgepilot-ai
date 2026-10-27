@@ -645,6 +645,10 @@ def main() -> None:
     engine = get_engine()
     if engine.dialect.name == "sqlite":
         Base.metadata.create_all(engine)
+        with engine.begin() as connection:
+            columns = {row[1] for row in connection.exec_driver_sql("PRAGMA table_info(work_orders)")}
+            if "planned_start_at" not in columns:
+                connection.exec_driver_sql("ALTER TABLE work_orders ADD COLUMN planned_start_at DATETIME")
     with get_sessionmaker()() as session:
         ids = seed_demo(session)
     print("已写入虚构演示数据：")

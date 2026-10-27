@@ -176,6 +176,7 @@ def work_order_to_dict(
         "diagnosisId": diagnosis.code if diagnosis else None,
         "createdAt": iso(order.created_at),
         "description": order.description,
+        "plannedStartAt": iso(order.planned_start_at),
         "dueAt": iso(order.due_at),
     }
 

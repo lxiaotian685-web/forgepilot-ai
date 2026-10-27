@@ -24,8 +24,8 @@ test("only local drafts can be deleted", () => {
 });
 
 test("requires title device owner and schedule", () => {
-  assert.deepEqual(Object.keys(validateWorkOrder({})).sort(), ["deviceId", "dueDate", "owner", "title"]);
-  assert.deepEqual(validateWorkOrder({ title: "检查", deviceId: "AC-07", owner: "张工", dueDate: "2026-10-25" }), {});
+  assert.deepEqual(Object.keys(validateWorkOrder({})).sort(), ["deviceId", "dueDate", "owner", "startDate", "title"]);
+  assert.deepEqual(validateWorkOrder({ title: "检查", deviceId: "AC-07", owner: "张工", startDate: "2026-10-24", dueDate: "2026-10-25" }), {});
 });
 
 test("reassignment changes only unfinished work and leaves history intact", () => {

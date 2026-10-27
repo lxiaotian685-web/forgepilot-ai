@@ -33,6 +33,13 @@ from app.schemas.requests import WorkOrderCreate, WorkOrderUpdate
 router = APIRouter(prefix="/api/v1/work-orders", tags=["work-orders"])
 
 
+def _validate_schedule(start, end) -> None:
+    if start is not None and end is None:
+        raise api_error(422, "VALIDATION_ERROR", "计划开始时间需要配套结束时间")
+    if start is not None and end is not None and start.date() > end.date():
+        raise api_error(422, "VALIDATION_ERROR", "计划结束日期不能早于开始日期")
+
+
 def _get_device(
     db: Session, organization_id: uuid.UUID, code: str
 ) -> Device | None:
@@ -305,6 +312,7 @@ def create_work_order(
                 },
             )
 
+    _validate_schedule(payload.planned_start_at, payload.due_at)
     now = utcnow()
     order = WorkOrder(
         organization_id=context.organization_id,
@@ -317,6 +325,7 @@ def create_work_order(
         priority=priority,
         status="pending",
         owner_user_id=owner.id if owner else None,
+        planned_start_at=payload.planned_start_at,
         due_at=payload.due_at,
         created_by=context.user_id,
         updated_by=context.user_id,
@@ -335,6 +344,8 @@ def create_work_order(
             "status": order.status,
             "priority": order.priority,
             "deviceId": device.code,
+            "plannedStartAt": order.planned_start_at.isoformat() if order.planned_start_at else None,
+            "dueAt": order.due_at.isoformat() if order.due_at else None,
         },
     )
     db.commit()
@@ -364,6 +375,8 @@ def update_work_order(
         "status": order.status,
         "priority": order.priority,
         "ownerId": str(order.owner_user_id) if order.owner_user_id else None,
+        "plannedStartAt": order.planned_start_at.isoformat() if order.planned_start_at else None,
+        "dueAt": order.due_at.isoformat() if order.due_at else None,
     }
     fields = payload.model_fields_set
     is_manager = ROLE_LEVELS.get(context.role, -1) >= ROLE_LEVELS["manager"]
@@ -430,8 +443,11 @@ def update_work_order(
         order.title = payload.title
     if "description" in fields:
         order.description = payload.description
+    if "planned_start_at" in fields:
+        order.planned_start_at = payload.planned_start_at
     if "due_at" in fields:
         order.due_at = payload.due_at
+    _validate_schedule(order.planned_start_at, order.due_at)
 
     order.updated_by = context.user_id
     write_audit(
@@ -446,6 +462,8 @@ def update_work_order(
             "status": order.status,
             "priority": order.priority,
             "ownerId": str(order.owner_user_id) if order.owner_user_id else None,
+            "plannedStartAt": order.planned_start_at.isoformat() if order.planned_start_at else None,
+            "dueAt": order.due_at.isoformat() if order.due_at else None,
             **({"cancelReason": payload.cancel_reason} if payload.cancel_reason else {}),
         },
     )

@@ -1,96 +1,75 @@
 # 制造领航 ForgePilot
 
-> 面向中小制造企业的设备知识、故障诊断与维护协同 AI Agent。
+面向中小制造企业设备维护的 Web 作品。系统把设备台账、测点、告警、知识文档、辅助诊断、维修工单和审计记录串成可演示的流程。
 
-ForgePilot 希望把设备台账、说明书、维修记录、点检数据和备件信息连接起来，让一线人员可以用自然语言查询设备知识、获得有证据的诊断建议，并把结果转化为可追踪的维护任务。
+> 参赛方向：第九届传智杯 AI WEB 网页开发挑战赛。当前仓库使用**虚构演示数据**。企业数据和模型密钥尚未取得；默认诊断明确标记为模拟结果，不宣称接入真实企业设备或真实大模型。
 
-本项目面向 Web 网站开发比赛的 **AI Agent智能助手** 与 **RAG知识问答系统** 方向，也是一个围绕数据库、工业业务流程和AI工程构建的工业软件作品集项目。
+## 体验路线
 
-## 当前状态
+1. 用评审演示账号登录，选择 `AC-07` 空压机，查看该设备的测点与历史。
+2. 在告警中心创建、指派并处理告警；在工单页面创建、指派、处理和验收维修任务。
+3. 上传虚构说明书，查看解析状态与证据；在诊断工作台查看证据、冲突和待补采项。
+4. 只有非模拟且符合证据校验的诊断才允许保存；之后由人确认并生成工单，审计记录可追溯操作。
 
-当前仓库处于早期后端原型阶段。
+设备导入支持 CSV 和扫码内容录入。扫码摄像头需要浏览器支持 `BarcodeDetector`，同时提供手动粘贴二维码内容。人员管理包含岗位、状态和停用前未完成工单转派。维修人员可查看看板与日历中的任务。
 
-已实现：
+## 架构
 
-- FastAPI应用骨架；
-- 健康检查接口；
-- 设备问答请求与响应数据模型；
-- 明确标记为mock的模拟诊断接口；
-- 6项API自动化测试。
+| 目录 | 技术 | 职责 |
+|---|---|---|
+| `frontend/` | React、Vite、Fluent UI | 设备、告警、诊断、知识、工单、人员和审计页面 |
+| `services/business/` | FastAPI、SQLAlchemy、Alembic | 登录、组织权限、设备、测点、告警、工单、诊断保存和审计 |
+| `services/knowledge/` | FastAPI、BM25、可选 OpenAI 兼容模型 | 说明书解析检索、证据引用、辅助诊断；通过业务服务验证身份 |
 
-尚未实现：
+三个进程分别运行。前端 API 模式只读取服务端数据；请求失败会提示错误，不会将本地虚构数据伪装成接口结果。B 服务的 PostgreSQL 迁移与 SQLite 本地演示均可用；C 服务目前使用单进程 JSON 知识库，部署多实例前须迁移存储。
 
-- Web前端业务接口接入；
-- PostgreSQL设备数据库；
-- 说明书RAG知识库；
-- 真实大模型与Agent工具调用；
-- 工单、备件、权限、审计和生产部署。
+## 本地复现
 
-前端 UI 基础位于 [`frontend`](frontend)，已经包含维护总览、设备中心、告警中心、诊断工作台、知识证据、维护工单和审计记录的可交互演示版本。
-
-完整方案、分工和里程碑见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。参与开发前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 本地运行
-
-需要 Python 3.10 或更高版本。
+需要 Python 3.10+、Node.js 20+、npm；Windows 示例使用 PowerShell。首次安装依赖：
 
 ```powershell
+cd services/business
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+cd ../knowledge
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+cd ../../frontend
+npm ci
+cd ..
 ```
 
-打开：
-
-- API文档：`http://127.0.0.1:8000/docs`
-- 健康检查：`http://127.0.0.1:8000/health`
-
-运行测试和代码检查：
+运行本地三服务演示：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m ruff check .
+.\scripts\start-demo.ps1
 ```
 
-## 当前接口
+打开 `http://127.0.0.1:5180/forgepilot/`，使用仅限本地的虚构账号 `demo@example.com` / `ForgePilot123!`。停止：`.\scripts\stop-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库。它只用于评审本地复现，不能原样公开部署。
 
-| 方法 | 路径 | 状态 | 用途 |
-|---|---|---|---|
-| GET | `/health` | 已实现 | 服务健康检查 |
-| POST | `/api/v1/chat` | Mock | 接收设备ID和问题，返回模拟诊断结果 |
+服务接口：业务 `http://127.0.0.1:8001/docs`、知识 `http://127.0.0.1:8002/docs`。各服务配置模板在 `services/business/.env.example`、`services/knowledge/.env.example`，前端配置模板在 `frontend/.env.example`；**模板值不能直接用于生产**。部署时后端设置独立密钥、受控 CORS、HTTPS 与身份校验，前端仅配置公开 API 地址，不包含模型密钥。
 
-## 目标业务闭环
+## 验证
 
-```text
-选择设备 / 扫码进入设备档案
-  → 查询说明书、维修记录和实时/导入数据
-  → Agent判断需要调用的工具
-  → RAG给出带来源的分析
-  → 生成检查步骤与风险提示
-  → 人工确认
-  → 创建维护工单并关联备件
-  → 记录处理结果，沉淀为企业知识
+```powershell
+cd frontend; npm test; npm run build; cd ..
+cd services/business; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\python.exe -m ruff check .; cd ../..
+cd services/knowledge; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\python.exe -m ruff check .; cd ../..
 ```
 
-## 协作方式
+模型配置成 `LLM_PROVIDER=openai`、提供合法密钥、模型与基础 URL，并使用 `DEVICE_PROVIDER=http` 读取 B 服务后，才能测试真实模型路径。无配置时 C 返回带 `is_mock`/降级状态的演示结果，前端不会把它作为可保存的真实诊断。
 
-项目采用：
+## 团队与来源
 
-```text
-Issue → feature/fix分支 → Pull Request → 同伴审查 → Squash合并
-```
+- 梁晓添：产品、前端、业务集成、后端补充与最终统筹。
+- 林同学：业务后端早期开发；后续负责演示视频录制。
+- 龚同学：知识检索、诊断服务与文档上传。
+- 指导教师丁老师提供业务反馈；企业原始数据尚未授权使用。
 
-不要直接向 `main` 提交业务代码。每个分支只解决一个Issue，PR中必须说明改动原因、测试结果、接口或数据库变化。详细规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+原始 A/B/C 功能分支和各轮 Pull Request 保留细粒度开发历史。本集成分支把三个独立服务放入同一可复现仓库；来源记录见 [docs/SOURCE_COMMITS.md](docs/SOURCE_COMMITS.md)。协作要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 安全说明
+## 提交说明
 
-- 禁止提交API Key、密码和私钥；
-- 禁止上传未经授权的企业说明书、设备数据和维修记录；
-- 演示材料必须使用虚构或脱敏数据；
-- AI建议不能替代安全规范、专业维修判断和人工确认；
-- 高风险操作必须提示停机、断电和现场安全要求。
+校赛通知要求公开或授权评审访问的代码仓库、README、环境配置说明、完整细粒度 Git 历史、5–8 分钟普通话 1080p 演示视频和不超过 30 页的技术 PDF；在线演示为可选加分项。通知：[东莞理工学院计算机学院校赛公告](https://cs.dgut.edu.cn/info/1034/19118.htm)。当前仍需核验最终仓库合并、视频与 PDF 终稿及公网部署版本，不能仅凭本地演示宣称已提交。
 
-## License
-
-[MIT](LICENSE)
-
+代码使用 [MIT License](LICENSE)。虚构说明书用于演示；不要上传未获授权的企业资料、密钥或个人信息。

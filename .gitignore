@@ -31,7 +31,9 @@ frontend/.openai/
 *.key
 
 # Runtime and business data
-data/
+/data/
+services/knowledge/data/knowledge_base.json
+.demo-preview/
 uploads/
 storage/
 *.db

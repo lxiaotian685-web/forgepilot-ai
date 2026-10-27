@@ -49,6 +49,7 @@ import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./
 import DiagnosisPage from "./DiagnosisPage";
 import WorkOrdersPage from "./WorkOrdersPage";
 import PeoplePage, { demoPeople } from "./PeoplePage";
+import ApiPeoplePage from "./ApiPeoplePage.jsx";
 import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
 import AuditWorkspace from "./AuditWorkspace.jsx";
@@ -460,6 +461,13 @@ function WorkspaceApp({ session, onLogout }) {
 
   const { alerts, auditRows, devices, deviceProfiles = demoData.deviceProfiles, evidence, trendData, workOrders } = workspaceData;
   const visibleOrders = useMemo(() => managedOrders ?? workOrders.map(normalizeWorkOrder), [managedOrders, workOrders]);
+  const refreshBusinessData = async () => {
+    const result = await loadWorkspaceData({ accessToken: session.accessToken });
+    setWorkspaceData(result.data);
+    setDataSource(result.source);
+    setConnectedResources(result.connectedResources);
+    setManagedOrders(null);
+  };
   const pages = {
     overview: <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />,
     devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} notify={notify} />,
@@ -467,7 +475,9 @@ function WorkspaceApp({ session, onLogout }) {
     diagnosis: <DiagnosisPage devices={devices} initialDeviceId={pageContext.deviceId || "AC-07"} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
     knowledge: <KnowledgeWorkspace notify={notify} evidence={evidence} />,
     orders: <WorkOrdersPage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} devices={devices} people={managedPeople} sourceAlert={pageContext.alert} />,
-    people: <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />,
+    people: isDemoMode
+      ? <PeoplePage notify={notify} orders={visibleOrders} onOrdersChange={setManagedOrders} people={managedPeople} onPeopleChange={setManagedPeople} />
+      : <ApiPeoplePage session={session} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
     audit: <AuditWorkspace auditRows={auditRows} />,
   };
   return (

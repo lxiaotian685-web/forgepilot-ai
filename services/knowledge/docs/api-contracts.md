@@ -63,8 +63,10 @@ HTTP 状态映射：
 
 - `POST /api/v1/search`：检索当前组织文档，需要 `X-Organization-Id`。
 - `GET /api/v1/documents`：列出当前组织文档，支持 `limit`（1–500）和 `offset`。
-- `POST /api/v1/documents/upload`：上传 PDF/TXT/MD，解析后入库；需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`）。
-- `POST /api/v1/documents/ingest`：文本内容入库，需要组织上下文；默认关闭（`C_ENABLE_INGEST=false`），生产不得开放无鉴权写入。
+- `GET /api/v1/documents/{document_id}`：读取当前组织文档及解析切片，供上传后核对；原始 PDF 字节未保存，不提供原文件下载。
+- `DELETE /api/v1/documents/{document_id}`：管理岗位及以上删除文档和所有切片；跨组织对象返回 404。
+- `POST /api/v1/documents/upload`：上传 PDF/TXT/MD，解析后入库；管理岗位及以上可用，默认关闭（`C_ENABLE_INGEST=false`）。
+- `POST /api/v1/documents/ingest`：文本内容入库；与上传接口使用同一岗位校验，默认关闭（`C_ENABLE_INGEST=false`）。
 
 ### 3.2.1 文档上传 `POST /api/v1/documents/upload`
 

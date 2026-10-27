@@ -303,3 +303,17 @@ def test_upload_is_org_scoped():
         json={"query": "排气温度过高"},
     ).json()
     assert search["count"] == 0
+
+    document_id = upload.json()["document_id"]
+    assert client.get(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Organization-Id": "org-b"},
+    ).status_code == 404
+    assert client.delete(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Organization-Id": "org-b"},
+    ).status_code == 404
+    assert client.get(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Organization-Id": "org-a"},
+    ).status_code == 200

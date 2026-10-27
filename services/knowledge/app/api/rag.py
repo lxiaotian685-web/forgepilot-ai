@@ -26,6 +26,7 @@ from app.schemas.document import (
     MAX_TITLE_LENGTH,
     MAX_VERSION_LENGTH,
     Document,
+    DocumentDetail,
     IngestRequest,
     IngestResponse,
     SearchRequest,
@@ -41,6 +42,11 @@ _HTTP_STATUS = {
     "device_unavailable": 503,
     "device_mismatch": 502,
 }
+
+
+def _require_document_manager(context: RequestContext) -> None:
+    if context.role is not None and context.role not in {"manager", "admin", "owner"}:
+        raise HTTPException(status_code=403, detail="当前岗位无权管理知识文档")
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -66,6 +72,7 @@ def ingest(
 ):
     if not ingest_enabled():
         raise HTTPException(status_code=403, detail="文档入库接口已禁用")
+    _require_document_manager(context)
     try:
         document, chunks = kb.ingest(
             title=request.title,
@@ -115,8 +122,7 @@ def upload_document(
 ):
     if not ingest_enabled():
         raise HTTPException(status_code=403, detail="文档入库接口已禁用")
-    if context.role is not None and context.role not in {"manager", "admin", "owner"}:
-        raise HTTPException(status_code=403, detail="当前岗位无权上传知识文档")
+    _require_document_manager(context)
 
     filename = safe_filename(file.filename or "")
     if not filename:
@@ -185,6 +191,32 @@ def list_documents(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/documents/{document_id}", response_model=DocumentDetail)
+def get_document(
+    document_id: str,
+    context: RequestContext = Depends(get_request_context),
+    kb: KnowledgeBase = Depends(get_kb),
+):
+    result = kb.get_document(document_id, context.organization_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="文档不存在")
+    document, chunks = result
+    return DocumentDetail(
+        document=document, chunks=chunks, chunk_count=len(chunks)
+    )
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+def delete_document(
+    document_id: str,
+    context: RequestContext = Depends(get_request_context),
+    kb: KnowledgeBase = Depends(get_kb),
+):
+    _require_document_manager(context)
+    if not kb.delete_document(document_id, context.organization_id):
+        raise HTTPException(status_code=404, detail="文档不存在")
 
 
 @router.post("/chat", response_model=ChatResponse)

@@ -43,6 +43,34 @@ def test_document_upload_requires_manager_when_identity_is_verified(monkeypatch)
     assert allowed.json()["chunk_count"] == 1
 
 
+def test_document_preview_delete_and_text_ingest_follow_verified_role(monkeypatch):
+    monkeypatch.setenv("C_IDENTITY_API_BASE_URL", "http://business.test")
+    role = {"value": "viewer"}
+    monkeypatch.setattr("app.api.context.httpx.get", lambda *args, **kwargs: _identity(role["value"]))
+    headers = {"Authorization": "Bearer valid", "X-Organization-Id": ORG}
+    payload = {
+        "title": "空压机规程", "equipment_model": "GX11",
+        "content": "排气温度检查冷却器。", "source": "虚构手册",
+    }
+    assert client.post("/api/v1/documents/ingest", headers=headers, json=payload).status_code == 403
+
+    role["value"] = "manager"
+    created = client.post("/api/v1/documents/ingest", headers=headers, json=payload)
+    assert created.status_code == 200
+    document_id = created.json()["document_id"]
+    role["value"] = "viewer"
+    detail = client.get(f"/api/v1/documents/{document_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["document"]["title"] == "空压机规程"
+    assert detail.json()["chunks"][0]["text"] == payload["content"]
+    assert client.delete(f"/api/v1/documents/{document_id}", headers=headers).status_code == 403
+
+    role["value"] = "manager"
+    assert client.delete(f"/api/v1/documents/{document_id}", headers=headers).status_code == 204
+    assert client.get(f"/api/v1/documents/{document_id}", headers=headers).status_code == 404
+    assert client.post("/api/v1/search", headers=headers, json={"query": "冷却器"}).json()["count"] == 0
+
+
 def test_production_requires_identity_api_configuration(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.delenv("C_IDENTITY_API_BASE_URL", raising=False)

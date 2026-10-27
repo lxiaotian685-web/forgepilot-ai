@@ -26,6 +26,12 @@ class Chunk(BaseModel):
     text: str
 
 
+class DocumentDetail(BaseModel):
+    document: Document
+    chunks: list[Chunk]
+    chunk_count: int
+
+
 class Evidence(BaseModel):
     id: str
     document_id: str

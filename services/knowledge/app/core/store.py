@@ -139,6 +139,32 @@ class KnowledgeBase:
             documents.sort(key=lambda doc: (doc.title, doc.id))
             return documents[offset : offset + limit]
 
+    def get_document(
+        self, document_id: str, organization_id: str
+    ) -> tuple[Document, list[Chunk]] | None:
+        with self._lock:
+            document = self._documents.get(document_id)
+            if document is None or document.organization_id != organization_id:
+                return None
+            chunks = [
+                chunk for chunk in self._chunks if chunk.document_id == document_id
+            ]
+            return document, chunks
+
+    def delete_document(self, document_id: str, organization_id: str) -> bool:
+        with self._lock:
+            document = self._documents.get(document_id)
+            if document is None or document.organization_id != organization_id:
+                return False
+            del self._documents[document_id]
+            self._chunks = [
+                chunk for chunk in self._chunks if chunk.document_id != document_id
+            ]
+            self._version += 1
+            self._index_cache.clear()
+            self.save()
+            return True
+
     def clear(self) -> None:
         with self._lock:
             self._documents.clear()

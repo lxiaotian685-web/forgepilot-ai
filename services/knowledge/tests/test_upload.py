@@ -226,6 +226,18 @@ def test_upload_can_be_disabled(monkeypatch):
     assert response.status_code == 403
 
 
+def test_delete_is_disabled_with_document_writes(monkeypatch):
+    uploaded = _upload("manual.txt", TEXT_CONTENT.encode("utf-8"))
+    assert uploaded.status_code == 200
+    monkeypatch.setenv("C_ENABLE_INGEST", "false")
+    document_id = uploaded.json()["document_id"]
+    response = client.delete(
+        f"/api/v1/documents/{document_id}",
+        headers={"X-Organization-Id": "org-a"},
+    )
+    assert response.status_code == 403
+
+
 def test_upload_requires_equipment_model():
     response = client.post(
         "/api/v1/documents/upload",

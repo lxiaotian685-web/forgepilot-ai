@@ -214,6 +214,8 @@ def delete_document(
     context: RequestContext = Depends(get_request_context),
     kb: KnowledgeBase = Depends(get_kb),
 ):
+    if not ingest_enabled():
+        raise HTTPException(status_code=403, detail="文档管理接口已禁用")
     _require_document_manager(context)
     if not kb.delete_document(document_id, context.organization_id):
         raise HTTPException(status_code=404, detail="文档不存在")

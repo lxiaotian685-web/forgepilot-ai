@@ -46,6 +46,29 @@ async function request(path, accessToken) {
   return response.json();
 }
 
+export async function importDevices(items, accessToken, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
+  if (!apiBaseUrl || !accessToken) throw new ApiRequestError(401, "/api/v1/devices/import");
+  const response = await fetchImpl(`${apiBaseUrl}/api/v1/devices/import`, {
+    method: "POST",
+    headers: { ...buildRequestHeaders({ accessToken, dataMode: "api" }), "Content-Type": "application/json" },
+    body: JSON.stringify({ items: items.map(({ id, name, type, plant, location }) => ({ id, name, type, plant, location })) }),
+  });
+  if (!response.ok) {
+    let message = `设备导入失败（${response.status}）`;
+    try { message = (await response.json())?.error?.message || message; } catch { /* retain status */ }
+    const error = new ApiRequestError(response.status, "/api/v1/devices/import");
+    error.message = message;
+    throw error;
+  }
+  return response.json();
+}
+
+export async function loadDeviceParameters(deviceId, accessToken) {
+  const result = await request(`/api/v1/devices/${encodeURIComponent(deviceId)}/parameters?latest=true&pageSize=100`, accessToken);
+  if (!Array.isArray(result.items)) throw new Error("设备测点响应格式不正确");
+  return result.items;
+}
+
 function formatTimestamp(value) {
   if (!value) return "暂无更新";
   const date = new Date(value);
@@ -83,39 +106,34 @@ function normalizeCollection(key, payload) {
   return payload.items;
 }
 
+async function loadBusinessCollection(key, path, accessToken) {
+  const items = [];
+  for (let page = 1; ; page += 1) {
+    const separator = path.includes("?") ? "&" : "?";
+    const payload = await request(`${path}${separator}page=${page}&pageSize=100`, accessToken);
+    if (!Number.isInteger(payload.total)) throw new Error(`${key} API response is missing total`);
+    const batch = normalizeCollection(key, payload);
+    items.push(...batch);
+    if (items.length >= payload.total || batch.length === 0) return items;
+  }
+}
+
 export async function loadWorkspaceData({ accessToken } = {}) {
-  if (mode !== "api" || !baseUrl) {
+  if (mode !== "api") {
     return { data: mockData, source: "mock", connectedResources: [] };
   }
+  if (!baseUrl) throw new Error("未配置业务 API 地址");
 
-  const results = await Promise.allSettled(
+  const connectedEntries = await Promise.all(
     Object.entries(businessResources).map(async ([key, path]) => [
       key,
-      normalizeCollection(key, await request(path, accessToken)),
+      await loadBusinessCollection(key, path, accessToken),
     ]),
   );
-  const connectedEntries = results
-    .filter((result) => result.status === "fulfilled")
-    .map((result) => result.value);
-  const failedResults = results.filter((result) => result.status === "rejected");
-
-  const authFailure = failedResults.find(({ reason }) => reason?.status === 401 || reason?.status === 403);
-  if (authFailure) throw authFailure.reason;
-
-  if (failedResults.length) {
-    console.warn(
-      "Some ForgePilot business APIs are unavailable; keeping demo data for those resources.",
-      failedResults.map((result) => result.reason),
-    );
-  }
-
-  if (!connectedEntries.length) {
-    return { data: mockData, source: "fallback", connectedResources: [] };
-  }
 
   return {
-    data: { ...mockData, ...Object.fromEntries(connectedEntries) },
-    source: "hybrid",
+    data: { ...mockData, ...Object.fromEntries(connectedEntries), trendData: [], deviceProfiles: {}, evidence: [], auditRows: [] },
+    source: "api",
     connectedResources: connectedEntries.map(([key]) => key),
   };
 }

@@ -2,20 +2,23 @@ function apiBase(config) {
   return (config.VITE_BUSINESS_API_BASE_URL || config.VITE_API_BASE_URL || "").replace(/\/$/, "");
 }
 
-function authHeaders(config) {
+function authHeaders(config, session) {
   const headers = { Accept: "application/json", "Content-Type": "application/json" };
-  if (config.VITE_API_TOKEN) headers.Authorization = `Bearer ${config.VITE_API_TOKEN}`;
-  if (config.VITE_API_ORGANIZATION_ID) headers["X-Organization-Id"] = config.VITE_API_ORGANIZATION_ID;
-  if (config.VITE_API_USER_ID) headers["X-User-Id"] = config.VITE_API_USER_ID;
+  if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+  else if (config.VITE_DATA_MODE === "api") throw new Error("业务操作需要当前登录会话");
+  else {
+    if (config.VITE_API_ORGANIZATION_ID) headers["X-Organization-Id"] = config.VITE_API_ORGANIZATION_ID;
+    if (config.VITE_API_USER_ID) headers["X-User-Id"] = config.VITE_API_USER_ID;
+  }
   return headers;
 }
 
-async function requestBusiness(path, options, config, fetcher) {
+async function requestBusiness(path, options, config, fetcher, session) {
   const base = apiBase(config);
   if (!base) throw new Error("尚未配置业务服务地址，请设置 VITE_BUSINESS_API_BASE_URL。");
   const response = await fetcher(`${base}${path}`, {
     ...options,
-    headers: { ...authHeaders(config), ...options.headers },
+    headers: { ...authHeaders(config, session), ...options.headers },
   });
   if (!response.ok) {
     let message = `业务请求失败（HTTP ${response.status}）。`;
@@ -42,7 +45,7 @@ export function diagnosisEvidenceSnapshot(result) {
 }
 
 export async function saveDiagnosis(
-  { deviceId, question, result, riskLevel, alertId = null },
+  { deviceId, question, result, riskLevel, alertId = null, session },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
@@ -65,11 +68,11 @@ export async function saveDiagnosis(
   return requestBusiness("/api/v1/diagnoses", {
     method: "POST",
     body: JSON.stringify(payload),
-  }, config, fetcher);
+  }, config, fetcher, session);
 }
 
 export async function confirmDiagnosis(
-  { diagnosisId, title, priority, note },
+  { diagnosisId, title, priority, note, session },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
@@ -81,7 +84,7 @@ export async function confirmDiagnosis(
   const result = await requestBusiness(`/api/v1/diagnoses/${encodeURIComponent(diagnosisId)}/confirm`, {
     method: "POST",
     body: JSON.stringify(payload),
-  }, config, fetcher);
+  }, config, fetcher, session);
   if (!result?.diagnosis?.id || !result?.workOrder?.id) {
     throw new Error("确认响应缺少诊断或工单编号，未将其视为成功。");
   }
@@ -89,7 +92,7 @@ export async function confirmDiagnosis(
 }
 
 export async function loadDiagnosisAudit(
-  { diagnosisEntityId, diagnosisId },
+  { diagnosisEntityId, diagnosisId, session },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
@@ -98,13 +101,13 @@ export async function loadDiagnosisAudit(
     const discoveryQuery = new URLSearchParams({
       entityType: "diagnosis", action: "diagnosis.create", pageSize: "100",
     });
-    const discovery = await requestBusiness(`/api/v1/audit-events?${discoveryQuery}`, { method: "GET" }, config, fetcher);
+    const discovery = await requestBusiness(`/api/v1/audit-events?${discoveryQuery}`, { method: "GET" }, config, fetcher, session);
     const created = discovery?.items?.find((item) => item?.after?.code === diagnosisId);
     entityId = created?.entityId;
   }
   if (!entityId) throw new Error("未找到该诊断的审计实体编号。");
   const query = new URLSearchParams({ entityType: "diagnosis", entityId });
-  const payload = await requestBusiness(`/api/v1/audit-events?${query}`, { method: "GET" }, config, fetcher);
+  const payload = await requestBusiness(`/api/v1/audit-events?${query}`, { method: "GET" }, config, fetcher, session);
   if (!payload || !Array.isArray(payload.items)) {
     throw new Error("审计响应缺少 items。");
   }

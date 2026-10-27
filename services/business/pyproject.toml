@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "industrial-maintenance-copilot"
+version = "0.1.0"
+description = "工业设备知识库与诊断助手"
+requires-python = ">=3.10"
+dependencies = [
+    "alembic>=1.13,<2.0",
+    "fastapi>=0.141,<1.0",
+    "pydantic>=2.13,<3.0",
+    "sqlalchemy>=2.0,<2.2",
+    "uvicorn[standard]>=0.52,<1.0",
+]
+
+[project.optional-dependencies]
+postgres = [
+    "psycopg[binary]>=3.2,<4.0",
+]
+dev = [
+    "httpx>=0.28,<1.0",
+    "pytest>=9,<10",
+    "ruff>=0.16,<1.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["frontend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]

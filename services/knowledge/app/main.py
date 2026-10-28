@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.agent import router as agent_router
 from app.api.rag import router as rag_router
 from app.config import env_bool, env_int
 from app.core.demo import ensure_demo_documents
@@ -93,6 +94,7 @@ app.add_middleware(
 )
 
 app.include_router(rag_router)
+app.include_router(agent_router)
 
 
 @app.get("/health")

@@ -24,6 +24,10 @@
 .grounded-empty { padding: 24px 20px; color: #526173; font-size: 13px; line-height: 1.8; }
 .grounded-empty h3 { color: #243c52; font-size: 16px; }
 .diagnostic-error { padding: 15px; margin: 16px; background: #fff0ef; border-left: 3px solid #b42318; color: #8d211a; font-size: 13px; line-height: 1.7; }
+.agent-trace { margin: 16px 20px; padding: 14px 16px; background: #f3f7fa; border-left: 3px solid #0f5a91; }
+.agent-trace h3 { margin: 0 0 10px; font-size: 13px; }
+.agent-trace p { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; margin: 0; padding: 7px 0; border-top: 1px solid #d6e1ea; font-size: 11px; line-height: 1.6; }
+.agent-trace span, .agent-trace small { color: #526173; overflow-wrap: anywhere; }
 .diagnostic-answer { padding: 0 20px; font-size: 13px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .diagnostic-conflicts { margin: 16px 20px; padding: 14px 16px; border-left: 3px solid #b42318; background: #fff4f2; }
 .diagnostic-conflicts h3 { margin: 0 0 10px; color: #8d211a; font-size: 13px; }

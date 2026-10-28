@@ -55,6 +55,7 @@ try {
         C_ENABLE_INGEST = "true"
         DEVICE_PROVIDER = "http"
         DEVICE_API_BASE_URL = $businessUrl
+        BUSINESS_API_BASE_URL = $businessUrl
         CORS_ORIGINS = $origin
     } -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot "knowledge.out.log") -RedirectStandardError (Join-Path $logRoot "knowledge.err.log")
     $started += $knowledge

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
 import { buildDemoMeasurementQuestion, createDemoDiagnosisOrder, demoEvidenceSources, diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
+import { requestAgent } from "./services/agent.js";
 import { confirmDiagnosis, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
 import { loadDeviceParameters } from "./services/api.js";
 import { buildMeasurementQuestion } from "./services/measurementPrompt.js";
@@ -10,7 +11,7 @@ import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
 
-export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "", demoOwners = [], onDemoOrderCreated }) {
+export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "", demoOwners = [], demoOrders = [], onDemoOrderCreated }) {
   const [deviceId, setDeviceId] = useState(initialDeviceId);
   const [question, setQuestion] = useState(initialQuestion || (session?.isPreview ? "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？" : ""));
   const [result, setResult] = useState(null);
@@ -26,6 +27,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
   const [confirmedOrder, setConfirmedOrder] = useState(null);
   const [auditEvents, setAuditEvents] = useState([]);
   const [workflowMessage, setWorkflowMessage] = useState("");
+  const [agentTrace, setAgentTrace] = useState(null);
   const request = useRef(null);
   useEffect(() => () => request.current?.abort(), []);
   useEffect(() => {
@@ -43,6 +45,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     setConfirmedOrder(null);
     setAuditEvents([]);
     setWorkflowMessage("");
+    setAgentTrace(null);
   }
 
   async function persistDiagnosis() {
@@ -150,6 +153,28 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     } catch (failure) { setError(failure.message); }
   }
 
+  async function runAgent() {
+    if (busy) return;
+    const controller = new AbortController();
+    request.current = controller;
+    clearResult();
+    setBusy(true);
+    try {
+      const response = await requestAgent({ deviceId, question, session, orders: demoOrders, signal: controller.signal });
+      if (!controller.signal.aborted) {
+        setAgentTrace(response);
+        if (response.diagnosis) {
+          setResult(response.diagnosis);
+          setActiveSource(response.diagnosis.sources[0]?.key || null);
+        } else setError("设备校验失败，Agent 已停止后续工具调用。");
+      }
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure.message || "Agent 服务不可用。");
+    } finally {
+      if (!controller.signal.aborted) setBusy(false);
+    }
+  }
+
   const previewSources = session?.isPreview ? demoEvidenceSources(deviceId).map((item) => ({ ...item, key: item.id })) : [];
   const displaySources = result?.sources?.length ? result.sources : previewSources;
   const source = displaySources.find((item) => item.key === activeSource) || displaySources[0];
@@ -202,6 +227,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
           {session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromDemoMeasurements}>根据演示测点生成诊断</Button>}
           {!session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromMeasurements}>读取设备测点并诊断</Button>}
+          <Button type="button" disabled={busy || !deviceId || !question.trim()} onClick={runAgent}>{session?.isPreview ? "运行受控 Agent 演示" : "运行受控 Agent"}</Button>
           {busy && <Button type="button" onClick={() => { request.current?.abort(); setBusy(false); setError("已取消本次诊断，未生成结论。"); }}>取消请求</Button>}
         </form>
         <p className="grounded-note">{session?.isPreview ? "演示测点与资料均为虚构样例；自动生成的内容仅用于展示流程，不代表真实设备诊断。" : "设备型号由服务端档案决定，页面不提交覆盖型号。测点自动提问需要实际采集数据；没有阈值时不会断言超限。"}</p>
@@ -209,6 +235,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
       <section className="panel grounded-result" aria-busy={busy}>
         <div className="panel-title"><div><Pulse24Regular /><h2>判断与依据</h2></div><span>{result ? diagnosisStatuses[result.status] : "等待诊断"}</span></div>
         {error && <p className="diagnostic-error" role="alert">{error}</p>}
+        {agentTrace && <section className="agent-trace" aria-label="Agent 工具调用记录"><h3>受控工具调用</h3>{agentTrace.tools.map((step) => <p key={step.name}><strong>{({ device_lookup: "设备查询", work_order_history: "历史工单", evidence_diagnosis: "证据诊断" })[step.name] || step.name}</strong><span>{step.status === "ok" ? "完成" : step.status === "skipped" ? "已跳过" : "不可用"} · {step.summary}</span></p>)}<small>同设备历史工单 {agentTrace.history.length} 条；{agentTrace.history.map((order) => `${order.id} ${order.status}`).join("、") || "暂无可展示记录"}。{agentTrace.is_demo ? "本次为演示流程。" : "结果需人工确认。"}</small></section>}
         {busy && <p role="status" className="grounded-empty">正在请求服务端。尚未确认检索或模型步骤完成。</p>}
         {!result && !busy && <div className="grounded-empty"><h3>从一个明确的现场问题开始</h3><p>结果会区分文档陈述、模型推断与待验证项。没有证据时会明确显示，不预填诊断结论。</p></div>}
         {result && <>

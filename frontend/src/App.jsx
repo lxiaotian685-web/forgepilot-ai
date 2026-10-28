@@ -521,7 +521,7 @@ function WorkspaceApp({ session, onLogout }) {
     alerts: isDemoMode
       ? <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />
       : <ApiAlertsPage session={session} devices={devices} navigate={navigate} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
-    diagnosis: <DiagnosisPage devices={devices} session={session} initialDeviceId={pageContext.deviceId || devices[0]?.id || ""} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} />,
+    diagnosis: <DiagnosisPage devices={devices} session={session} initialDeviceId={pageContext.deviceId || devices[0]?.id || ""} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} demoOwners={managedPeople.filter((person) => person.status === "在岗" && ["维修技师", "维护主管"].includes(person.role)).map((person) => person.name)} onDemoOrderCreated={(order) => setManagedOrders((current) => [order, ...(current ?? workOrders.map(normalizeWorkOrder))])} />,
     knowledge: isDemoMode
       ? <KnowledgeWorkspace notify={notify} evidence={evidence} />
       : <ApiKnowledgePage session={session} notify={notify} onLogout={onLogout} />,

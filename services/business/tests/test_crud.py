@@ -216,6 +216,20 @@ def test_work_order_schedule_range_persists_and_rejects_reverse_dates(api):
     assert saved["dueAt"].startswith("2026-11-02")
 
 
+def test_seeded_cancelled_order_can_be_filtered_with_reason(api):
+    client, ids, _ = api
+    response = client.get(
+        "/api/v1/work-orders",
+        params={"status": "已取消"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert response.status_code == 200
+    items = response.json()["items"]
+    order = next(item for item in items if item["id"] == "WO-20250515-05")
+    assert order["status"] == "已取消"
+    assert "WO-20250517-03" in order["description"]
+
+
 def test_create_work_order_unknown_device(api):
     client, ids, _ = api
     response = client.post(

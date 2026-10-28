@@ -584,6 +584,34 @@ def seed_demo(db: Session) -> dict:
 
     db.flush()
 
+    # 虚构的重复报修案例，用于演示“已取消”筛选与保留原因。
+    cancelled_order = WorkOrder(
+        organization_id=demo_org.id,
+        device_id=devices["CNC-04"].id,
+        code="WO-20250515-05",
+        title="CNC-04 主轴巡检（重复报修）",
+        description="取消原因：与 WO-20250517-03 为同一故障，已合并到该工单处理。",
+        priority="p3",
+        status="cancelled",
+        owner_user_id=zhao.id,
+        closed_at=BASE - timedelta(days=3),
+        created_at=BASE - timedelta(days=3, hours=1),
+        updated_at=BASE - timedelta(days=3),
+        created_by=owner.id,
+        updated_by=owner.id,
+    )
+    db.add(cancelled_order)
+    db.flush()
+    db.add(AuditLog(
+        organization_id=demo_org.id,
+        actor_user_id=owner.id,
+        action="work_order.cancel",
+        entity_type="work_order",
+        entity_id=cancelled_order.id,
+        after={"status": "cancelled", "cancelReason": "与 WO-20250517-03 为同一故障，已合并到该工单处理。"},
+        created_at=BASE - timedelta(days=3),
+    ))
+
     db.add(
         MaintenanceRecord(
             organization_id=demo_org.id,

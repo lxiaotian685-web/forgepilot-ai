@@ -11,6 +11,10 @@ export const demoPeople = [
   { id: "3", code: "EMP-021", name: "王强", role: "诊断工程师", team: "可靠性组", status: "在岗", phone: "139****4506" },
   { id: "4", code: "EMP-028", name: "赵工", role: "维修技师", team: "电气二班", status: "在岗", phone: "137****6630" },
   { id: "5", code: "EMP-032", name: "陈敏", role: "生产观察员", team: "生产运行组", status: "停用", phone: "135****2701" },
+  { id: "7", code: "EMP-036", name: "刘工", role: "维修技师", team: "机械一班", status: "在岗", phone: "136****4107" },
+  { id: "8", code: "EMP-041", name: "黄工", role: "维修技师", team: "机械一班", status: "在岗", phone: "139****7208" },
+  { id: "9", code: "EMP-047", name: "吴工", role: "维修技师", team: "电气二班", status: "在岗", phone: "137****5904" },
+  { id: "10", code: "EMP-052", name: "何工", role: "诊断工程师", team: "可靠性组", status: "在岗", phone: "138****2609" },
 ];
 const roles = ["超级管理员", "维护主管", "诊断工程师", "维修技师", "生产观察员"];
 const teams = ["设备管理组", "可靠性组", "机械一班", "电气二班", "生产运行组"];

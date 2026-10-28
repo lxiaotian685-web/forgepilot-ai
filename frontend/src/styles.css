@@ -52,11 +52,10 @@ button { white-space: nowrap; }
 .brand strong { font-size: 16px; letter-spacing: .02em; }
 .brand small { margin-top: 2px; color: #b8cee3; font-size: 12px; }
 .sidebar nav { padding: 14px 10px; display: grid; gap: 4px; }
-.sidebar nav button { width: 100%; min-height: 44px; border: 0; border-radius: 6px; padding: 0 12px; display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; color: #d8e6f4; background: transparent; text-align: left; cursor: pointer; transition: background 140ms ease, color 140ms ease; }
+.sidebar nav button { width: 100%; min-height: 44px; border: 0; border-radius: 6px; padding: 0 12px; display: grid; grid-template-columns: 24px 1fr; align-items: center; gap: 10px; color: #d8e6f4; background: transparent; text-align: left; cursor: pointer; transition: background 140ms ease, color 140ms ease; }
 .sidebar nav button:hover { background: rgb(255 255 255 / .08); color: #fff; }
 .sidebar nav button.active { background: #fff; color: var(--navy); font-weight: 700; box-shadow: inset 3px 0 0 #3aa6df; }
 .sidebar nav button:active { transform: translateY(1px); }
-.sidebar nav em { min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 10px; font-size: 11px; font-style: normal; color: #fff; background: #c4312e; }
 .sidebar-foot { margin-top: auto; padding: 16px 20px; border-top: 1px solid rgb(255 255 255 / .12); color: #c3d5e7; }
 .sidebar-foot span, .sidebar-foot small { display: block; }
 .sidebar-foot span { font-size: 12px; font-weight: 700; }
@@ -191,7 +190,6 @@ body {
   border-left-color: #65b7e6;
   box-shadow: none;
 }
-.sidebar nav em { border-radius: 2px; }
 .sidebar-foot { background: rgb(0 0 0 / .08); }
 
 .topbar {

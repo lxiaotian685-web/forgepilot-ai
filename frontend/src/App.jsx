@@ -63,10 +63,10 @@ import AuditWorkspace from "./AuditWorkspace.jsx";
 const navItems = [
   { id: "overview", label: "维护总览", icon: Board24Regular },
   { id: "devices", label: "设备中心", icon: Database24Regular },
-  { id: "alerts", label: "告警中心", icon: Alert24Regular, count: 3 },
+  { id: "alerts", label: "告警中心", icon: Alert24Regular },
   { id: "diagnosis", label: "诊断工作台", icon: Pulse24Regular },
   { id: "knowledge", label: "知识证据", icon: BookOpen24Regular },
-  { id: "orders", label: "维护工单", icon: ClipboardTask24Regular, count: 5 },
+  { id: "orders", label: "维护工单", icon: ClipboardTask24Regular },
   { id: "people", label: "人员与权限", icon: PeopleTeam24Regular },
   { id: "audit", label: "审计记录", icon: ShieldLock24Regular },
 ];
@@ -536,7 +536,7 @@ function WorkspaceApp({ session, onLogout }) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand"><span className="brand-mark"><Wrench24Regular /></span><span><strong>制造领航</strong><small>ForgePilot</small></span></div>
-        <nav aria-label="主导航">{allowedNavItems.map((item) => { const Icon = item.icon; const count = isDemoMode ? item.count : item.id === "alerts" ? alerts.filter((alert) => alert.status !== "已关闭").length : item.id === "orders" ? workOrders.filter((order) => !["已完成", "已取消"].includes(order.status)).length : 0; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span>{count ? <em>{count}</em> : null}</button>; })}</nav>
+        <nav aria-label="主导航">{allowedNavItems.map((item) => { const Icon = item.icon; return <button key={item.id} className={activePage === item.id ? "active" : ""} onClick={() => navigate(item.id)}><Icon /><span>{item.label}</span></button>; })}</nav>
         <div className="sidebar-foot"><span>比赛演示环境</span><small>请勿录入真实敏感数据</small></div>
       </aside>
       <div className="app-main">

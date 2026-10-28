@@ -15,6 +15,7 @@ export async function requestAgent({ deviceId, question, session, orders = [], s
         { name: "evidence_diagnosis", status: diagnosis.status === "ok" ? "ok" : "unavailable", summary: "已运行本地演示规则，未调用模型", count: diagnosis.sources.length },
       ],
       requires_human_confirmation: true, can_create_work_order: false, is_demo: true,
+      audit_status: "unavailable", audit_id: null,
     };
   }
   const base = (config.VITE_DIAGNOSIS_API_BASE_URL || "").replace(/\/$/, "");
@@ -31,7 +32,7 @@ export async function requestAgent({ deviceId, question, session, orders = [], s
   });
   if (!response.ok) throw new Error(`Agent 请求失败（HTTP ${response.status}）。`);
   const payload = await response.json();
-  if (payload?.device_id !== deviceId || !Array.isArray(payload.tools) || !Array.isArray(payload.history) || payload.can_create_work_order !== false) {
+  if (payload?.device_id !== deviceId || !Array.isArray(payload.tools) || !Array.isArray(payload.history) || payload.can_create_work_order !== false || !["recorded", "unavailable"].includes(payload.audit_status)) {
     throw new Error("Agent 响应与接口契约不一致。");
   }
   return {

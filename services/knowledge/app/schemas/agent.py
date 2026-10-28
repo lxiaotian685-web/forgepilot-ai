@@ -34,3 +34,5 @@ class AgentResponse(BaseModel):
     requires_human_confirmation: bool = True
     can_create_work_order: bool = False
     is_demo: bool = True
+    audit_status: Literal["recorded", "unavailable"] = "unavailable"
+    audit_id: str | None = None

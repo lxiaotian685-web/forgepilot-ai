@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
-import { diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
+import { buildDemoMeasurementQuestion, createDemoDiagnosisOrder, demoEvidenceSources, diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
 import { confirmDiagnosis, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
 import { loadDeviceParameters } from "./services/api.js";
 import { buildMeasurementQuestion } from "./services/measurementPrompt.js";
+import BelowSelect from "./BelowSelect.jsx";
 import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
 
-export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "" }) {
+export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "", demoOwners = [], onDemoOrderCreated }) {
   const [deviceId, setDeviceId] = useState(initialDeviceId);
   const [question, setQuestion] = useState(initialQuestion || (session?.isPreview ? "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？" : ""));
   const [result, setResult] = useState(null);
@@ -19,6 +20,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
   const [contextChecks, setContextChecks] = useState({ sampledAt: false, measuringPoint: false, operatingMode: false });
   const [verifiedItems, setVerifiedItems] = useState({});
   const [riskLevel, setRiskLevel] = useState("");
+  const [assignedOwner, setAssignedOwner] = useState(demoOwners[0] || "");
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [savedDiagnosis, setSavedDiagnosis] = useState(null);
   const [confirmedOrder, setConfirmedOrder] = useState(null);
@@ -48,6 +50,13 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     setWorkflowBusy(true);
     setWorkflowMessage("");
     try {
+      if (session?.isPreview) {
+        if (!["low", "medium", "high"].includes(riskLevel)) throw new Error("请先选择人工风险等级。");
+        const saved = { id: `DEMO-DIAG-${Date.now()}`, riskLevel };
+        setSavedDiagnosis(saved);
+        setWorkflowMessage(`演示诊断 ${saved.id} 已保留在本次会话，未写入服务器。`);
+        return;
+      }
       const saved = await saveDiagnosis({ deviceId, question, result, riskLevel, session });
       setSavedDiagnosis(saved);
       setWorkflowMessage(`诊断 ${saved.id} 已保存，等待人工确认。`);
@@ -63,6 +72,13 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     setWorkflowBusy(true);
     setWorkflowMessage("");
     try {
+      if (session?.isPreview) {
+        const order = createDemoDiagnosisOrder({ deviceId, riskLevel, owner: assignedOwner, diagnosisId: savedDiagnosis.id, answer: result.answer });
+        onDemoOrderCreated?.(order);
+        setConfirmedOrder(order);
+        setWorkflowMessage(`演示工单 ${order.id} 已加入本次会话的工单列表；未写入服务器。`);
+        return;
+      }
       const confirmed = await confirmDiagnosis({
         diagnosisId: savedDiagnosis.id,
         title: `${deviceId} 诊断处理`,
@@ -125,9 +141,20 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     } catch (failure) { setBusy(false); setError(failure.message); }
   }
 
-  const source = result?.sources.find((item) => item.key === activeSource);
-  const origin = !result ? "尚未生成结果" : result.transport === "local-demo"
-    ? "本地固定样例 · 未调用模型" : result.is_mock ? "服务端模拟或降级结果 · 非真实模型诊断" : "服务端标记为真实模型 · 仍需人工核验";
+  async function diagnoseFromDemoMeasurements() {
+    try {
+      const nextQuestion = buildDemoMeasurementQuestion(deviceId);
+      setQuestion(nextQuestion);
+      setContextChecks({ sampledAt: true, measuringPoint: true, operatingMode: false });
+      await runDiagnosis(nextQuestion);
+    } catch (failure) { setError(failure.message); }
+  }
+
+  const previewSources = session?.isPreview ? demoEvidenceSources(deviceId).map((item) => ({ ...item, key: item.id })) : [];
+  const displaySources = result?.sources?.length ? result.sources : previewSources;
+  const source = displaySources.find((item) => item.key === activeSource) || displaySources[0];
+  const origin = !result ? (session?.isPreview ? "本地演示资料 · 尚未调用模型或 RAG 服务" : "尚未生成结果") : result.transport === "local-demo"
+    ? "虚构测点与规则演示 · 未调用模型或真实 RAG" : result.is_mock ? "服务端模拟或降级结果 · 非真实模型诊断" : "服务端标记为真实模型 · 仍需人工核验";
   const pending = result?.statements.filter((item) => item.type === "pending") || [];
   const suggestions = result?.verification_suggestions || [];
   const selectedDevice = devices.find((item) => item.id === deviceId);
@@ -173,10 +200,11 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
             <small>勾选项仅保存在本页，用于提醒资料是否齐全，不会传给诊断接口。</small>
           </fieldset>
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
+          {session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromDemoMeasurements}>根据演示测点生成诊断</Button>}
           {!session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromMeasurements}>读取设备测点并诊断</Button>}
           {busy && <Button type="button" onClick={() => { request.current?.abort(); setBusy(false); setError("已取消本次诊断，未生成结论。"); }}>取消请求</Button>}
         </form>
-        <p className="grounded-note">设备型号由服务端档案决定，页面不提交覆盖型号。测点自动提问需要实际采集数据；没有阈值时不会断言超限。</p>
+        <p className="grounded-note">{session?.isPreview ? "演示测点与资料均为虚构样例；自动生成的内容仅用于展示流程，不代表真实设备诊断。" : "设备型号由服务端档案决定，页面不提交覆盖型号。测点自动提问需要实际采集数据；没有阈值时不会断言超限。"}</p>
       </aside>
       <section className="panel grounded-result" aria-busy={busy}>
         <div className="panel-title"><div><Pulse24Regular /><h2>判断与依据</h2></div><span>{result ? diagnosisStatuses[result.status] : "等待诊断"}</span></div>
@@ -186,7 +214,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
         {result && <>
           <section className="diagnosis-summary" aria-label="诊断结果摘要">
             <div><span>文档陈述</span><strong>{resultSummary.fact}</strong></div>
-            <div><span>模型推断</span><strong>{resultSummary.inference}</strong></div>
+            <div><span>{result.transport === "local-demo" ? "规则提示" : "模型推断"}</span><strong>{resultSummary.inference}</strong></div>
             <div><span>待验证</span><strong>{resultSummary.pending}</strong></div>
             <div><span>原文证据</span><strong>{resultSummary.sources}</strong></div>
             <p>{resultSummary.pending > 0 ? "当前状态：证据待补齐" : "当前状态：仍需人工复核"}</p>
@@ -201,7 +229,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
           </section>}
           <div className="statement-list">{result.statements.map((item, index) => <article key={index} className={`statement statement-${item.type}`}>
             <span className="statement-index">{String(index + 1).padStart(2, "0")}</span>
-            <div><strong>{types[item.type]}</strong><p>{item.text}</p>
+            <div><strong>{item.type === "inference" && result.transport === "local-demo" ? "演示规则提示" : types[item.type]}</strong><p>{item.text}</p>
               {item.sourceKey ? <Button appearance="subtle" onClick={() => setActiveSource(item.sourceKey)}>查看依据{item.sourceKeys.length > 1 ? `（${item.sourceKeys.length} 条，先打开第 1 条）` : item.source ? `：${item.source}` : ""}</Button>
                 : <small>{item.source ? `引用未唯一匹配：${item.source}` : "未提供直接引用，需人工核对"}</small>}
             </div>
@@ -209,28 +237,28 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
           <section className="verification-next"><div className="verification-heading"><h3>证据补采清单</h3>{verificationItems.length > 0 && <strong>{verifiedCount}/{verificationItems.length} 已现场核对</strong>}</div>{verificationItems.length
             ? <div className="verification-list">{verificationItems.map((item, index) => <label key={index} className={verifiedItems[index] ? "checked" : ""}><input type="checkbox" checked={Boolean(verifiedItems[index])} onChange={(event) => setVerifiedItems((current) => ({ ...current, [index]: event.target.checked }))} /><span>{item}</span></label>)}</div>
             : <p>服务端未提供待验证项，不能据此认为已经验证充分。请补充现场记录并由维护人员复核。</p>}
-            <small>勾选记录不会保存，也不会生成任务。尚未建立校准模型，不展示诊断置信度或预测概率。</small>
+            <small>勾选记录仅在当前页面生效。演示规则不展示诊断置信度或预测概率。</small>
           </section>
           <section className="grounded-confirm" aria-label="诊断确认与建单">
-            <label htmlFor="diagnosis-risk">人工风险分级</label>
-            <select id="diagnosis-risk" value={riskLevel} disabled={workflowBusy || Boolean(savedDiagnosis)} onChange={(event) => setRiskLevel(event.target.value)}>
-              <option value="">请选择</option><option value="low">低</option><option value="medium">中</option><option value="high">高</option>
-            </select>
+            <label>人工风险分级</label>
+            <BelowSelect ariaLabel="人工风险分级" value={riskLevel} disabled={workflowBusy || Boolean(savedDiagnosis)} onChange={setRiskLevel} options={[{ value: "", label: "请选择风险等级" }, { value: "low", label: "低" }, { value: "medium", label: "中" }, { value: "high", label: "高" }]} />
+            {session?.isPreview && <><label htmlFor="diagnosis-owner">演示工单负责人</label><select id="diagnosis-owner" value={assignedOwner} disabled={workflowBusy || Boolean(confirmedOrder)} onChange={(event) => setAssignedOwner(event.target.value)}><option value="">请选择</option>{demoOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}</select></>}
             <div className="workflow-actions">
-              <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.transport !== "api" || result.is_mock || result.status !== "ok" || !riskLevel} onClick={persistDiagnosis}>{savedDiagnosis ? "诊断已保存" : workflowBusy ? "正在处理" : "保存诊断"}</Button>
+              <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.status !== "ok" || !riskLevel || (!session?.isPreview && (result.transport !== "api" || result.is_mock))} onClick={persistDiagnosis}>{savedDiagnosis ? "诊断已保存" : workflowBusy ? "正在处理" : session?.isPreview ? "保存演示诊断" : "保存诊断"}</Button>
               <Button disabled={workflowBusy || !savedDiagnosis || Boolean(confirmedOrder)} onClick={confirmAndCreateOrder}>{confirmedOrder ? "工单已生成" : "人工确认并生成工单"}</Button>
             </div>
-            <p>{result.transport !== "api" || result.is_mock || result.status !== "ok" ? "只有真实接口返回且证据校验通过的诊断才能保存。" : "风险等级由人工选择；确认后由 B 服务幂等生成工单。"}</p>
+            <p>{session?.isPreview ? "风险等级由人工选择；演示诊断和工单仅保留在当前会话。" : result.transport !== "api" || result.is_mock || result.status !== "ok" ? "只有真实接口返回且证据校验通过的诊断才能保存。" : "风险等级由人工选择；确认后由 B 服务幂等生成工单。"}</p>
             {workflowMessage && <p className="workflow-message" role="status">{workflowMessage}</p>}
-            {savedDiagnosis && <dl className="workflow-result"><dt>诊断编号</dt><dd>{savedDiagnosis.id}</dd>{confirmedOrder && <><dt>工单编号</dt><dd>{confirmedOrder.id}</dd><dt>审计记录</dt><dd>{auditEvents.length ? `${auditEvents.length} 条已核对` : "待管理员权限核对"}</dd></>}</dl>}
+            {savedDiagnosis && <dl className="workflow-result"><dt>诊断编号</dt><dd>{savedDiagnosis.id}</dd>{confirmedOrder && <><dt>工单编号</dt><dd>{confirmedOrder.id}</dd><dt>审计记录</dt><dd>{session?.isPreview ? "本地演示未写入审计服务" : auditEvents.length ? `${auditEvents.length} 条已核对` : "待管理员权限核对"}</dd></>}</dl>}
           </section>
         </>}
       </section>
       <aside className="panel grounded-sources" aria-label="证据阅读器">
-        <div className="panel-title"><div><BookOpen24Regular /><h2>证据阅读器</h2></div><span>{result?.sources.length || 0} 条</span></div>
-        {!result?.sources.length && <p className="grounded-empty">暂无可核对的原文片段。</p>}
-        <div className="source-picker">{result?.sources.map((item, index) => <button key={item.key} type="button" aria-pressed={item.key === activeSource} onClick={() => setActiveSource(item.key)}><span>证据 {index + 1}</span><strong>{item.title}</strong><small>{item.page === null ? "页码未知" : `第 ${item.page} 页`} · 分块 {item.chunk_index}</small></button>)}</div>
-        {source && <section className="source-reading" aria-live="polite"><h3>{source.title}</h3><dl><dt>引用编号</dt><dd>{source.id}</dd><dt>文档编号</dt><dd>{source.document_id}</dd><dt>位置</dt><dd>{source.page === null ? "页码未知" : `第 ${source.page} 页`} · 分块 {source.chunk_index}</dd><dt>文档版本</dt><dd>{source.version}</dd></dl><blockquote>{source.snippet}</blockquote><p>这是服务端返回的片段，不是全文。检索分数不是故障概率；该片段是否支持结论仍需人工判断。</p></section>}
+        <div className="panel-title"><div><BookOpen24Regular /><h2>证据阅读器</h2></div><span>{displaySources.length} 条</span></div>
+        {!displaySources.length && <p className="grounded-empty">暂无可核对的原文片段。</p>}
+        {session?.isPreview && displaySources.length > 0 && <p className="demo-source-intro">虚构演示资料预览，可切换卡片阅读；不代表已接入企业 RAG 知识库。</p>}
+        <div className="source-picker">{displaySources.map((item, index) => <button key={item.key} type="button" aria-pressed={item.key === source?.key} onClick={() => setActiveSource(item.key)}><span>证据 {index + 1}</span><strong>{item.title}</strong><small>{item.page === null ? "页码未知" : `第 ${item.page} 页`} · 分块 {item.chunk_index}</small></button>)}</div>
+        {source && <section className="source-reading" aria-live="polite"><h3>{source.title}</h3><dl><dt>引用编号</dt><dd>{source.id}</dd><dt>文档编号</dt><dd>{source.document_id}</dd><dt>位置</dt><dd>{source.page === null ? "页码未知" : `第 ${source.page} 页`} · 分块 {source.chunk_index}</dd><dt>文档版本</dt><dd>{source.version}</dd></dl><blockquote>{source.snippet}</blockquote><p>{session?.isPreview ? "这是虚构演示摘录，不是企业原文或真实 RAG 检索结果。请在正式场景核对授权文档。" : "这是服务端返回的片段，不是全文。检索分数不是故障概率；该片段是否支持结论仍需人工判断。"}</p></section>}
       </aside>
     </div>
   </>;

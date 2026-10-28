@@ -1,3 +1,5 @@
+import { deviceProfiles, evidence } from "../data.js";
+
 // Current C contract: POST /api/v1/chat. No implicit mock fallback for failures.
 export const diagnosisStatuses = {
   ok: "检索完成，需人工复核",
@@ -84,21 +86,66 @@ export function normalizeDiagnosis(payload, deviceId) {
   };
 }
 
-function demoDiagnosis(deviceId) {
+export function demoEvidenceSources(deviceId) {
+  return evidence.filter((item) => item.device === deviceId && item.preview).map((item, index) => ({
+    id: `demo-${deviceId}-${index}@${item.version}#p1c0`,
+    document_id: `demo-${deviceId}-${index}`,
+    version: item.version,
+    title: item.name,
+    page: 1,
+    chunk_index: 0,
+    snippet: item.preview,
+    score: 0,
+  }));
+}
+
+export function buildDemoMeasurementQuestion(deviceId) {
+  const metrics = deviceProfiles[deviceId]?.metrics;
+  if (!metrics?.length) throw new Error("该设备没有演示测点，无法生成提问");
+  return `${deviceId} 演示测点：${metrics.map((item) => `${item.label} ${item.value}${item.unit}（${item.limit}）`).join("；")}。请根据这些虚构示例数据列出需要现场复核的项目。`;
+}
+
+export function createDemoDiagnosisOrder({ deviceId, riskLevel, owner, diagnosisId, answer, now = new Date() }) {
+  if (!deviceProfiles[deviceId]) throw new Error("请选择有效的演示设备。");
+  if (!owner?.trim()) throw new Error("请选择演示工单负责人。");
+  const priority = { high: "P1 紧急", medium: "P2 高", low: "P3 中" }[riskLevel];
+  if (!priority || !diagnosisId) throw new Error("请先保存人工分级的演示诊断。");
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateText = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return {
+    id: `DEMO-WO-${now.getTime()}`, title: `${deviceId} 诊断复核与现场检查`, deviceId,
+    owner: owner.trim(), priority, status: "待处理", startDate: dateText(now), dueDate: dateText(tomorrow),
+    description: `来源演示诊断 ${diagnosisId}。${answer}`, checklist: [false, false, false],
+    updated: "刚刚", draft: false,
+  };
+}
+
+function demoDiagnosis(deviceId, question) {
+  const profile = deviceProfiles[deviceId];
+  const sources = demoEvidenceSources(deviceId);
+  const watch = profile?.metrics?.filter((metric) => ["danger", "warning"].includes(metric.tone)) || [];
+  const focus = watch[0] || profile?.metrics?.[0];
+  const finding = focus ? `${focus.label}演示值 ${focus.value} ${focus.unit}（${focus.limit}）` : "暂无演示测点";
+  const hasEvidence = Boolean(profile && sources.length);
   return normalizeDiagnosis({
     device_id: deviceId,
-    status: deviceId === "AC-07" ? "ok" : "no_knowledge",
+    status: hasEvidence ? "ok" : "no_knowledge",
     is_mock: true,
-    answer: deviceId === "AC-07"
-      ? "这是固定的界面演示样例，未分析你输入的现象，也未调用模型。示例展示如何核对文档和记录待验证项，不构成设备故障判断。"
-      : "本地样例只覆盖 AC-07；该设备没有演示证据，请配置诊断服务后重试。",
-    statements: deviceId === "AC-07" ? [
-      { type: "fact", text: "示例文档说明：异常振动应结合工况及维护记录复核。", source: "《空压机演示检查说明》第1页", source_ids: ["local-demo@v1.0#p1c0"] },
-      { type: "pending", text: "待人工补充振动采样位置、单位、采样时间与工况，不能仅凭异响确定故障。", source: null, source_ids: [] },
+    answer: hasEvidence
+      ? `演示规则根据 ${deviceId} 的虚构测点和资料生成提示：${finding}。你填写的现象是“${question.trim().slice(0, 100)}”。请先复测并核对工况，再由人员判断风险等级；此结果未调用模型，也未访问真实 RAG 服务。`
+      : "该设备暂无可展示的演示测点或资料；请检查设备档案。",
+    statements: hasEvidence ? [
+      { type: "fact", text: sources[0].snippet, source: `《${sources[0].title}》第1页`, source_ids: [sources[0].id] },
+      { type: "inference", text: watch.length ? `演示规则提示关注：${finding}。这不是故障结论。` : `演示测点未显示越限；仍需根据现场现象复核 ${focus?.label || "相关指标"}。`, source: null, source_ids: [] },
+      { type: "pending", text: "请补充采样时间、测点与单位、当前工况及现场复测记录。", source: null, source_ids: [] },
     ] : [],
-    sources: deviceId === "AC-07" ? [{ id: "local-demo@v1.0#p1c0", document_id: "local-demo", version: "1.0", title: "空压机演示检查说明", page: 1, chunk_index: 0, snippet: "虚构界面样例，非企业手册。异常振动应结合工况及维护记录复核。", score: 0 }] : [],
+    sources,
     conflicts: [],
-    verification_suggestions: [],
+    verification_suggestions: hasEvidence ? [
+      { missing_evidence: "现场复测", to_verify: `${focus?.label || "关键指标"}是否持续偏离` },
+      { missing_evidence: "点检记录", to_verify: "核对最近一次维护及传感器校准时间" },
+    ] : [],
   }, deviceId);
 }
 
@@ -106,7 +153,7 @@ export async function requestDiagnosis({ deviceId, question, signal, session }, 
   if (!deviceId || !question.trim()) throw new Error("请选择设备并填写现场现象。");
   if (signal?.aborted) throw new DOMException("请求已取消", "AbortError");
   if ((config.VITE_DATA_MODE || "mock") === "mock") {
-    return { ...demoDiagnosis(deviceId), transport: "local-demo" };
+    return { ...demoDiagnosis(deviceId, question), transport: "local-demo" };
   }
   const base = (config.VITE_DIAGNOSIS_API_BASE_URL || "").replace(/\/$/, "");
   if (!base) throw new Error("尚未配置诊断服务地址，请设置 VITE_DIAGNOSIS_API_BASE_URL。");

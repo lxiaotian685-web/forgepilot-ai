@@ -3,11 +3,14 @@ from __future__ import annotations
 import hmac
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
@@ -23,6 +26,7 @@ from app.api import (
     work_orders,
 )
 from app.api.errors import ERROR_CODES
+from app.db import get_db
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -117,6 +121,15 @@ async def validation_exception_handler(
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness_check(db: Session = Depends(get_db)):
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="数据库暂不可用") from exc
+    return {"status": "ready", "database": "ok"}
 
 
 app.include_router(devices.router)

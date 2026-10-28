@@ -23,6 +23,8 @@
 
 三个进程分别运行。前端 API 模式只读取服务端数据；请求失败会提示错误，不会将本地虚构数据伪装成接口结果。B 服务的 PostgreSQL 迁移与 SQLite 本地演示均可用；C 服务目前使用单进程 JSON 知识库，部署多实例前须迁移存储。
 
+数据库准备使用 `scripts/prepare-business-db.ps1`：先在终端设置 PostgreSQL `DATABASE_URL`，再运行脚本执行 Alembic 迁移；仅开发演示环境可加 `-SeedDemo`。业务服务的 `/ready` 会实际查询数据库，适合部署就绪检查。`scripts/start-demo.ps1` 则继续使用独立的 SQLite 本地演示库。具体步骤见 [数据库运行说明](docs/DATABASE_READINESS.md)。
+
 ## 本地复现
 
 需要 Python 3.10+、Node.js 20+、npm；Windows 示例使用 PowerShell。首次安装依赖：

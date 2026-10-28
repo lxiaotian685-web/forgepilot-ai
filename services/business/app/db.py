@@ -14,6 +14,10 @@ class Base(DeclarativeBase):
 
 
 def create_db_engine(url: str) -> Engine:
+    if os.getenv("APP_ENV", "development").lower() == "production" and not url.startswith(
+        "postgresql"
+    ):
+        raise RuntimeError("生产环境必须配置 PostgreSQL DATABASE_URL")
     kwargs: dict[str, object] = {"future": True}
     if url.startswith("sqlite"):
         kwargs["connect_args"] = {"check_same_thread": False}

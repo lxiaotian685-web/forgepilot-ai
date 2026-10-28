@@ -25,7 +25,11 @@ export function formatWorkOrderSchedule(order) {
 }
 
 export function openOrdersFor(orders, owner) {
-  return orders.filter((order) => order.owner === owner && !["已完成", "已取消"].includes(order.status));
+  return activeWorkOrders(orders).filter((order) => order.owner === owner);
+}
+
+export function activeWorkOrders(orders) {
+  return orders.filter((order) => !["已完成", "已取消"].includes(order.status));
 }
 
 export function reassignOwner(orders, from, to) {

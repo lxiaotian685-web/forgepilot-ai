@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canDeleteWorkOrder, filterWorkOrders, normalizeWorkOrder, openOrdersFor, reassignOwner, transitionWorkOrder, validateWorkOrder } from "../src/services/workOrderLifecycle.js";
+import { activeWorkOrders, canDeleteWorkOrder, filterWorkOrders, normalizeWorkOrder, openOrdersFor, reassignOwner, transitionWorkOrder, validateWorkOrder } from "../src/services/workOrderLifecycle.js";
 
 const orders = [
   { id: "WO-1", title: "更换轴承", deviceId: "AC-07", priority: "P1 紧急", owner: "张工", status: "处理中" },
@@ -34,6 +34,13 @@ test("reassignment changes only unfinished work and leaves history intact", () =
   assert.equal(reassignOwner(history, "张工", "赵工")[0].owner, "赵工");
   assert.equal(reassignOwner(history, "张工", "赵工")[2].owner, "张工");
   assert.throws(() => reassignOwner(history, "张工", "张工"), /另一位/);
+});
+
+test("overview and work order list share live active counts after cancellation", () => {
+  const current = [...orders, { id: "WO-3", status: "已完成" }, { id: "WO-4", status: "已取消" }];
+  assert.deepEqual(activeWorkOrders(current).map((order) => order.id), ["WO-1", "WO-2"]);
+  const cancelled = current.map((order) => order.id === "WO-1" ? transitionWorkOrder(order, "已取消", "重复工单") : order);
+  assert.deepEqual(activeWorkOrders(cancelled).map((order) => order.id), ["WO-2"]);
 });
 
 test("unknown schedules stay unscheduled", () => {

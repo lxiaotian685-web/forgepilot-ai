@@ -50,7 +50,7 @@
 实测结果：
 
 ```text
-pytest: 121 passed
+pytest: 129 passed
 ruff: All checks passed
 RAG 评测:
   可答问题数: 16
@@ -147,9 +147,33 @@ $env:DEVICE_API_BASE_URL = "http://127.0.0.1:8001"
 - `is_demo=false`
 - 每条 `fact` 的 `source_ids` 都能在 `sources` 中定位
 - 无证据问题返回 `no_answer`
+- 可使用第 7 节的 `scripts.verify_real_rag` 自动检查以上条件
 
-## 7. 结论
+## 7. 真实模型验收脚本
+
+服务以真实模型和 B 设备事实启动后，可直接运行：
+
+```powershell
+$env:C_API_BASE_URL = "http://127.0.0.1:8002"
+$env:C_ORGANIZATION_ID = "<当前组织>"
+$env:C_USER_ID = "<当前用户>"
+$env:C_API_TOKEN = "<Bearer 令牌，可选>"
+.\.venv\Scripts\python.exe -m scripts.verify_real_rag
+```
+
+脚本检查：
+
+- `/health` 的 `llm_provider=openai`、`device_provider=http`
+- AC-07 诊断 `status=ok`、`is_mock=false`、`is_demo=false`
+- 每条 `sources` 包含 ID、文档、版本、标题、页码、分块、片段和分数
+- 每条 `fact` 的 `source_ids` 都命中本次 `sources`
+- 无答案问题返回 `no_answer` 且不携带证据
+- 页码未知时允许 `page=null`，但 `statement.source` 必须显示“未知页”
+
+脚本在 Mock/static、`is_demo=true`、证据缺失或引用越界时返回非零退出码，不能把演示结果当作真实验收。
+
+## 8. 结论
 
 - 虚构数据集上的上传、解析、检索、引用和降级链路已通过自动化验证。
 - 当前结果不能声称为真实企业 RAG 或真实模型诊断。
-- 等模型密钥和授权企业资料到位后，按第 6 节复测并更新本报告，才能完成真实 RAG 验收。
+- 等模型密钥和授权企业资料到位后，按第 6、7 节复测并更新本报告，才能完成真实 RAG 验收。

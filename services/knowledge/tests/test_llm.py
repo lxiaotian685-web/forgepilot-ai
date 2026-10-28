@@ -226,6 +226,25 @@ def test_openai_llm_prompt_includes_device_facts():
     assert captured["body"]["max_tokens"] == 1024
 
 
+def test_openai_llm_prompt_marks_unknown_page():
+    captured = {}
+
+    def handler(request):
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json=_completion(_valid_payload()))
+
+    evidence = _evidence()
+    evidence[0].page = None
+    llm = OpenAILLM(
+        api_key="k", base_url="http://x", model="m", client=_client(handler)
+    )
+    llm.answer("问题", evidence)
+
+    user_prompt = captured["body"]["messages"][1]["content"]
+    assert "第未知页" in user_prompt
+    assert "第None页" not in user_prompt
+
+
 def test_openai_llm_invalid_http_json_degrades():
     def handler(request):
         return httpx.Response(200, text="not-json")

@@ -36,6 +36,7 @@ export const workOrders = [
   { id: "WO-20250518-02", title: "P-102 机械密封泄漏检查", priority: "P2 高", owner: "王强", status: "待验收", updated: "25 分钟前" },
   { id: "WO-20250517-03", title: "CNC-04 主轴动平衡校准", priority: "P3 中", owner: "赵工", status: "待处理", updated: "2 小时前" },
   { id: "WO-20250516-04", title: "AC-08 月度定检与油分滤芯检查", priority: "P4 低", owner: "张工", status: "已完成", updated: "2 天前" },
+  { id: "WO-20250515-05", title: "CNC-04 主轴巡检（重复报修）", priority: "P3 中", owner: "赵工", status: "已取消", updated: "3 天前", cancellationReason: "与 WO-20250517-03 为同一故障，已合并到该工单处理。" },
 ];
 
 export const evidence = [

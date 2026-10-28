@@ -19,7 +19,7 @@ test("demo Agent uses only local data and same-device history", async () => {
 
 test("API Agent forwards current bearer identity and validates response", async () => {
   const session = { accessToken: "current-token", organization: { id: "org-1" }, user: { id: "user-1" } };
-  const payload = { device_id: "AC-07", status: "unavailable", diagnosis: null, history: [], tools: [], can_create_work_order: false };
+  const payload = { device_id: "AC-07", status: "unavailable", diagnosis: null, history: [], tools: [], can_create_work_order: false, audit_status: "unavailable", audit_id: null };
   const result = await requestAgent({ ...input, session }, { VITE_DATA_MODE: "api", VITE_DIAGNOSIS_API_BASE_URL: "https://rag.example.test/" }, async (url, options) => {
     assert.equal(url, "https://rag.example.test/api/v1/agent/assist");
     assert.equal(options.headers.Authorization, "Bearer current-token");

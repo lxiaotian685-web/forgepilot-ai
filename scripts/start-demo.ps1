@@ -36,15 +36,18 @@ try {
 } finally { $env:DATABASE_URL = $oldDatabaseUrl }
 
 $previewSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$agentAuditSecret = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $origin = "http://127.0.0.1:$FrontendPort"
 $businessUrl = "http://127.0.0.1:$BusinessPort"
 $knowledgeUrl = "http://127.0.0.1:$KnowledgePort"
+$demoOrganizationId = "00000000-0000-4000-8000-000000000001"
 $started = @()
 try {
     $business = Start-Process -FilePath $businessPython -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$BusinessPort") -WorkingDirectory $businessRoot -Environment @{
         DATABASE_URL = $previewDb
         AUTH_MODE = "token"
         AUTH_SECRET = $previewSecret
+        AGENT_AUDIT_KEY = $agentAuditSecret
         AUTH_TOKEN_TTL_SECONDS = "43200"
         CORS_ORIGINS = $origin
     } -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot "business.out.log") -RedirectStandardError (Join-Path $logRoot "business.err.log")
@@ -52,10 +55,12 @@ try {
     $knowledge = Start-Process -FilePath $knowledgePython -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$KnowledgePort") -WorkingDirectory $knowledgeRoot -Environment @{
         C_REQUIRE_AUTH = "true"
         C_IDENTITY_API_BASE_URL = $businessUrl
+        C_DEFAULT_ORGANIZATION_ID = $demoOrganizationId
         C_ENABLE_INGEST = "true"
         DEVICE_PROVIDER = "http"
         DEVICE_API_BASE_URL = $businessUrl
         BUSINESS_API_BASE_URL = $businessUrl
+        AGENT_AUDIT_KEY = $agentAuditSecret
         CORS_ORIGINS = $origin
     } -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot "knowledge.out.log") -RedirectStandardError (Join-Path $logRoot "knowledge.err.log")
     $started += $knowledge

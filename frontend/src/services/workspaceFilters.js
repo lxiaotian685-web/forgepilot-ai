@@ -12,9 +12,11 @@ export function validateEvidenceFile(file, existingNames) {
   if (existingNames.some((name) => name.toLowerCase() === file.name.toLowerCase())) throw new Error("同名资料已存在");
 }
 
-export function filterAuditRows(rows, { query = "", actor = "", action = "" } = {}) {
+export function filterAuditRows(rows, { query = "", actor = "", action = "", days = 0 } = {}, now = new Date()) {
   const term = query.trim().toLowerCase();
+  const cutoff = days ? new Date(now.getTime() - Number(days) * 24 * 60 * 60 * 1000) : null;
   return rows.filter((row) => (!actor || row.user === actor)
     && (!action || row.action === action)
+    && (!cutoff || (Number.isFinite(Date.parse(row.time)) && new Date(row.time) >= cutoff))
     && (!term || [row.time, row.user, row.action, row.object, row.result].some((value) => String(value || "").toLowerCase().includes(term))));
 }

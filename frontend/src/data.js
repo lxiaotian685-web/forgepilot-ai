@@ -46,10 +46,25 @@ export const evidence = [
   { name: "Pump_P102_Cavitation_Troubleshooting.pdf", type: "检修规程", version: "v1.0", device: "P-102", source: "维保专家组", state: "部分失败", chunks: 11 },
 ];
 
+const demoAuditTime = (daysAgo, time) => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${time}`;
+};
+
 export const auditRows = [
-  { time: "09:44:00", user: "李振华", action: "确认告警", object: "Rule #VIB-RMS-004", result: "成功" },
-  { time: "09:41:14", user: "李振华", action: "采纳证据", object: "Atlas_Copco_GX11.pdf", result: "成功" },
-  { time: "09:42:03", user: "李振华", action: "解决参数冲突", object: "AC-07 额定排气压力", result: "成功" },
-  { time: "09:44:55", user: "李振华", action: "确认诊断结论", object: "DIAG-20250518-0941", result: "成功" },
-  { time: "09:46:12", user: "张工", action: "生成工单", object: "WO-20250518-01", result: "成功" },
+  { time: demoAuditTime(0, "09:46:12"), user: "张工", action: "生成工单", object: "WO-20250518-01", result: "成功" },
+  { time: demoAuditTime(0, "09:44:55"), user: "李振华", action: "确认诊断结论", object: "DIAG-20250518-0941", result: "成功" },
+  { time: demoAuditTime(0, "09:44:00"), user: "李振华", action: "确认告警", object: "ALT-0941", result: "成功" },
+  { time: demoAuditTime(1, "16:25:08"), user: "王强", action: "提交验收", object: "WO-20250518-02", result: "成功" },
+  { time: demoAuditTime(1, "10:42:03"), user: "李振华", action: "解决参数冲突", object: "AC-07 额定排气压力", result: "成功" },
+  { time: demoAuditTime(2, "14:41:14"), user: "李振华", action: "采纳证据", object: "Atlas_Copco_GX11.pdf", result: "成功" },
+  { time: demoAuditTime(4, "11:08:22"), user: "赵工", action: "接收工单", object: "WO-20250517-03", result: "成功" },
+  { time: demoAuditTime(5, "15:16:02"), user: "李振华", action: "指派负责人", object: "WO-20250517-03 → 赵工", result: "成功" },
+  { time: demoAuditTime(6, "08:52:33"), user: "张工", action: "完成点检", object: "AC-08 月度定检", result: "成功" },
+  { time: demoAuditTime(9, "13:12:41"), user: "李振华", action: "取消重复工单", object: "WO-20250515-05", result: "成功" },
+  { time: demoAuditTime(12, "09:32:10"), user: "王强", action: "确认告警", object: "ALT-0938", result: "成功" },
+  { time: demoAuditTime(16, "17:24:55"), user: "张工", action: "更换油分滤芯", object: "AC-08", result: "成功" },
+  { time: demoAuditTime(24, "10:02:09"), user: "李振华", action: "导入设备", object: "CV-01", result: "成功" },
+  { time: demoAuditTime(35, "08:31:27"), user: "李振华", action: "创建告警规则", object: "Rule #VIB-RMS-004", result: "成功" },
 ];

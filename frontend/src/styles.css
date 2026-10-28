@@ -141,6 +141,12 @@ button { white-space: nowrap; }
 .people-panel { overflow: hidden; }.people-notice { margin: 16px; padding: 13px 15px; display: grid; gap: 5px; color: #4f4537; background: #fff9ef; border-left: 3px solid #c67520; }.people-notice strong { font-size: 12px; }.people-notice span { font-size: 11px; line-height: 1.6; }
 .permission-table tr { cursor: default; }.permission-table td:nth-child(2) { max-width: 720px; line-height: 1.7; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.below-select-trigger { width: 100%; min-height: 34px; padding: 6px 9px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #334155; background: #fff; border: 1px solid #b9c8d8; border-radius: 4px; text-align: left; cursor: pointer; font: inherit; }
+.below-select-trigger:disabled { opacity: .55; cursor: not-allowed; }.below-select-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.below-select-trigger span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.below-select-menu { position: fixed; z-index: 120; overflow-y: auto; background: #fff; border: 1px solid #b9c8d8; border-radius: 4px; box-shadow: 0 12px 28px rgb(20 42 64 / .2); }
+.below-select-menu button { width: 100%; min-height: 38px; padding: 7px 10px; display: block; color: #334155; background: #fff; border: 0; border-bottom: 1px solid #edf0f4; text-align: left; white-space: normal; cursor: pointer; }
+.below-select-menu button:hover, .below-select-menu button[aria-selected="true"] { background: #edf4fa; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 @media (max-width: 1250px) { .app-shell { grid-template-columns: 190px minmax(0, 1fr); }.sidebar nav button { padding-inline: 9px; }.diagnosis-layout { grid-template-columns: 230px minmax(500px, 1fr); }.evidence-rail { display: none; }.topbar { padding-inline: 16px; }.user-name { display: none; }.page-content { padding: 18px; } }
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, Input } from "@fluentui/react-components";
 import { changePersonStatus, filterPeople, updatePerson } from "./services/peopleManagement.js";
 import { openOrdersFor, reassignOwner } from "./services/workOrderLifecycle.js";
+import BelowSelect from "./BelowSelect.jsx";
 
 export const demoPeople = [
   { id: "1", code: "EMP-001", name: "李振华", role: "维护主管", team: "设备管理组", status: "在岗", phone: "138****1024" },
@@ -49,9 +50,9 @@ export default function PeoplePage({ notify, orders, onOrdersChange, people, onP
     <div className="page-heading"><div><h1>人员管理</h1><p>按岗位、班组和状态管理厂内人员及任务责任</p></div><span className="tone-badge tone-warning">本次会话演示 · 刷新后重置</span></div>
     <div className="toolbar">
       <Input className="search-input" placeholder="搜索姓名、工号、岗位或班组" value={filters.query} onChange={(_, data) => changeFilter("query", data.value)} />
-      <select aria-label="岗位" value={filters.role} onChange={(event) => changeFilter("role", event.target.value)}><option value="">全部岗位</option>{roles.map((value) => <option key={value}>{value}</option>)}</select>
-      <select aria-label="班组" value={filters.team} onChange={(event) => changeFilter("team", event.target.value)}><option value="">全部班组</option>{teams.map((value) => <option key={value}>{value}</option>)}</select>
-      <select aria-label="在岗状态" value={filters.status} onChange={(event) => changeFilter("status", event.target.value)}><option value="">全部状态</option><option>在岗</option><option>停用</option></select>
+      <BelowSelect value={filters.role} onChange={(value) => changeFilter("role", value)} options={[{ value: "", label: "全部岗位" }, ...roles.map((value) => ({ value, label: value }))]} />
+      <BelowSelect value={filters.team} onChange={(value) => changeFilter("team", value)} options={[{ value: "", label: "全部班组" }, ...teams.map((value) => ({ value, label: value }))]} />
+      <BelowSelect value={filters.status} onChange={(value) => changeFilter("status", value)} options={[{ value: "", label: "全部状态" }, { value: "在岗", label: "在岗" }, { value: "停用", label: "停用" }]} />
       <Button onClick={() => setFilters({ query: "", role: "", status: "", team: "" })}>重置</Button>
     </div>
     <div className="split-layout people-layout">
@@ -60,11 +61,11 @@ export default function PeoplePage({ notify, orders, onOrdersChange, people, onP
         <div className="drawer-heading"><div><small>{selected.code}</small><h2>{selected.name}</h2></div><Button onClick={() => setDraft({ ...selected })}>编辑资料</Button></div>
         {draft ? <div className="person-form">
           <label>姓名<Input value={draft.name} onChange={(_, data) => setDraft((current) => ({ ...current, name: data.value }))} /></label>
-          <label>岗位<select value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value }))}>{roles.map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label>班组<select value={draft.team} onChange={(event) => setDraft((current) => ({ ...current, team: event.target.value }))}>{teams.map((value) => <option key={value}>{value}</option>)}</select></label>
+          <label>岗位<BelowSelect value={draft.role} onChange={(role) => setDraft((current) => ({ ...current, role }))} options={roles.map((role) => ({ value: role, label: role }))} /></label>
+          <label>班组<BelowSelect value={draft.team} onChange={(team) => setDraft((current) => ({ ...current, team }))} options={teams.map((team) => ({ value: team, label: team }))} /></label>
           <div><Button onClick={() => setDraft(null)}>取消</Button><Button appearance="primary" onClick={save}>保存修改</Button></div>
         </div> : <div className="person-summary"><span>岗位<strong>{selected.role}</strong></span><span>班组<strong>{selected.team}</strong></span><span>联系电话<strong>{selected.phone}</strong></span><span>未完成工单<strong>{selected.openOrders}</strong></span></div>}
-        {selected.status === "在岗" && selected.openOrders > 0 && <label className="reassign-field">停用前转派 {selected.openOrders} 张未完成工单<select value={recipient} onChange={(event) => setRecipient(event.target.value)}><option value="">选择接收人</option>{people.filter((person) => person.id !== selected.id && person.status === "在岗").map((person) => <option key={person.id}>{person.name}</option>)}</select></label>}
+        {selected.status === "在岗" && selected.openOrders > 0 && <label className="reassign-field">停用前转派 {selected.openOrders} 张未完成工单<BelowSelect value={recipient} onChange={setRecipient} options={[{ value: "", label: "选择接收人" }, ...people.filter((person) => person.id !== selected.id && person.status === "在岗").map((person) => ({ value: person.name, label: person.name }))]} /></label>}
         <Button appearance={selected.status === "在岗" ? "secondary" : "primary"} onClick={toggleStatus}>{selected.status === "在岗" ? "停用账号" : "恢复账号"}</Button>
         <p className="boundary-note">本页操作只保留在当前浏览器会话；正式人员接口接入后才能保存到服务器。</p>
       </aside>}

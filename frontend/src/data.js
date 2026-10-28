@@ -67,16 +67,18 @@ export const workOrders = [
 ];
 
 export const evidence = [
-  { name: "Atlas_Copco_GX11_UserManual_RevC.pdf", type: "技术说明书", version: "RevC", device: "AC-07", source: "阿特拉斯官方", state: "可用", chunks: 42 },
-  { name: "ISO-10816-3_VibrationStandard.pdf", type: "行业标准", version: "2018", device: "工业回转设备", source: "国家标准委", state: "可用", chunks: 18 },
-  { name: "AC07_DriveAssembly_MechanicalDrawing.dwg", type: "装配 CAD", version: "v2.1", device: "AC-07", source: "厂内工程部", state: "可用", chunks: 9 },
-  { name: "Pump_P102_Cavitation_Troubleshooting.pdf", type: "检修规程", version: "v1.0", device: "P-102", source: "维保专家组", state: "部分失败", chunks: 11 },
+  { name: "Atlas_Copco_GX11_UserManual_RevC.pdf", type: "技术说明书", version: "RevC", device: "AC-07", source: "演示资料（非官方原文）", state: "可用", chunks: 42, preview: "虚构演示摘录：驱动端振动持续升高时，应核对测点、转速与轴承润滑状态。" },
+  { name: "ISO-10816-3_VibrationStandard.pdf", type: "行业标准", version: "2018", device: "工业回转设备", source: "演示资料（非标准原文）", state: "可用", chunks: 18, preview: "虚构演示摘录：振动阈值仅作界面示例；正式判定需使用企业适用标准与校准记录。" },
+  { name: "AC07_DriveAssembly_MechanicalDrawing.dwg", type: "装配 CAD", version: "v2.1", device: "AC-07", source: "厂内演示资料", state: "可用", chunks: 9, preview: "虚构演示摘录：驱动端轴承座与联轴器位置用于现场检查定位。" },
+  { name: "Pump_P102_Cavitation_Troubleshooting.pdf", type: "检修规程", version: "v1.0", device: "P-102", source: "厂内演示资料", state: "部分失败", chunks: 11, preview: "虚构演示摘录：机械密封检查应结合入口压力、出口压力与泄漏观察。" },
   { name: "AC08_Compressor_Monthly_Checklist.pdf", type: "检修规程", version: "v2.0", device: "AC-08", source: "厂内演示资料", state: "可用", chunks: 24, preview: "虚构演示摘要：月度点检依次记录油分压差、排气温度与滤芯更换时间。" },
   { name: "R03_Gearbox_Lubrication_Guide.pdf", type: "技术说明书", version: "v1.3", device: "R-03", source: "厂内演示资料", state: "可用", chunks: 31, preview: "虚构演示摘要：减速箱油温高于 75°C 时，复核油位与润滑油状态。" },
   { name: "P103_Seal_Inspection_Card.pdf", type: "检修规程", version: "v1.1", device: "P-103", source: "厂内演示资料", state: "可用", chunks: 19, preview: "虚构演示摘要：机械密封泄漏量持续上升时，先确认运行安全边界。" },
   { name: "CNC05_Tool_Magazine_Service.pdf", type: "技术说明书", version: "v2.2", device: "CNC-05", source: "厂内演示资料", state: "可用", chunks: 27, preview: "虚构演示摘要：刀库定位时间偏离基线时，检查传感器与气路状态。" },
   { name: "F12_Blower_Belt_Procedure.pdf", type: "检修规程", version: "v1.0", device: "F-12", source: "厂内演示资料", state: "可用", chunks: 22, preview: "虚构演示摘要：风机皮带张力低于建议值时，复核张紧机构并复测风量。" },
   { name: "CV01_Conveyor_Chain_Maintenance.pdf", type: "检修规程", version: "v1.5", device: "CV-01", source: "厂内演示资料", state: "可用", chunks: 16, preview: "虚构演示摘要：输送链润滑后检查链速和张紧行程，记录复测结果。" },
+  { name: "CNC04_Spindle_Inspection_Demo.pdf", type: "检修规程", version: "v1.0", device: "CNC-04", source: "厂内演示资料", state: "可用", chunks: 14, preview: "虚构演示摘录：主轴负载与电流同时升高时，先复核加工程序、刀具磨损和冷却液状态。" },
+  { name: "WR09_Robot_Service_Demo.pdf", type: "技术说明书", version: "v1.0", device: "WR-09", source: "厂内演示资料", state: "可用", chunks: 12, preview: "虚构演示摘录：焊接机器人日常点检应记录电流、六轴扭矩与循环节拍。" },
 ];
 
 const demoAuditTime = (daysAgo, time) => {

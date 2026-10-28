@@ -57,6 +57,8 @@
 .grounded-confirm { padding: 16px 20px; border-top: 1px solid var(--border); }
 .grounded-confirm > label { display: block; margin-bottom: 7px; color: #243c52; font-size: 12px; font-weight: 600; }
 .grounded-confirm > select { min-width: 180px; padding: 8px 10px; border: 1px solid #8a9aac; border-radius: 2px; background: white; color: #152033; }
+.grounded-confirm .below-select-trigger { min-width: 180px; width: fit-content; margin-bottom: 12px; }
+.demo-source-intro { margin: 12px 20px 2px; padding: 10px 12px; color: #654a1e; background: #fff8e9; border-left: 3px solid #d59827; font-size: 11px; line-height: 1.7; }
 .workflow-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .grounded-confirm p { font-size: 11px; color: #526173; line-height: 1.7; }
 .grounded-confirm .workflow-message { padding: 10px 12px; border-left: 3px solid #0f5a91; background: #edf4fa; color: #234762; }

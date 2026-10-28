@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-export default function BelowSelect({ value, options, onChange, disabled = false, placeholder = "请选择" }) {
+export default function BelowSelect({ value, options, onChange, disabled = false, placeholder = "请选择", ariaLabel }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState(null);
   const trigger = useRef(null);
@@ -29,7 +29,7 @@ export default function BelowSelect({ value, options, onChange, disabled = false
     setOpen((current) => !current);
   };
   return <>
-    <button ref={trigger} type="button" className="below-select-trigger" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={toggle} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
+    <button ref={trigger} type="button" className="below-select-trigger" disabled={disabled} aria-label={ariaLabel} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? listId : undefined} onClick={toggle} onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
       <span>{selected?.label || placeholder}</span><span aria-hidden="true">⌄</span>
     </button>
     {open && rect && createPortal(<div ref={menu} id={listId} role="listbox" className="below-select-menu" style={{ left: rect.left, top: rect.bottom + 4, width: rect.width, maxHeight: Math.max(80, window.innerHeight - rect.bottom - 12) }}>

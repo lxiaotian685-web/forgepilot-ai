@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { normalizeDiagnosis, requestDiagnosis, diagnosisStatuses, summarizeDiagnosis } from "../src/services/diagnosis.js";
+import { createDemoDiagnosisOrder, normalizeDiagnosis, requestDiagnosis, diagnosisStatuses, summarizeDiagnosis } from "../src/services/diagnosis.js";
+import { devices } from "../src/data.js";
 
 const payload = () => ({ device_id: "AC-07", answer: "需核验", is_mock: true, status: "ok", statements: [
   { type: "fact", text: "文档片段", source: "《演示手册》第2页", source_ids: ["doc-1@v1#p2c0"] },
@@ -58,12 +59,26 @@ test("validates conflicts, verification suggestions and grounded success", () =>
 for (const status of Object.keys(diagnosisStatuses)) {
   test(`preserves server status ${status}`, () => assert.equal(normalizeDiagnosis({ ...payload(), status }, "AC-07").status, status));
 }
-test("mock is an explicit fixed sample, never calls network", async () => {
+test("mock uses each device's demo readings and excerpts without network", async () => {
   const result = await requestDiagnosis(input, {}, () => { throw new Error("unexpected network"); });
   assert.equal(result.transport, "local-demo"); assert.equal(result.is_mock, true);
-  assert.match(result.answer, /未分析/);
-  const other = await requestDiagnosis({ ...input, deviceId: "P-102" }, {});
-  assert.equal(other.status, "no_knowledge"); assert.deepEqual(other.sources, []);
+  assert.match(result.answer, /振动异常/);
+  for (const device of devices) {
+    const other = await requestDiagnosis({ ...input, deviceId: device.id }, {});
+    assert.equal(other.status, "ok", `${device.id} has no demo evidence`);
+    assert.ok(other.sources.length > 0);
+    assert.ok(other.statements.some((statement) => statement.type === "pending"));
+  }
+});
+test("demo diagnosis order keeps risk, owner and device for the shared work order list", () => {
+  const order = createDemoDiagnosisOrder({ deviceId: "CNC-04", riskLevel: "high", owner: "赵工", diagnosisId: "DEMO-DIAG-1", answer: "复核主轴。", now: new Date(2026, 9, 28, 10, 0) });
+  assert.equal(order.status, "待处理");
+  assert.equal(order.priority, "P1 紧急");
+  assert.equal(order.deviceId, "CNC-04");
+  assert.equal(order.owner, "赵工");
+  assert.equal(order.dueDate, "2026-10-29");
+  assert.match(order.description, /DEMO-DIAG-1/);
+  assert.throws(() => createDemoDiagnosisOrder({ deviceId: "CNC-04", riskLevel: "high", owner: "", diagnosisId: "D-1" }), /负责人/);
 });
 test("POSTs current C contract without overriding equipment model", async () => {
   const result = await requestDiagnosis(apiInput, { ...config, VITE_DIAGNOSIS_API_BASE_URL: "https://rag.example.test/", VITE_API_USER_ID: "demo" }, async (url, options) => {

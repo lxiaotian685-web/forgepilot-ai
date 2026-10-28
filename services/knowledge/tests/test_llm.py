@@ -137,6 +137,21 @@ def test_openai_llm_timeout():
         llm.answer("问题", _evidence())
 
 
+@pytest.mark.parametrize("status_code", [401, 403, 429, 500])
+def test_openai_llm_http_error_degrades(status_code):
+    def handler(request):
+        return httpx.Response(
+            status_code, json={"error": {"message": "upstream failed"}}
+        )
+
+    llm = OpenAILLM(
+        api_key="k", base_url="http://x", model="m", client=_client(handler)
+    )
+
+    with pytest.raises(LLMError):
+        llm.answer("问题", _evidence())
+
+
 def test_openai_llm_missing_config(monkeypatch):
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_BASE_URL", raising=False)

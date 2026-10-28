@@ -21,9 +21,10 @@
 ## 2. 认证与权限
 
 - 组织与用户来自**认证上下文**，不在 JSON 请求体。
-- B 演示模式：请求头 `X-Organization-Id`、`X-User-Id`；缺省回落到 demo 组织/用户。
-- B 生产模式：`Authorization: Bearer <token>`（token 内含 org/user，HMAC 签名）。
-- C 默认要求 `X-Organization-Id`（`C_REQUIRE_AUTH=true`），用于知识库组织隔离；C 不自行签发 token，生产应由可信网关注入组织上下文。
+- 演示模式：请求头 `X-Organization-Id`、`X-User-Id`；缺省回落到 demo 组织/用户。
+- 生产模式：C 配置 `C_IDENTITY_API_BASE_URL`，使用 `Authorization: Bearer <token>` 调用 B 的 `GET /api/v1/auth/me`，以 B 返回的 `organization.id`、`user.id`、`role` 为准。
+- 生产模式缺少 Bearer 返回 401；身份服务不可用返回 503；请求头 `X-Organization-Id`/`X-User-Id` 与登录身份不一致返回 403，防止头伪造。
+- 文档上传、文本入库、删除仅 `manager` / `admin` / `owner` 可执行；只读接口对所有已认证岗位开放。
 - 角色等级：`viewer < technician < manager < admin < owner`。
 - 跨组织资源一律返回 404。
 
@@ -135,6 +136,7 @@ DEVICE_API_TIMEOUT=5
 DEVICE_KNOWLEDGE_MODELS={"GX11":"compressor-002"}
 C_REQUIRE_AUTH=true
 C_DEFAULT_ORGANIZATION_ID=demo-org
+C_IDENTITY_API_BASE_URL=
 C_ENABLE_INGEST=false
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 RATE_LIMIT_PER_MINUTE=60
@@ -147,9 +149,9 @@ HTTP_TRUST_ENV=false
 
 C **不得**从环境变量固定组织、用户或 token。每次 `/chat` 请求的
 `Authorization: Bearer <token>`、`X-Organization-Id`、`X-User-Id` 会原样透传给 B；
-演示模式使用后两者，生产模式使用 Bearer。跨组织一律返回 404，C 转换为
-`device_not_found`；B 返回的设备编号与请求不一致时，C 返回 `device_mismatch`
-并拒绝使用该设备事实。
+演示模式使用后两者，生产模式使用 Bearer，并以 B 的 `/api/v1/auth/me` 返回身份为准。
+跨组织一律返回 404，C 转换为 `device_not_found`；B 返回的设备编号与请求不一致时，
+C 返回 `device_mismatch` 并拒绝使用该设备事实。
 
 ## 4. C 侧证据引用扩展（已实现）
 
@@ -267,4 +269,4 @@ C 的 `/api/v1/chat` 返回结果后，由 B 保存；字段映射：
 
 2026-10-22 已使用 B 侧 SQLite 种子数据完成 AC-07 设备事实、身份透传、跨组织隔离与模型不可用降级联调。命令、请求和实测结果见 [docs/integration-ac07.md](integration-ac07.md)。真实模型仍需配置密钥后复测。
 
-C 侧文档上传、解析、检索与诊断演示见 [docs/demo-ac07.md](demo-ac07.md)，使用虚构演示文档，`is_demo=true`。
+C 侧文档上传、解析、检索与诊断演示见 [docs/demo-ac07.md](demo-ac07.md)，使用虚构演示文档，`is_demo=true`。完整测试结果、模型失败路径和未完成的真实接入验证见 [docs/real-rag-report.md](real-rag-report.md)。

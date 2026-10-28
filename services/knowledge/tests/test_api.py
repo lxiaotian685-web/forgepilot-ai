@@ -1,9 +1,11 @@
+import httpx
 from fastapi.testclient import TestClient
 
 from app.core.device_provider import DeviceProviderError, StaticDeviceProvider
 from app.deps import rag
 from app.llm.base import BaseLLM, LLMResult
 from app.llm.mock import UnavailableLLM
+from app.llm.openai import OpenAILLM
 from app.main import app
 from app.rate_limit import limiter
 from app.schemas.chat import Statement
@@ -128,6 +130,61 @@ def test_chat_returns_answer_with_sources():
     assert "inference" in types
     assert "pending" in types
     assert any(s["type"] == "fact" and s["source"] for s in body["statements"])
+
+
+def test_chat_sources_include_traceable_evidence_fields():
+    _ingest_air_compressor()
+    response = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sources"]
+    for source in body["sources"]:
+        assert source["id"]
+        assert source["document_id"]
+        assert source["version"] == "1.0"
+        assert source["title"]
+        assert isinstance(source["page"], int)
+        assert source["page"] >= 1
+        assert source["chunk_index"] >= 0
+        assert source["snippet"]
+        assert source["score"] > 0
+
+    source_ids = {source["id"] for source in body["sources"]}
+    for statement in body["statements"]:
+        if statement["type"] == "fact":
+            assert statement["source_ids"]
+            assert set(statement["source_ids"]) <= source_ids
+
+
+def test_chat_model_auth_failure_degrades_with_evidence():
+    _ingest_air_compressor()
+
+    def handler(request):
+        return httpx.Response(401, json={"error": {"message": "unauthorized"}})
+
+    rag.llm = OpenAILLM(
+        api_key="k",
+        base_url="http://model.test",
+        model="m",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={"device_id": "AC-07", "question": "排气温度过高怎么排查？"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "model_unavailable"
+    assert body["is_mock"] is False
+    assert body["sources"]
+    assert any(s["type"] == "fact" for s in body["statements"])
+    assert any(s["type"] == "pending" for s in body["statements"])
 
 
 def test_chat_rejects_mismatched_equipment_model():

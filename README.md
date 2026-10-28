@@ -66,6 +66,8 @@ cd services/knowledge; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\
 
 模型配置成 `LLM_PROVIDER=openai`、提供合法密钥、模型与基础 URL，并使用 `DEVICE_PROVIDER=http` 读取 B 服务后，才能测试真实模型路径。无配置时 C 返回带 `is_mock`/降级状态的演示结果，前端不会把它作为可保存的真实诊断。
 
+知识服务的虚构数据集验证、引用样本、模型失败路径和未完成项见 [真实 RAG 验证报告](services/knowledge/docs/real-rag-report.md)。报告明确说明：真实企业资料和真实模型调用尚未完成，不能把当前演示结果当作企业诊断。
+
 ## 团队与来源
 
 - 梁晓添：产品、前端、业务集成、后端补充与最终统筹。

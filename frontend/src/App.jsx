@@ -56,7 +56,7 @@ import ApiKnowledgePage from "./ApiKnowledgePage.jsx";
 import ApiAuditPage from "./ApiAuditPage.jsx";
 import ApiOverviewPage from "./ApiOverviewPage.jsx";
 import DeviceScanImport from "./DeviceScanImport.jsx";
-import { normalizeWorkOrder } from "./services/workOrderLifecycle.js";
+import { activeWorkOrders, normalizeWorkOrder } from "./services/workOrderLifecycle.js";
 import KnowledgeWorkspace from "./KnowledgeWorkspace.jsx";
 import AuditWorkspace from "./AuditWorkspace.jsx";
 
@@ -200,7 +200,7 @@ function OverviewPage({ navigate, workOrders, devices, alerts, profiles }) {
   const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]?.id || "");
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) || devices[0];
   const profile = profiles[selectedDevice?.id];
-  const activeOrders = workOrders.filter((order) => !["已完成", "已取消"].includes(order.status));
+  const activeOrders = activeWorkOrders(workOrders);
   const openAlerts = alerts.filter((alert) => alert.status !== "已关闭");
   const averageHealth = devices.length ? (devices.reduce((sum, device) => sum + device.health, 0) / devices.length).toFixed(1) : "—";
   return (
@@ -210,26 +210,21 @@ function OverviewPage({ navigate, workOrders, devices, alerts, profiles }) {
         <div><span>平均设备健康度</span><strong>{averageHealth}</strong><small>/ 100</small></div>
         <div><span>未关闭告警</span><strong className="text-danger">{openAlerts.length}</strong><small>项</small></div>
         <div><span>未完成工单</span><strong>{activeOrders.length}</strong><small>项</small></div>
-        <div><span>今日诊断</span><strong>3</strong><small>次</small></div>
+        <div><span>在册设备</span><strong>{devices.length}</strong><small>台</small></div>
       </div>
       <div className="dashboard-grid">
         <section className="panel task-panel">
           <div className="panel-title"><div><Alert24Regular /><h2>待处理事项</h2></div><Button appearance="subtle" onClick={() => navigate("alerts")}>查看全部</Button></div>
-          <div className="task-row task-critical">
-            <ToneBadge tone="danger">一级紧急</ToneBadge>
-            <div className="task-copy"><strong>AC-07 驱动端振动持续超限</strong><span>已持续 44 分钟，当前值 7.82 mm/s</span></div>
-            <Button appearance="primary" onClick={() => navigate("alerts")}>处理告警</Button>
-          </div>
-          <div className="task-row task-warning">
-            <ToneBadge tone="warning">待人工确认</ToneBadge>
-            <div className="task-copy"><strong>P-102 气蚀风险诊断待复核</strong><span>AI 结论置信度 84%，需主管确认</span></div>
-            <Button onClick={() => navigate("diagnosis")}>进入诊断</Button>
-          </div>
-          <div className="task-row">
-            <ToneBadge>即将逾期</ToneBadge>
-            <div className="task-copy"><strong>WO-20250518-02 密封检查</strong><span>距离计划完成还剩 35 分钟</span></div>
+          {openAlerts.slice(0, 2).map((alert) => <div className={`task-row ${alert.level?.includes("一级") ? "task-critical" : "task-warning"}`} key={alert.id}>
+            <ToneBadge tone={alert.level?.includes("一级") ? "danger" : "warning"}>{alert.level}</ToneBadge>
+            <div className="task-copy"><strong>{alert.title}</strong><span>{alert.device} · {alert.status}</span></div>
+            <Button onClick={() => navigate("alerts")}>查看告警</Button>
+          </div>)}
+          {activeOrders.slice(0, 1).map((order) => <div className="task-row" key={order.id}>
+            <ToneBadge>{order.priority}</ToneBadge><div className="task-copy"><strong>{order.title}</strong><span>{order.deviceId} · {order.owner || "未指派"} · {order.status}</span></div>
             <Button onClick={() => navigate("orders")}>查看工单</Button>
-          </div>
+          </div>)}
+          {!openAlerts.length && !activeOrders.length && <div className="device-empty">当前没有待处理事项</div>}
         </section>
         <section className="panel health-panel">
           <div className="panel-title"><div><CheckmarkCircle24Regular /><h2>设备健康概览</h2></div><ToneBadge tone="success">{devices.length} 台演示设备</ToneBadge></div>
@@ -254,8 +249,8 @@ function OverviewPage({ navigate, workOrders, devices, alerts, profiles }) {
         </section>
       </div>
       <section className="panel table-panel">
-        <div className="panel-title"><div><ClipboardTask24Regular /><h2>进行中工单</h2></div><Button appearance="subtle" onClick={() => navigate("orders")}>查看全部</Button></div>
-        <OrderTable rows={workOrders.slice(0, 3)} onSelect={() => navigate("orders")} />
+        <div className="panel-title"><div><ClipboardTask24Regular /><h2>未完成工单</h2></div><Button appearance="subtle" onClick={() => navigate("orders")}>查看全部</Button></div>
+        <OrderTable rows={activeOrders.slice(0, 5)} onSelect={() => navigate("orders")} />
       </section>
     </>
   );
@@ -520,7 +515,7 @@ function WorkspaceApp({ session, onLogout }) {
   };
   const pages = {
     overview: isDemoMode
-      ? <OverviewPage navigate={navigate} workOrders={workOrders} devices={devices} alerts={alerts} profiles={deviceProfiles} />
+      ? <OverviewPage navigate={navigate} workOrders={visibleOrders} devices={devices} alerts={alerts} profiles={deviceProfiles} />
       : <ApiOverviewPage navigate={navigate} devices={devices} alerts={alerts} workOrders={workOrders} error={businessError} />,
     devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} canImport={["manager", "admin", "owner"].includes(session.role)} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
     alerts: isDemoMode

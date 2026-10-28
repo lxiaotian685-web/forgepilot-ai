@@ -50,7 +50,7 @@
 实测结果：
 
 ```text
-pytest: 119 passed
+pytest: 121 passed
 ruff: All checks passed
 RAG 评测:
   可答问题数: 16

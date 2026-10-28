@@ -1,11 +1,12 @@
 import { Button } from "@fluentui/react-components";
 import { useState } from "react";
+import { activeWorkOrders } from "./services/workOrderLifecycle.js";
 
 export default function ApiOverviewPage({ navigate, devices, alerts, workOrders, error }) {
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) || devices[0];
   const openAlerts = alerts.filter((item) => item.status !== "已关闭");
-  const activeOrders = workOrders.filter((item) => !["已完成", "已取消"].includes(item.status));
+  const activeOrders = activeWorkOrders(workOrders);
   const healthValues = devices.map((item) => item.health).filter((value) => typeof value === "number");
   const averageHealth = healthValues.length ? (healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length).toFixed(1) : "—";
   return <>

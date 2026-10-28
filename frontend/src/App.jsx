@@ -196,14 +196,20 @@ function DeviceTrendChart({ profile }) {
   return <div className="chart chart-compact" aria-label="当前设备关键指标趋势图"><ResponsiveContainer width="100%" height="100%"><LineChart data={profile.trend} margin={{ top: 12, right: 18, left: -18, bottom: 0 }}><CartesianGrid stroke="#dbe4ef" strokeDasharray="3 4" vertical={false} /><XAxis dataKey="time" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="left" tick={{ fontSize: 11, fill: "#687386" }} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" hide /><Tooltip contentStyle={{ border: "1px solid #cbd6e4", borderRadius: 0, fontSize: 12 }} />{profile.series.map((series, index) => <Line key={series.key} isAnimationActive={false} yAxisId={index ? "right" : "left"} name={series.label} type="monotone" dataKey={series.key} stroke={series.color} strokeWidth={index ? 2 : 3} dot={false} />)}</LineChart></ResponsiveContainer></div>;
 }
 
-function OverviewPage({ navigate, workOrders, trendData }) {
+function OverviewPage({ navigate, workOrders, devices, alerts, profiles }) {
+  const [selectedDeviceId, setSelectedDeviceId] = useState(devices[0]?.id || "");
+  const selectedDevice = devices.find((device) => device.id === selectedDeviceId) || devices[0];
+  const profile = profiles[selectedDevice?.id];
+  const activeOrders = workOrders.filter((order) => !["已完成", "已取消"].includes(order.status));
+  const openAlerts = alerts.filter((alert) => alert.status !== "已关闭");
+  const averageHealth = devices.length ? (devices.reduce((sum, device) => sum + device.health, 0) / devices.length).toFixed(1) : "—";
   return (
     <>
       <PageHeader title="维护总览" description="一号装配厂设备健康、告警与工单处置概况" action="发起诊断" onAction={() => navigate("diagnosis")} />
       <div className="metric-strip">
-        <div><span>设备健康度</span><strong>91.4</strong><small>/ 100</small></div>
-        <div><span>待确认告警</span><strong className="text-danger">3</strong><small>项</small></div>
-        <div><span>进行中工单</span><strong>5</strong><small>项</small></div>
+        <div><span>平均设备健康度</span><strong>{averageHealth}</strong><small>/ 100</small></div>
+        <div><span>未关闭告警</span><strong className="text-danger">{openAlerts.length}</strong><small>项</small></div>
+        <div><span>未完成工单</span><strong>{activeOrders.length}</strong><small>项</small></div>
         <div><span>今日诊断</span><strong>3</strong><small>次</small></div>
       </div>
       <div className="dashboard-grid">
@@ -226,15 +232,15 @@ function OverviewPage({ navigate, workOrders, trendData }) {
           </div>
         </section>
         <section className="panel health-panel">
-          <div className="panel-title"><div><CheckmarkCircle24Regular /><h2>设备健康概览</h2></div><ToneBadge tone="success">48 台在线</ToneBadge></div>
-          <div className="health-score"><strong>91.4</strong><span>整体健康度</span></div>
-          <ProgressBar value={0.914} thickness="large" color="success" />
-          <div className="health-legend"><span><i className="good" />良好 41</span><span><i className="watch" />关注 4</span><span><i className="bad" />异常 3</span></div>
+          <div className="panel-title"><div><CheckmarkCircle24Regular /><h2>设备健康概览</h2></div><ToneBadge tone="success">{devices.length} 台演示设备</ToneBadge></div>
+          <div className="health-score"><strong>{averageHealth}</strong><span>整体平均健康度</span></div>
+          <ProgressBar value={Number(averageHealth) / 100 || 0} thickness="large" color="success" />
+          <div className="health-legend"><span><i className="good" />良好 {devices.filter((device) => device.state === "运行正常").length}</span><span><i className="watch" />关注 {devices.filter((device) => device.state === "需关注").length}</span><span><i className="bad" />异常 {devices.filter((device) => device.state === "告警异常").length}</span></div>
         </section>
         <section className="panel trend-panel">
-          <div className="panel-title"><div><Board24Regular /><h2>AC-07 设备健康趋势</h2></div><div className="segmented"><button className="active">近 2 小时</button><button>近 7 天</button><button>近 30 天</button></div></div>
-          <p className="panel-note">08:58 开始持续超限，振动峰值 7.82 mm/s</p>
-          <TrendChart data={trendData} />
+          <div className="panel-title"><div><Board24Regular /><h2>设备健康趋势</h2></div><span className="tone-badge">演示测点</span></div>
+          <div className="overview-device-switcher" role="tablist" aria-label="切换趋势设备">{devices.map((device) => <button key={device.id} role="tab" aria-selected={selectedDevice?.id === device.id} onClick={() => setSelectedDeviceId(device.id)}><strong>{device.id}</strong><small>{device.name}</small></button>)}</div>
+          {selectedDevice && <div key={selectedDevice.id} className="overview-device-content" role="tabpanel"><div className="overview-device-caption"><strong>{selectedDevice.id} · {selectedDevice.name}</strong><span>{selectedDevice.location} · 健康度 {selectedDevice.health}</span></div><p className="panel-note">{profile?.alertSummary || "该设备暂无趋势数据"} · 更新于 {profile?.updatedAt || "未接入"}</p><DeviceTrendChart profile={profile} /><div className="overview-device-metrics">{profile?.metrics?.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div></div>}
         </section>
         <section className="panel recent-panel">
           <div className="panel-title"><div><Pulse24Regular /><h2>最近诊断</h2></div></div>
@@ -514,7 +520,7 @@ function WorkspaceApp({ session, onLogout }) {
   };
   const pages = {
     overview: isDemoMode
-      ? <OverviewPage navigate={navigate} workOrders={workOrders} trendData={trendData} />
+      ? <OverviewPage navigate={navigate} workOrders={workOrders} devices={devices} alerts={alerts} profiles={deviceProfiles} />
       : <ApiOverviewPage navigate={navigate} devices={devices} alerts={alerts} workOrders={workOrders} error={businessError} />,
     devices: <DevicePage navigate={navigate} devices={devices} profiles={deviceProfiles} allowLocalImport={isDemoMode} canImport={["manager", "admin", "owner"].includes(session.role)} accessToken={session.accessToken} onImported={refreshBusinessData} notify={notify} />,
     alerts: isDemoMode

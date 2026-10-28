@@ -6,6 +6,7 @@ import BelowSelect from "./BelowSelect.jsx";
 
 export const demoPeople = [
   { id: "1", code: "EMP-001", name: "李振华", role: "维护主管", team: "设备管理组", status: "在岗", phone: "138****1024" },
+  { id: "6", code: "EMP-006", name: "周工", role: "维修技师", team: "设备管理组", status: "在岗", phone: "138****3506" },
   { id: "2", code: "EMP-014", name: "张工", role: "维修技师", team: "机械一班", status: "在岗", phone: "136****8812" },
   { id: "3", code: "EMP-021", name: "王强", role: "诊断工程师", team: "可靠性组", status: "在岗", phone: "139****4506" },
   { id: "4", code: "EMP-028", name: "赵工", role: "维修技师", team: "电气二班", status: "在岗", phone: "137****6630" },

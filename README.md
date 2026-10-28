@@ -21,6 +21,9 @@
 | `services/business/` | FastAPI、SQLAlchemy、Alembic | 登录、组织权限、设备、测点、告警、工单、诊断保存和审计 |
 | `services/knowledge/` | FastAPI、BM25、可选 OpenAI 兼容模型 | 说明书解析检索、证据引用、辅助诊断；通过业务服务验证身份 |
 
+知识服务的 `POST /api/v1/agent/assist` 提供受控只读 Agent 流程：先验证设备身份，再读取同设备历史工单并调用证据诊断，返回每一步工具状态。此接口不创建或修改工单；诊断保存与建单仍须在业务服务中人工确认。默认演示配置的模型与资料仍是模拟数据。
+Agent 的历史工单工具需要 C 服务配置 `BUSINESS_API_BASE_URL`，并逐请求透传当前 Bearer 令牌和组织身份；未配置或查询失败时会明确显示该步骤不可用。前端诊断页可运行同一受控流程，公开预览只展示标注为演示的本地版本。工具轨迹目前随响应返回，尚未持久化为服务端审计记录。
+
 三个进程分别运行。前端 API 模式只读取服务端数据；请求失败会提示错误，不会将本地虚构数据伪装成接口结果。B 服务的 PostgreSQL 迁移与 SQLite 本地演示均可用；C 服务目前使用单进程 JSON 知识库，部署多实例前须迁移存储。
 
 数据库准备使用 `scripts/prepare-business-db.ps1`：先在终端设置 PostgreSQL `DATABASE_URL`，再运行脚本执行 Alembic 迁移；仅开发演示环境可加 `-SeedDemo`。业务服务的 `/ready` 会实际查询数据库，适合部署就绪检查。`scripts/start-demo.ps1` 则继续使用独立的 SQLite 本地演示库。具体步骤见 [数据库运行说明](docs/DATABASE_READINESS.md)。

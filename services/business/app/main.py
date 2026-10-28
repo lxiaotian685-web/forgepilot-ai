@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
+    agent_runs,
     alerts,
     audit_events,
     auth,
@@ -142,3 +143,4 @@ app.include_router(audit_events.router)
 app.include_router(maintenance_records.router)
 app.include_router(members.router)
 app.include_router(auth.router)
+app.include_router(agent_runs.router)

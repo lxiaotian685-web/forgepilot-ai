@@ -6,7 +6,9 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 DEMO_DOCS_DIR = DATA_DIR / "demo_docs"
-STORAGE_PATH = DATA_DIR / "knowledge_base.json"
+STORAGE_PATH = Path(
+    os.getenv("KNOWLEDGE_STORAGE_PATH") or str(DATA_DIR / "knowledge_base.json")
+)
 
 
 def env_bool(name: str, default: bool = False) -> bool:

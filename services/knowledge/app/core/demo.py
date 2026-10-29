@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.config import DEMO_DOCS_DIR, default_organization_id
+from app.config import DEMO_DOCS_DIR, default_organization_id, is_production
 from app.core.store import KnowledgeBase
 
 DEMO_DOCS = [
@@ -41,3 +41,10 @@ def ensure_demo_documents(kb: KnowledgeBase) -> int:
     if kb.list_documents(organization_id=organization_id, limit=1):
         return 0
     return ingest_demo_docs(kb, organization_id=organization_id)
+
+
+def load_startup_documents(kb: KnowledgeBase) -> int:
+    if is_production():
+        kb.load()
+        return 0
+    return ensure_demo_documents(kb)

@@ -5,6 +5,7 @@ from app.core.store import KnowledgeBase
 from app.llm.base import LLMError
 from app.llm.mock import MockLLM
 from app.schemas.chat import Conflict, ConflictSource, Statement
+from app.schemas.document import Evidence
 from app.services.rag import RAGService
 
 
@@ -328,3 +329,22 @@ def test_http_provider_with_real_llm_is_not_demo():
     assert resp.status == "ok"
     assert resp.device_source == "http"
     assert resp.is_demo is False
+
+
+def test_unknown_page_is_explicit_in_source_ref():
+    evidence = Evidence(
+        id="a@v1.0#pNonec0",
+        document_id="a",
+        version="1.0",
+        title="演示手册",
+        page=None,
+        chunk_index=0,
+        snippet="片段",
+        score=1.0,
+    )
+
+    statement = RAGService._to_fact(evidence)
+
+    assert statement.type == "fact"
+    assert statement.source == "《演示手册》第未知页"
+    assert statement.source_ids == ["a@v1.0#pNonec0"]

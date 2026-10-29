@@ -151,7 +151,8 @@ class OpenAILLM(BaseLLM):
         device: DeviceContext | None = None,
     ) -> str:
         context = "\n\n".join(
-            f"[{ev.id}] {ev.title} 第{ev.page}页：{ev.snippet}" for ev in evidences
+            f"[{ev.id}] {ev.title} 第{self._page_label(ev.page)}页：{ev.snippet}"
+            for ev in evidences
         )
         parts: list[str] = []
         if device is not None:
@@ -167,6 +168,10 @@ class OpenAILLM(BaseLLM):
         parts.append(f"文档证据：\n{context}")
         parts.append(f"用户问题：{query}")
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _page_label(page: int | None) -> str:
+        return str(page) if page is not None else "未知"
 
     def _parse(self, data: dict) -> LLMResult:
         try:

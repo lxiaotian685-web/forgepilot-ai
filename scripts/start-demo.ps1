@@ -1,10 +1,14 @@
 param(
     [int]$FrontendPort = 5180,
     [int]$BusinessPort = 8001,
-    [int]$KnowledgePort = 8002
+    [int]$KnowledgePort = 8002,
+    [switch]$DeepSeek
 )
 
 $ErrorActionPreference = "Stop"
+if ($DeepSeek -and [string]::IsNullOrWhiteSpace($env:DEEPSEEK_API_KEY)) {
+    throw '请先在本机设置 DEEPSEEK_API_KEY 环境变量，再使用 -DeepSeek 启动。'
+}
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $businessRoot = Join-Path $projectRoot "services/business"
 $knowledgeRoot = Join-Path $projectRoot "services/knowledge"
@@ -53,6 +57,12 @@ try {
     } -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logRoot "business.out.log") -RedirectStandardError (Join-Path $logRoot "business.err.log")
     $started += $business
     $knowledge = Start-Process -FilePath $knowledgePython -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "$KnowledgePort") -WorkingDirectory $knowledgeRoot -Environment @{
+        LLM_PROVIDER = $(if ($DeepSeek) { 'openai' } else { 'mock' })
+        LLM_API_KEY = $(if ($DeepSeek) { $env:DEEPSEEK_API_KEY } else { '' })
+        LLM_BASE_URL = 'https://api.deepseek.com'
+        LLM_MODEL = 'deepseek-flash'
+        LLM_TIMEOUT = '45'
+        LLM_MAX_TOKENS = '2048'
         C_REQUIRE_AUTH = "true"
         C_IDENTITY_API_BASE_URL = $businessUrl
         C_DEFAULT_ORGANIZATION_ID = $demoOrganizationId

@@ -46,6 +46,10 @@ Agent 的历史工单工具需要 C 服务配置 `BUSINESS_API_BASE_URL`，并�
 
 首次安装或依赖需要更新时运行 `.\scripts\quickstart.ps1`；依赖已安装后可直接运行 `.\scripts\start-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库，不能原样公开部署。
 
+### 使用真实 DeepSeek 诊断
+
+本机配置 `DEEPSEEK_API_KEY` 环境变量后，运行 `.\scripts\start-demo.ps1 -DeepSeek`。模型密钥只传入知识服务，默认使用 `deepseek-flash`；未带此参数时使用模拟模型。已经启动的本地服务需要先通过 `.\scripts\stop-demo.ps1` 停止。设备与知识文档仍为虚构演示资料，真实模型调用不代表真实企业数据验收。
+
 Linux/macOS 的三终端命令见 [docs/RUN_LINUX.md](docs/RUN_LINUX.md)。
 
 服务接口：业务 `http://127.0.0.1:8001/docs`、知识 `http://127.0.0.1:8002/docs`。各服务配置模板在 `services/business/.env.example`、`services/knowledge/.env.example`，前端配置模板在 `frontend/.env.example`；**模板值不能直接用于生产**。部署时后端设置独立密钥、受控 CORS、HTTPS 与身份校验，前端仅配置公开 API 地址，不包含模型密钥。

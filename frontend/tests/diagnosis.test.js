@@ -17,6 +17,12 @@ test("links a unique exact reference, keeps retrieval score unscaled", () => {
   assert.deepEqual(result.statements[0].sourceKeys, ["doc-1@v1#p2c0"]);
   assert.equal(result.sources[0].score, 1.5);
 });
+test("keeps model identity and token usage for transparent real-model display", () => {
+  const result = normalizeDiagnosis({ ...payload(), model_provider: "openai-compatible", model_name: "deepseek-flash", input_tokens: 321, output_tokens: 123, total_tokens: 444 }, "AC-07");
+  assert.equal(result.model_name, "deepseek-flash");
+  assert.equal(result.total_tokens, 444);
+  assert.throws(() => normalizeDiagnosis({ ...payload(), total_tokens: -1 }, "AC-07"), /模型用量字段格式错误/);
+});
 test("summarizes only real statement and source counts", () => {
   const value = payload();
   value.statements.push({ type: "inference", text: "可能原因" }, { type: "pending", text: "待现场核对" });

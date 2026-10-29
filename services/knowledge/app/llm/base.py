@@ -22,6 +22,11 @@ class LLMResult:
     summary: str = ""
     conflicts: list[Conflict] = field(default_factory=list)
     verification_suggestions: list[VerificationSuggestion] = field(default_factory=list)
+    provider: str = "unknown"
+    model: str = "unknown"
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
 
 class BaseLLM(ABC):

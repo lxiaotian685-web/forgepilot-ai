@@ -285,6 +285,15 @@ class _RealLikeLLM(MockLLM):
     is_mock = False
     name = "openai"
 
+    def answer(self, query, evidences, device=None):
+        result = super().answer(query, evidences, device=device)
+        result.provider = "openai-compatible"
+        result.model = "deepseek-chat"
+        result.input_tokens = 512
+        result.output_tokens = 128
+        result.total_tokens = 640
+        return result
+
 
 def test_device_facts_are_passed_to_llm():
     llm = _CapturingLLM()
@@ -329,6 +338,11 @@ def test_http_provider_with_real_llm_is_not_demo():
     assert resp.status == "ok"
     assert resp.device_source == "http"
     assert resp.is_demo is False
+    assert resp.model_provider == "openai-compatible"
+    assert resp.model_name == "deepseek-chat"
+    assert resp.input_tokens == 512
+    assert resp.output_tokens == 128
+    assert resp.total_tokens == 640
 
 
 def test_unknown_page_is_explicit_in_source_ref():

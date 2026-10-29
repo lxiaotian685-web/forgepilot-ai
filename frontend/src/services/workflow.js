@@ -41,6 +41,13 @@ export function diagnosisEvidenceSnapshot(result) {
     sources: result.sources.map(({ key, reference, order, ...source }) => source),
     conflicts: result.conflicts,
     verificationSuggestions: result.verification_suggestions,
+    model: {
+      provider: result.model_provider || "unknown",
+      name: result.model_name || "unknown",
+      inputTokens: result.input_tokens || 0,
+      outputTokens: result.output_tokens || 0,
+      totalTokens: result.total_tokens || 0,
+    },
   };
 }
 
@@ -61,7 +68,9 @@ export async function saveDiagnosis(
     conclusion: result.answer,
     riskLevel,
     confidence: null,
-    modelSource: "c-rag-api",
+    modelSource: result.model_name && result.model_name !== "unknown"
+      ? `c-rag-api:${result.model_name}`
+      : "c-rag-api",
     evidence: diagnosisEvidenceSnapshot(result),
     alertId,
   };

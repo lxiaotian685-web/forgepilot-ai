@@ -61,6 +61,11 @@ export function normalizeDiagnosis(payload, deviceId) {
   });
   const conflicts = payload.conflicts ?? [];
   const verificationSuggestions = payload.verification_suggestions ?? [];
+  const tokenFields = ["input_tokens", "output_tokens", "total_tokens"];
+  if (tokenFields.some((field) => payload[field] != null &&
+      (!Number.isInteger(payload[field]) || payload[field] < 0))) {
+    throw new Error("模型用量字段格式错误，请联系服务端检查。");
+  }
   if (!Array.isArray(conflicts) || conflicts.some((conflict) =>
     !conflict || typeof conflict.field !== "string" || !Array.isArray(conflict.sources) ||
     conflict.sources.some((source) => !source || typeof source.origin !== "string" ||
@@ -83,6 +88,11 @@ export function normalizeDiagnosis(payload, deviceId) {
     statements,
     conflicts,
     verification_suggestions: verificationSuggestions,
+    model_provider: typeof payload.model_provider === "string" ? payload.model_provider : "unknown",
+    model_name: typeof payload.model_name === "string" ? payload.model_name : "unknown",
+    input_tokens: payload.input_tokens || 0,
+    output_tokens: payload.output_tokens || 0,
+    total_tokens: payload.total_tokens || 0,
   };
 }
 

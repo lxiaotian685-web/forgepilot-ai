@@ -185,7 +185,20 @@ class OpenAILLM(BaseLLM):
             parsed = _ModelDiagnosis.model_validate(payload)
         except ValidationError as exc:
             raise LLMError("模型结构化输出不符合 schema") from exc
-        return self._to_result(parsed)
+        result = self._to_result(parsed)
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        result.provider = "openai-compatible"
+        result.model = str(data.get("model") or self.model)
+        result.input_tokens = self._token_count(usage.get("prompt_tokens"))
+        result.output_tokens = self._token_count(usage.get("completion_tokens"))
+        result.total_tokens = self._token_count(usage.get("total_tokens"))
+        if not result.total_tokens:
+            result.total_tokens = result.input_tokens + result.output_tokens
+        return result
+
+    @staticmethod
+    def _token_count(value: object) -> int:
+        return value if isinstance(value, int) and value >= 0 else 0
 
     @staticmethod
     def _extract_json(content: str) -> dict:

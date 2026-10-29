@@ -22,6 +22,11 @@ function diagnosis() {
     sources: [{ id: "doc@v1#p2c0", document_id: "doc", version: "v1", page: 2, chunk_index: 0, title: "手册", snippet: "原文", score: 1.2, key: "doc@v1#p2c0", reference: "《手册》第2页", order: 0 }],
     conflicts: [],
     verification_suggestions: [{ missing_evidence: "振动频谱", to_verify: "轴承状态" }],
+    model_provider: "openai-compatible",
+    model_name: "deepseek-chat",
+    input_tokens: 512,
+    output_tokens: 128,
+    total_tokens: 640,
   };
 }
 
@@ -31,6 +36,9 @@ test("builds an auditable evidence snapshot without UI-only fields", () => {
   assert.equal(Object.hasOwn(snapshot.sources[0], "reference"), false);
   assert.equal(Object.hasOwn(snapshot.statements[0], "sourceKey"), false);
   assert.equal(snapshot.verificationSuggestions[0].to_verify, "轴承状态");
+  assert.deepEqual(snapshot.model, {
+    provider: "openai-compatible", name: "deepseek-chat", inputTokens: 512, outputTokens: 128, totalTokens: 640,
+  });
 });
 
 test("saves only verified real API diagnosis using the B contract", async () => {
@@ -44,6 +52,8 @@ test("saves only verified real API diagnosis using the B contract", async () => 
     assert.deepEqual({ deviceId: body.deviceId, question: body.question, riskLevel: body.riskLevel, confidence: body.confidence },
       { deviceId: "AC-07", question: "振动异常", riskLevel: "high", confidence: null });
     assert.equal(body.evidence.sources[0].id, "doc@v1#p2c0");
+    assert.equal(body.modelSource, "c-rag-api:deepseek-chat");
+    assert.equal(body.evidence.model.totalTokens, 640);
     return { ok: true, json: async () => ({ id: "DIAG-001", status: "draft" }) };
   });
   assert.equal(saved.id, "DIAG-001");

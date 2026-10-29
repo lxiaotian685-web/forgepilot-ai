@@ -71,3 +71,8 @@ class ChatResponse(BaseModel):
     device_source: str = "static"
     is_demo: bool = True
     status: DiagnosisStatus = "ok"
+    model_provider: str = "unknown"
+    model_name: str = "unknown"
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    total_tokens: int = Field(default=0, ge=0)

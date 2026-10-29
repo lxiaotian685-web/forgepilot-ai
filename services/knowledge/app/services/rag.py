@@ -119,6 +119,11 @@ class RAGService:
             sources=evidences,
             conflicts=conflicts,
             verification_suggestions=result.verification_suggestions,
+            model_provider=result.provider,
+            model_name=result.model,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            total_tokens=result.total_tokens,
         )
 
     def _respond(
@@ -128,6 +133,8 @@ class RAGService:
         **fields,
     ) -> ChatResponse:
         device_source = getattr(self.device_provider, "source", "unknown")
+        fields.setdefault("model_provider", getattr(self.llm, "name", "unknown"))
+        fields.setdefault("model_name", getattr(self.llm, "name", "unknown"))
         return ChatResponse(
             device_id=device_id,
             status=status,

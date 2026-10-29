@@ -63,7 +63,12 @@ def _valid_payload() -> dict:
 
 def test_openai_llm_structured_output():
     def handler(request):
-        return httpx.Response(200, json=_completion(_valid_payload()))
+        response = _completion(_valid_payload())
+        response.update({
+            "model": "deepseek-flash",
+            "usage": {"prompt_tokens": 321, "completion_tokens": 123, "total_tokens": 444},
+        })
+        return httpx.Response(200, json=response)
 
     llm = OpenAILLM(
         api_key="k", base_url="http://x", model="m", client=_client(handler)
@@ -78,6 +83,11 @@ def test_openai_llm_structured_output():
     assert result.statements[0].source_ids == ["a@v1.0#p1c0"]
     assert result.conflicts[0].field == "额定压力"
     assert result.verification_suggestions[0].missing_evidence == "清洗记录"
+    assert result.provider == "openai-compatible"
+    assert result.model == "deepseek-flash"
+    assert result.input_tokens == 321
+    assert result.output_tokens == 123
+    assert result.total_tokens == 444
 
 
 def test_openai_llm_handles_code_fence():

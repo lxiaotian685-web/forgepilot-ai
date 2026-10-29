@@ -246,6 +246,9 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
             <div><span>原文证据</span><strong>{resultSummary.sources}</strong></div>
             <p>{resultSummary.pending > 0 ? "当前状态：证据待补齐" : "当前状态：仍需人工复核"}</p>
           </section>
+          {result.transport === "api" && !result.is_mock && <p className="model-observability" role="status">
+            真实模型：{result.model_name || "未返回名称"} · 输入 {result.input_tokens || 0} Token · 输出 {result.output_tokens || 0} Token · 合计 {result.total_tokens || 0} Token
+          </p>}
           <p className="diagnostic-answer">{result.answer}</p>
           {result.conflicts.length > 0 && <section className="diagnostic-conflicts" aria-label="事实冲突">
             <h3>检测到事实冲突</h3>

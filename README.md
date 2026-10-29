@@ -4,6 +4,18 @@
 
 > 参赛方向：第九届传智杯 AI WEB 网页开发挑战赛。当前仓库使用**虚构演示数据**。企业数据和模型密钥尚未取得；默认诊断明确标记为模拟结果，不宣称接入真实企业设备或真实大模型。
 
+## 立即体验
+
+直接打开 [CloudBase 在线演示](https://cloud1-d8gmw1jur6dc98110-1470332055.tcloudbaseapp.com/forgepilot-preview/)，无需下载代码或安装软件。该地址提供前端演示数据；操作仅用于体验页面流程，不会写入云端业务数据库。ICP备案未完成期间，CloudBase 默认域名可能有访问提示或限制。
+
+要在 Windows 本地运行前后端完整演示，预先安装 **Python 3.10+**、**Node.js 20+**（含 npm）和 **PowerShell 7.4+**，在仓库根目录执行：
+
+```powershell
+.\scripts\quickstart.ps1
+```
+
+首次运行会自动建立两个 Python 虚拟环境、安装依赖并启动三个服务，之后打开 `http://127.0.0.1:5180/forgepilot/`。本地演示账号为 `demo@example.com` / `ForgePilot123!`；停止服务运行 `.\scripts\stop-demo.ps1`。本地演示使用 SQLite 和虚构数据，**不需要** PostgreSQL、CloudBase、企业数据或模型密钥。
+
 ## 体验路线
 
 1. 用评审演示账号登录，选择 `AC-07` 空压机，查看该设备的测点与历史。
@@ -30,33 +42,15 @@ Agent 的历史工单工具需要 C 服务配置 `BUSINESS_API_BASE_URL`，并�
 
 公网部署前，应分别在业务服务和知识服务的环境中执行 `python scripts/check_production_config.py business` 与 `python scripts/check_production_config.py knowledge`。脚本只检查必填配置，不打印密钥，也不能代替 PostgreSQL 迁移、模型调用、持久化卷和公网接口的实际验收。知识服务当前使用单进程 JSON 文件，部署时须将 `KNOWLEDGE_STORAGE_PATH` 指向持久化卷并保持单实例；多实例需要先改造存储。
 
-## 本地复现
+## 本地复现与部署
 
-需要 Python 3.10+、Node.js 20+、npm；Windows 示例使用 PowerShell。首次安装依赖：
-
-```powershell
-cd services/business
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-cd ../knowledge
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-cd ../../frontend
-npm ci
-cd ..
-```
-
-运行本地三服务演示：
-
-```powershell
-.\scripts\start-demo.ps1
-```
-
-打开 `http://127.0.0.1:5180/forgepilot/`，使用仅限本地的虚构账号 `demo@example.com` / `ForgePilot123!`。停止：`.\scripts\stop-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库。它只用于评审本地复现，不能原样公开部署。
+首次安装或依赖需要更新时运行 `.\scripts\quickstart.ps1`；依赖已安装后可直接运行 `.\scripts\start-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库，不能原样公开部署。
 
 Linux/macOS 的三终端命令见 [docs/RUN_LINUX.md](docs/RUN_LINUX.md)。
 
 服务接口：业务 `http://127.0.0.1:8001/docs`、知识 `http://127.0.0.1:8002/docs`。各服务配置模板在 `services/business/.env.example`、`services/knowledge/.env.example`，前端配置模板在 `frontend/.env.example`；**模板值不能直接用于生产**。部署时后端设置独立密钥、受控 CORS、HTTPS 与身份校验，前端仅配置公开 API 地址，不包含模型密钥。
+
+真实后端上线时才需要 PostgreSQL、持久化文件存储和模型配置；CloudBase 步骤见 [后端部署说明](docs/CLOUDBASE_DEPLOY.md)。
 
 ## 验证
 

@@ -2,7 +2,11 @@ import pytest
 
 from app.core import devices
 from app.core.chunker import chunk_text
-from app.core.demo import ensure_demo_documents, ingest_demo_docs
+from app.core.demo import (
+    ensure_demo_documents,
+    ingest_demo_docs,
+    load_startup_documents,
+)
 from app.core.store import KnowledgeBase
 
 
@@ -69,6 +73,23 @@ def test_ensure_demo_documents_skips_when_populated(tmp_path):
     ingest_demo_docs(kb)
 
     assert ensure_demo_documents(kb) == 0
+    assert len(kb.list_documents()) == 3
+
+
+def test_production_startup_does_not_seed_demo_documents(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    kb = KnowledgeBase(tmp_path / "kb.json")
+
+    assert load_startup_documents(kb) == 0
+    assert kb.list_documents() == []
+    assert not (tmp_path / "kb.json").exists()
+
+
+def test_development_startup_keeps_demo_documents(tmp_path, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "development")
+    kb = KnowledgeBase(tmp_path / "kb.json")
+
+    assert load_startup_documents(kb) == 3
     assert len(kb.list_documents()) == 3
 
 

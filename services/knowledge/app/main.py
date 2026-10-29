@@ -11,14 +11,14 @@ from fastapi.responses import JSONResponse
 from app.api.agent import router as agent_router
 from app.api.rag import router as rag_router
 from app.config import env_bool, env_int
-from app.core.demo import ensure_demo_documents
+from app.core.demo import load_startup_documents
 from app.deps import kb, rag
 from app.rate_limit import limiter
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    ensure_demo_documents(kb)
+    load_startup_documents(kb)
     yield
     rag.llm.close()
     rag.device_provider.close()

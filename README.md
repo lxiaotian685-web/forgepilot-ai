@@ -28,6 +28,8 @@ Agent 的历史工单工具需要 C 服务配置 `BUSINESS_API_BASE_URL`，并�
 
 数据库准备使用 `scripts/prepare-business-db.ps1`：先在终端设置 PostgreSQL `DATABASE_URL`，再运行脚本执行 Alembic 迁移；仅开发演示环境可加 `-SeedDemo`。业务服务的 `/ready` 会实际查询数据库，适合部署就绪检查。`scripts/start-demo.ps1` 则继续使用独立的 SQLite 本地演示库。具体步骤见 [数据库运行说明](docs/DATABASE_READINESS.md)。
 
+公网部署前，应分别在业务服务和知识服务的环境中执行 `python scripts/check_production_config.py business` 与 `python scripts/check_production_config.py knowledge`。脚本只检查必填配置，不打印密钥，也不能代替 PostgreSQL 迁移、模型调用、持久化卷和公网接口的实际验收。知识服务当前使用单进程 JSON 文件，部署时须将 `KNOWLEDGE_STORAGE_PATH` 指向持久化卷并保持单实例；多实例需要先改造存储。
+
 ## 本地复现
 
 需要 Python 3.10+、Node.js 20+、npm；Windows 示例使用 PowerShell。首次安装依赖：

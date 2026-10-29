@@ -95,6 +95,7 @@ class DiagnosisConfirm(RequestModel):
     description: str | None = Field(default=None, max_length=2000)
     priority: str | None = None
     owner_id: UUID | None = None
+    planned_start_at: datetime | None = None
     due_at: datetime | None = None
     note: str | None = Field(default=None, max_length=500)
 

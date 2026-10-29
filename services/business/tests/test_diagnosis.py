@@ -171,6 +171,44 @@ def test_confirm_is_idempotent(api):
         assert len(confirm_audits) == 1
 
 
+def test_confirm_rejects_read_only_assignee_without_changing_diagnosis(api):
+    client, ids, session_factory = api
+    created = create_diagnosis(client, ids)
+    code = created.json()["id"]
+    response = client.post(
+        f"/api/v1/diagnoses/{code}/confirm",
+        json={"ownerId": str(ids["users"]["viewer@example.com"])},
+        headers=auth(ids, user="tech@example.com"),
+    )
+    assert response.status_code == 422
+    with session_factory() as session:
+        diagnosis = session.scalar(select(Diagnosis).where(Diagnosis.code == code))
+        assert diagnosis.status == "draft"
+        assert session.scalar(select(WorkOrder).where(WorkOrder.diagnosis_id == diagnosis.id)) is None
+
+
+def test_confirm_persists_valid_schedule_and_rejects_invalid_range(api):
+    client, ids, _ = api
+    created = create_diagnosis(client, ids)
+    code = created.json()["id"]
+    url = f"/api/v1/diagnoses/{code}/confirm"
+    headers = auth(ids, user="tech@example.com")
+    invalid = client.post(
+        url,
+        json={"plannedStartAt": "2026-11-02T09:00:00+08:00", "dueAt": "2026-11-01T18:00:00+08:00"},
+        headers=headers,
+    )
+    assert invalid.status_code == 422
+    valid = client.post(
+        url,
+        json={"plannedStartAt": "2026-11-02T09:00:00+08:00", "dueAt": "2026-11-03T18:00:00+08:00"},
+        headers=headers,
+    )
+    assert valid.status_code == 200
+    assert valid.json()["workOrder"]["plannedStartAt"].startswith("2026-11-02")
+    assert valid.json()["workOrder"]["dueAt"].startswith("2026-11-03")
+
+
 def test_confirm_cross_org_rejected(api):
     client, ids, session_factory = api
     created = create_diagnosis(

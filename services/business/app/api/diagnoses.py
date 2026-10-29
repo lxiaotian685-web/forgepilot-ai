@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
 from app.api.codes import next_diagnosis_code, next_work_order_code
-from app.api.deps import RequestContext, get_context, require_role
+from app.api.deps import ROLE_LEVELS, RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import (
     DIAGNOSIS_STATUS_LABELS,
@@ -92,6 +92,13 @@ def _validate_owner(
             422,
             "VALIDATION_ERROR",
             "负责人不存在、已停用或不属于当前组织",
+            {"ownerId": str(user_id)},
+        )
+    if ROLE_LEVELS.get(membership.role, -1) < ROLE_LEVELS["technician"]:
+        raise api_error(
+            422,
+            "VALIDATION_ERROR",
+            "工单负责人至少需要维修人员权限",
             {"ownerId": str(user_id)},
         )
     return user
@@ -391,6 +398,11 @@ def confirm_diagnosis(
         if payload and payload.description is not None
         else diagnosis.conclusion
     )
+    if payload and payload.planned_start_at is not None:
+        if payload.due_at is None:
+            raise api_error(422, "VALIDATION_ERROR", "计划开始时间需要配套结束时间")
+        if payload.planned_start_at.date() > payload.due_at.date():
+            raise api_error(422, "VALIDATION_ERROR", "计划结束日期不能早于开始日期")
 
     try:
         if diagnosis.status != "confirmed":
@@ -427,6 +439,7 @@ def confirm_diagnosis(
                 priority=priority,
                 status="pending",
                 owner_user_id=owner.id if owner else None,
+                planned_start_at=payload.planned_start_at if payload else None,
                 due_at=payload.due_at if payload else None,
                 created_by=context.user_id,
                 updated_by=context.user_id,

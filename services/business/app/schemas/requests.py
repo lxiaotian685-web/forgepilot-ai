@@ -146,6 +146,8 @@ class WorkOrderUpdate(RequestModel):
     planned_start_at: datetime | None = None
     due_at: datetime | None = None
     cancel_reason: str | None = Field(default=None, min_length=1, max_length=500)
+    root_cause: str | None = Field(default=None, max_length=2000)
+    action_taken: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
     def _require_one_field(self) -> "WorkOrderUpdate":

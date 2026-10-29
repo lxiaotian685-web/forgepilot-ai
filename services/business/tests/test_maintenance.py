@@ -24,9 +24,15 @@ def test_completed_work_order_writes_history(api):
         headers=headers,
     )
     assert to_verifying.status_code == 200
-    completed = client.patch(
+    missing_action = client.patch(
         "/api/v1/work-orders/WO-20250518-01",
         json={"status": "已完成"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert missing_action.status_code == 422
+    completed = client.patch(
+        "/api/v1/work-orders/WO-20250518-01",
+        json={"status": "已完成", "rootCause": "轴承磨损", "actionTaken": "更换轴承并复测振动"},
         headers=auth(ids, user="manager@example.com"),
     )
     assert completed.status_code == 200
@@ -48,6 +54,8 @@ def test_completed_work_order_writes_history(api):
     assert record["recordType"] == "维护"
     assert record["recordedBy"]
     assert "AC-07" in record["summary"]
+    assert record["rootCause"] == "轴承磨损"
+    assert record["actionTaken"] == "更换轴承并复测振动"
 
     with session_factory() as session:
         order = session.scalar(
@@ -77,7 +85,7 @@ def test_repeated_completion_keeps_single_history(api):
     )
     client.patch(
         "/api/v1/work-orders/WO-20250518-01",
-        json={"status": "已完成"},
+        json={"status": "已完成", "actionTaken": "更换轴承并复测振动"},
         headers=auth(ids, user="manager@example.com"),
     )
     again = client.patch(

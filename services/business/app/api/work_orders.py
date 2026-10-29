@@ -389,6 +389,11 @@ def update_work_order(
             raise api_error(403, "FORBIDDEN", "验收和取消工单需要主管权限")
     if payload.status in {"已取消", "cancelled"} and not payload.cancel_reason:
         raise api_error(422, "VALIDATION_ERROR", "取消工单必须填写原因")
+    completing = payload.status in {"已完成", "completed"} and order.status != "completed"
+    if completing and not (payload.action_taken or "").strip():
+        raise api_error(422, "VALIDATION_ERROR", "验收工单必须填写实际维修措施")
+    if {"root_cause", "action_taken"} & fields and not completing:
+        raise api_error(422, "VALIDATION_ERROR", "维修结果只能在验收完成时填写")
 
     if "status" in fields and payload.status:
         new_status = label_to_code(
@@ -469,7 +474,7 @@ def update_work_order(
     )
     device = db.get(Device, order.device_id)
     try:
-        if order.status == "completed":
+        if completing:
             existing_record = db.scalar(
                 select(MaintenanceRecord).where(
                     MaintenanceRecord.organization_id
@@ -487,7 +492,8 @@ def update_work_order(
                     alert_id=order.alert_id,
                     record_type="maintenance",
                     summary=order.title[:255],
-                    action_taken=order.description,
+                    root_cause=payload.root_cause.strip() if payload.root_cause else None,
+                    action_taken=payload.action_taken.strip(),
                     recorded_by=context.user_id,
                     recorded_at=utcnow(),
                     created_by=context.user_id,
@@ -506,6 +512,7 @@ def update_work_order(
                         "deviceId": device.code if device else None,
                         "workOrderId": order.code,
                         "recordType": record.record_type,
+                        "actionTaken": record.action_taken,
                     },
                 )
         db.commit()

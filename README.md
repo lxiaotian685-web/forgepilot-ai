@@ -1,86 +1,174 @@
 # 制造领航 ForgePilot
 
-面向中小制造企业设备维护的 Web 作品。系统把设备台账、测点、告警、知识文档、辅助诊断、维修工单和审计记录串成可演示的流程。
+**面向中小制造企业的设备维护 AI 工作台**：把设备台账、测点、告警、说明书知识、AI 辅助诊断、人工确认、维修工单和审计记录串成一条可追溯的闭环。
 
-> 参赛方向：第九届传智杯 AI WEB 网页开发挑战赛。当前仓库使用**虚构演示数据**；在线演示接入服务端真实 DeepSeek，企业真实数据尚未取得，诊断结论仍需人工核验，不代表企业真实诊断结论。
+[![在线演示](https://img.shields.io/badge/在线演示-forgepilot.xiaotianworks.cn-2f6feb)](https://forgepilot.xiaotianworks.cn/)
+[![Frontend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml)
+[![Backend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
+> 第九届传智杯 AI WEB 网页开发挑战赛参赛作品。仓库使用**虚构演示数据**；在线演示接入服务端真实 DeepSeek，诊断结论仍需人工核验，不代表企业真实诊断结论。
+
+![维护总览](docs/screenshots/02-overview.png)
 
 ## 立即体验
 
-直接打开 [在线演示](https://forgepilot.xiaotianworks.cn/)，无需下载代码或安装软件。在线演示由 CloudBase 静态托管提供前端、CloudBase 云托管运行 `services/business` 与 `services/knowledge`，支持真实账号登录和真实 DeepSeek 诊断。演示账号 `demo@example.com` / `ForgePilot123!`。
+**<https://forgepilot.xiaotianworks.cn/>**
 
-> 云端容器内的 SQLite 与知识库 JSON 属于演示数据，重新部署或实例重启后会恢复初始状态；如需长期保存，请按 `docs/CLOUDBASE_DEPLOY.md` 接入持久化数据库与存储。
+| 项目 | 值 |
+|---|---|
+| 演示账号 | `demo@example.com` |
+| 密码 | `ForgePilot123!` |
+| 组织代码 | 选填，留空即可 |
+| 在线能力 | 真实登录、真实 DeepSeek 诊断、诊断保存、人工确认生成工单、审计查询 |
 
-要在 Windows 本地运行前后端完整演示，预先安装 **Python 3.10+**、**Node.js 20+**（含 npm）和 **PowerShell 7.4+**，在仓库根目录执行：
+在线演示由 CloudBase 静态托管提供前端，CloudBase 云托管运行 `services/business` 与 `services/knowledge` 两个 FastAPI 服务，不依赖任何个人电脑。云端容器内的 SQLite 与知识库 JSON 属于演示数据，重新部署或实例重启后会恢复初始状态；长期保存请按 [CloudBase 部署说明](docs/CLOUDBASE_DEPLOY.md) 接入持久化数据库与存储。
+
+## 界面预览
+
+| 登录 | 设备中心 |
+|---|---|
+| ![登录](docs/screenshots/01-login.png) | ![设备中心](docs/screenshots/03-devices.png) |
+
+| 告警中心 | 维护工单 |
+|---|---|
+| ![告警中心](docs/screenshots/04-alerts.png) | ![维护工单](docs/screenshots/07-work-orders.png) |
+
+### 诊断工作台：把“模型回答”拆成可核对的三类内容
+
+![诊断工作台](docs/screenshots/05-diagnosis.png)
+
+界面会同时展示 **文档陈述、模型推断、待验证项**，右侧是可点击核对的证据原文；顶部显示真实模型名称和输入/输出/合计 Token 用量。只有通过证据校验且非模拟的诊断才允许保存，之后由人确认生成工单。
+
+| 知识证据 | 审计记录 |
+|---|---|
+| ![知识证据](docs/screenshots/06-knowledge.png) | ![审计记录](docs/screenshots/09-audit.png) |
+
+人员与权限、更多细节见 [docs/screenshots](docs/screenshots)。
+
+## 解决什么问题
+
+设备出异常时，运行信息、说明书和维修任务通常分散在三个地方：现场人员靠经验判断，查资料靠翻 PDF，处理结果靠口头或表格传递。ForgePilot 把这些环节放在一个工作台里，让每一次异常都有：
+
+```
+发现异常 → 检索证据 → AI 辅助诊断 → 人工确认 → 生成工单 → 维修验收 → 审计追溯
+```
+
+首条验收路线固定为演示设备 **AC-07 螺杆空气压缩机**。
+
+## 核心能力
+
+| 模块 | 能力 |
+|---|---|
+| 维护总览 | 设备健康度、未关闭告警、未完成工单、最近诊断，按当前组织实时汇总 |
+| 设备中心 | 设备档案、专属测点与趋势、类型/状态/厂区筛选、CSV 导入、扫码录入、历史维修记录 |
+| 告警中心 | 待确认/处理中/已关闭页签，严重程度与负责人筛选，指派、处理、重新打开 |
+| 诊断工作台 | 现场描述 + RAG 证据 + DeepSeek 诊断；事实/推断/待验证分区、证据阅读器、Token 用量、Agent 辅助分析 |
+| 知识证据 | 虚构说明书上传、解析文本预览、删除、组织隔离、检索结果与引用原文 |
+| 维护工单 | 列表/看板/日历三视图，设备与负责人指派、优先级、计划时间、步骤勾选、提交验收、退回、完成、取消 |
+| 人员与权限 | 成员搜索、岗位/班组/状态筛选、改岗、停用前工单转派、按岗位限制导航与操作 |
+| 审计记录 | 操作人、时间、对象、前后变更，按业务编号追溯诊断与建单 |
+
+## AI 方案
+
+**检索增强 + 结构化输出 + 人工在环**，不是让模型直接替人下结论。
+
+1. **检索**：说明书解析后进入 BM25 文本检索，按设备型号与组织隔离，返回带来源的原文片段。
+2. **生成**：通过 OpenAI 兼容适配器调用 DeepSeek（默认 `deepseek-flash`），要求结构化输出而不是一段自由文本。
+3. **校验**：引用必须能在检索结果中找到；无效引用会整体降级，并明确标注“证据不足”，不会保留一个看似完整的答案。
+4. **分流**：结果拆为 `文档陈述 / 模型推断 / 待验证项`，分别对应“资料写了什么”“模型怎么判断”“还需要现场确认什么”。
+5. **人工确认**：模型只给建议；风险分级、保存诊断、生成工单都由人触发，重复确认返回同一张工单。
+6. **可观测**：响应返回模型名、调用模式、输入/输出/合计 Token，写入诊断记录并展示在页面。
+7. **受控 Agent**：`POST /api/v1/agent/assist` 只执行白名单只读工具（设备查询、同设备历史工单、证据诊断），逐步返回状态，并把工具名/状态写入审计；不操作设备、不自动建单。
+
+模型密钥只存在知识服务端，不进入前端 `VITE_` 变量；无合法密钥时服务返回带 `is_mock` 标记的演示结果，前端不会把它当作可保存的真实诊断。
+
+## 技术架构
+
+```mermaid
+flowchart LR
+  U[浏览器] --> F[React + Vite + Fluent UI]
+  F -->|Bearer Token| B[FastAPI 业务服务]
+  F -->|Bearer Token| C[FastAPI 知识服务]
+  C -->|身份校验 / 设备 / 历史工单| B
+  C --> R[BM25 检索]
+  C --> L[DeepSeek OpenAI 兼容接口]
+  B --> DB[(SQLite 演示 / PostgreSQL)]
+  C --> KB[(JSON 知识库 / 持久化存储)]
+```
+
+| 目录 | 技术 | 职责 |
+|---|---|---|
+| `frontend/` | React、Vite、Fluent UI、Recharts | 设备、告警、诊断、知识、工单、人员、审计页面 |
+| `services/business/` | FastAPI、SQLAlchemy、Alembic | 登录、组织与岗位权限、设备、测点、告警、工单、诊断保存、审计 |
+| `services/knowledge/` | FastAPI、BM25、OpenAI 兼容适配器 | 说明书解析检索、证据引用、结构化诊断、受控 Agent |
+| `docs/` | 文档与截图 | 部署、数据库、截图、Linux 运行说明 |
+
+## 快速开始
+
+### 本地完整演示（Windows）
+
+需要 **Python 3.10+**、**Node.js 20+**（含 npm）和 **PowerShell 7.4+**：
 
 ```powershell
 .\scripts\quickstart.ps1
 ```
 
-首次运行会自动建立两个 Python 虚拟环境、安装依赖并启动三个服务，之后打开 `http://127.0.0.1:5180/forgepilot/`。本地演示账号为 `demo@example.com` / `ForgePilot123!`；停止服务运行 `.\scripts\stop-demo.ps1`。本地演示使用 SQLite 和虚构数据，**不需要** PostgreSQL、CloudBase、企业数据或模型密钥。
+首次运行会建立两个 Python 虚拟环境、安装依赖并启动三个服务，然后打开 `http://127.0.0.1:5180/forgepilot/`。演示账号同上；停止服务运行 `.\scripts\stop-demo.ps1`。
 
-## 体验路线
-
-1. 用评审演示账号登录，选择 `AC-07` 空压机，查看该设备的测点与历史。
-2. 在告警中心创建、指派并处理告警；在工单页面创建、指派、处理和验收维修任务。
-3. 上传虚构说明书，核对解析文本、删除误上传文档；在诊断工作台查看证据、冲突和待补采项。
-4. 只有非模拟且符合证据校验的诊断才允许保存；之后由人确认并生成工单，审计记录可追溯操作。
-
-设备导入支持 CSV 和扫码内容录入。扫码摄像头需要浏览器支持 `BarcodeDetector`，同时提供手动粘贴二维码内容。人员管理包含岗位、状态和停用前未完成工单转派。维修人员可查看看板与日历中的任务。
-
-## 架构
-
-| 目录 | 技术 | 职责 |
-|---|---|---|
-| `frontend/` | React、Vite、Fluent UI | 设备、告警、诊断、知识、工单、人员和审计页面 |
-| `services/business/` | FastAPI、SQLAlchemy、Alembic | 登录、组织权限、设备、测点、告警、工单、诊断保存和审计 |
-| `services/knowledge/` | FastAPI、BM25、可选 OpenAI 兼容模型 | 说明书解析检索、证据引用、辅助诊断；通过业务服务验证身份 |
-
-知识服务的 `POST /api/v1/agent/assist` 提供受控只读 Agent 流程：先验证设备身份，再读取同设备历史工单并调用证据诊断，返回每一步工具状态。此接口不创建或修改工单；诊断保存与建单仍须在业务服务中人工确认。默认演示配置的模型与资料仍是模拟数据。
-Agent 的历史工单工具需要 C 服务配置 `BUSINESS_API_BASE_URL`，并逐请求透传当前 Bearer 令牌和组织身份；未配置或查询失败时会明确显示该步骤不可用。B/C 两端配置相同的随机 `AGENT_AUDIT_KEY` 后，C 会把工具名称、状态和数量写入 B 的审计表，不发送提问原文或模型回答；如 B 设置了 `WRITE_API_KEY`，C 还需配置 `BUSINESS_WRITE_KEY`。前端诊断页会显示审计是否写入；公开预览只展示标注为演示的本地版本。
-
-三个进程分别运行。前端 API 模式只读取服务端数据；请求失败会提示错误，不会将本地虚构数据伪装成接口结果。B 服务的 PostgreSQL 迁移与 SQLite 本地演示均可用；C 服务目前使用单进程 JSON 知识库，部署多实例前须迁移存储。
-
-数据库准备使用 `scripts/prepare-business-db.ps1`：先在终端设置 PostgreSQL `DATABASE_URL`，再运行脚本执行 Alembic 迁移；仅开发演示环境可加 `-SeedDemo`。业务服务的 `/ready` 会实际查询数据库，适合部署就绪检查。`scripts/start-demo.ps1` 则继续使用独立的 SQLite 本地演示库。具体步骤见 [数据库运行说明](docs/DATABASE_READINESS.md)。
-
-公网部署前，应分别在业务服务和知识服务的环境中执行 `python scripts/check_production_config.py business` 与 `python scripts/check_production_config.py knowledge`。脚本只检查必填配置，不打印密钥，也不能代替 PostgreSQL 迁移、模型调用、持久化卷和公网接口的实际验收。知识服务当前使用单进程 JSON 文件，部署时须将 `KNOWLEDGE_STORAGE_PATH` 指向持久化卷并保持单实例；多实例需要先改造存储。
-
-## 本地复现与部署
-
-首次安装或依赖需要更新时运行 `.\scripts\quickstart.ps1`；依赖已安装后可直接运行 `.\scripts\start-demo.ps1`。启动脚本为会话生成随机签名密钥、绑定回环地址并创建 SQLite 演示数据库，不能原样公开部署。
-
-### 使用真实 DeepSeek 诊断
-
-本机配置 `DEEPSEEK_API_KEY` 环境变量后，运行 `.\scripts\start-demo.ps1 -DeepSeek`。模型密钥只传入知识服务，默认使用 `deepseek-flash`；未带此参数时使用模拟模型。已经启动的本地服务需要先通过 `.\scripts\stop-demo.ps1` 停止。设备与知识文档仍为虚构演示资料，真实模型调用不代表真实企业数据验收。
-
-Linux/macOS 的三终端命令见 [docs/RUN_LINUX.md](docs/RUN_LINUX.md)。
-
-服务接口：业务 `http://127.0.0.1:8001/docs`、知识 `http://127.0.0.1:8002/docs`。各服务配置模板在 `services/business/.env.example`、`services/knowledge/.env.example`，前端配置模板在 `frontend/.env.example`；**模板值不能直接用于生产**。部署时后端设置独立密钥、受控 CORS、HTTPS 与身份校验，前端仅配置公开 API 地址，不包含模型密钥。
-
-真实后端上线时才需要 PostgreSQL、持久化文件存储和模型配置；CloudBase 步骤见 [后端部署说明](docs/CLOUDBASE_DEPLOY.md)。
-
-## 验证
+本地默认使用 `mock` 模型，不需要任何密钥。要接真实 DeepSeek：
 
 ```powershell
+# 先设置用户环境变量 DEEPSEEK_API_KEY，再启动
+.\scripts\start-demo.ps1 -DeepSeek
+```
+
+模型密钥只传入知识服务，默认 `deepseek-flash`。Linux/macOS 三终端命令见 [docs/RUN_LINUX.md](docs/RUN_LINUX.md)。
+
+### 云端部署
+
+前端由 CloudBase 静态托管，业务与知识服务由 CloudBase 云托管运行。完整步骤、环境变量和持久化注意事项见 [docs/CLOUDBASE_DEPLOY.md](docs/CLOUDBASE_DEPLOY.md)。
+
+## 测试与质量
+
+```powershell
+# 前端
 cd frontend; npm test; npm run build; cd ..
+
+# 业务服务
 cd services/business; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\python.exe -m ruff check .; cd ../..
+
+# 知识服务
 cd services/knowledge; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\python.exe -m ruff check .; cd ../..
 ```
 
-模型配置成 `LLM_PROVIDER=openai`、提供合法密钥、模型与基础 URL，并使用 `DEVICE_PROVIDER=http` 读取 B 服务后，才能测试真实模型路径。无配置时 C 返回带 `is_mock`/降级状态的演示结果，前端不会把它作为可保存的真实诊断。
+三套测试、前端生产构建和 Ruff 均在 GitHub Actions 中执行，当前 `main` 的两项 CI 均为通过状态。知识服务的虚构数据集检索、引用与失败路径评测见 [真实 RAG 验证报告](services/knowledge/docs/real-rag-report.md)。
 
-知识服务的虚构数据集验证、引用样本、模型失败路径和未完成项见 [真实 RAG 验证报告](services/knowledge/docs/real-rag-report.md)。报告明确说明：真实企业资料和真实模型调用尚未完成，不能把当前演示结果当作企业诊断。
+## 数据与安全边界
 
-## 团队与来源
+- 设备、告警、工单、说明书均为**虚构演示数据**，未使用未授权的企业原始资料。
+- 组织与用户身份由登录令牌在服务端解析，不信任客户端伪造的请求头。
+- 模型密钥只存在服务端；仓库只提交 `.env.example`。
+- Agent 只使用白名单只读工具；诊断保存、人工确认、工单生成都必须由人触发。
+- 不具备真实企业数据时，不宣称诊断结果等同于企业现场结论。
 
-- 梁晓添：产品、前端、业务集成、后端补充与最终统筹。
-- 林同学：业务后端早期开发；后续负责演示视频录制。
-- 龚同学：知识检索、诊断服务与文档上传。
-- 指导教师丁老师提供业务反馈；企业原始数据尚未授权使用。
+## 团队
 
-原始 A/B/C 功能分支和各轮 Pull Request 保留细粒度开发历史。本集成分支把三个独立服务放入同一可复现仓库；来源记录见 [docs/SOURCE_COMMITS.md](docs/SOURCE_COMMITS.md)。协作要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+| 成员 | 分工 |
+|---|---|
+| 梁晓添 | 产品、前端、业务集成、云端部署、最终统筹 |
+| 林同学 | 业务后端早期开发；演示视频录制 |
+| 龚同学 | 知识检索、诊断服务与文档上传 |
+| 丁老师 | 业务指导（不参与代码与分工） |
 
-## 提交说明
+A/B/C 功能分支与各轮 Pull Request 保留了细粒度开发历史；来源记录见 [docs/SOURCE_COMMITS.md](docs/SOURCE_COMMITS.md)，协作要求见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-校赛通知要求公开或授权评审访问的代码仓库、README、环境配置说明、完整细粒度 Git 历史、5–8 分钟普通话 1080p 演示视频和不超过 30 页的技术 PDF；在线演示为可选加分项。通知：[东莞理工学院计算机学院校赛公告](https://cs.dgut.edu.cn/info/1034/19118.htm)。A/B/C 功能与集成代码已合入 `main`；视频和 PDF 是独立提交材料，公网部署仍需另行配置，不能仅凭本地演示宣称已完成比赛提交。
+## 提交材料
 
-代码使用 [MIT License](LICENSE)。虚构说明书用于演示；不要上传未获授权的企业资料、密钥或个人信息。
+- 代码仓库：<https://github.com/lxiaotian685-web/forgepilot-ai>
+- 在线演示：<https://forgepilot.xiaotianworks.cn/>
+- 5–8 分钟普通话 1080p 演示视频：待补充链接
+- 技术 PDF：待补充链接
+- 校赛公告：[东莞理工学院计算机学院校赛公告](https://cs.dgut.edu.cn/info/1034/19118.htm)
+
+代码使用 [MIT License](LICENSE)。虚构说明书仅用于演示，请勿上传未获授权的企业资料、密钥或个人信息。

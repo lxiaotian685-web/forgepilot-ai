@@ -1,6 +1,8 @@
 # CloudBase 后端部署准备
 
-当前 CloudBase 环境 `cloud1-d8gmw1jur6dc98110` 的静态托管已上线；截至 2026 年 10 月 29 日，云托管服务列表为空，CLI 查询 PostgreSQL 返回 `PG instance not found`。因此目前只有前端演示，不应把预览地址描述为完整的公网系统。
+当前线上演示：<https://forgepilot.xiaotianworks.cn/>。前端由 CloudBase 静态托管提供，`services/business` 与 `services/knowledge` 分别以 CloudBase 云托管服务 `forgepilot-business`、`forgepilot-knowledge` 运行，均为 `min=1` 常驻单实例。
+
+> 当前容器内使用 SQLite 和单进程 JSON 知识库，属于演示配置；重新部署或实例重启会恢复种子数据。长期运行前请按下文接入 PostgreSQL 与持久化存储。
 
 ## 需要先开通的资源
 

@@ -2,11 +2,13 @@
 
 面向中小制造企业设备维护的 Web 作品。系统把设备台账、测点、告警、知识文档、辅助诊断、维修工单和审计记录串成可演示的流程。
 
-> 参赛方向：第九届传智杯 AI WEB 网页开发挑战赛。当前仓库使用**虚构演示数据**。企业数据和模型密钥尚未取得；默认诊断明确标记为模拟结果，不宣称接入真实企业设备或真实大模型。
+> 参赛方向：第九届传智杯 AI WEB 网页开发挑战赛。当前仓库使用**虚构演示数据**；在线演示接入服务端真实 DeepSeek，企业真实数据尚未取得，诊断结论仍需人工核验，不代表企业真实诊断结论。
 
 ## 立即体验
 
-直接打开 [CloudBase 在线演示](https://cloud1-d8gmw1jur6dc98110-1470332055.tcloudbaseapp.com/forgepilot-preview/)，无需下载代码或安装软件。该地址提供前端演示数据；操作仅用于体验页面流程，不会写入云端业务数据库。ICP备案未完成期间，CloudBase 默认域名可能有访问提示或限制。
+直接打开 [在线演示](https://forgepilot.xiaotianworks.cn/)，无需下载代码或安装软件。在线演示由 CloudBase 静态托管提供前端、CloudBase 云托管运行 `services/business` 与 `services/knowledge`，支持真实账号登录和真实 DeepSeek 诊断。演示账号 `demo@example.com` / `ForgePilot123!`。
+
+> 云端容器内的 SQLite 与知识库 JSON 属于演示数据，重新部署或实例重启后会恢复初始状态；如需长期保存，请按 `docs/CLOUDBASE_DEPLOY.md` 接入持久化数据库与存储。
 
 要在 Windows 本地运行前后端完整演示，预先安装 **Python 3.10+**、**Node.js 20+**（含 npm）和 **PowerShell 7.4+**，在仓库根目录执行：
 

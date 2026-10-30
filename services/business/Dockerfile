@@ -6,4 +6,4 @@ COPY . .
 RUN pip install --no-cache-dir ".[postgres]"
 
 EXPOSE 8080
-CMD ["sh", "-c", "exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "python -m app.seed && exec python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

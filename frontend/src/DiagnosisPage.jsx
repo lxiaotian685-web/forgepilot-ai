@@ -11,7 +11,7 @@ import "./diagnosis.css";
 
 const types = { fact: "文档陈述", inference: "模型推断", pending: "待验证" };
 
-export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "", demoOwners = [], demoOrders = [], onDemoOrderCreated }) {
+export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-07", initialQuestion = "", demoOwners = [], demoOrders = [], onDemoOrderCreated, onChanged, onViewOrders }) {
   const [deviceId, setDeviceId] = useState(initialDeviceId);
   const [question, setQuestion] = useState(initialQuestion || (session?.isPreview ? "现场巡检发现驱动端异响，振动在慢升速过程中明显加剧。需要核对哪些证据？" : ""));
   const [result, setResult] = useState(null);
@@ -91,6 +91,8 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
       });
       setSavedDiagnosis(confirmed.diagnosis);
       setConfirmedOrder(confirmed.workOrder);
+      setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已保存，可点击查看工单。`);
+      try { await onChanged?.(); } catch { setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已保存，但总览刷新失败，请刷新工单列表。`); }
       let events = [];
       try {
         events = await loadDiagnosisAudit({ diagnosisId: savedDiagnosis.id, session });
@@ -160,7 +162,13 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     clearResult();
     setBusy(true);
     try {
-      const response = await requestAgent({ deviceId, question, session, orders: demoOrders, signal: controller.signal });
+      let analysisQuestion = question;
+      try {
+        const measured = session?.isPreview ? buildDemoMeasurementQuestion(deviceId) : buildMeasurementQuestion(deviceId, await loadDeviceParameters(deviceId, session.accessToken));
+        analysisQuestion = `${question}\n\n设备测点上下文：\n${measured}`.slice(0, 2000);
+      } catch { /* Keep the user's question when measurements are unavailable. */ }
+      if (controller.signal.aborted) return;
+      const response = await requestAgent({ deviceId, question: analysisQuestion, session, orders: demoOrders, signal: controller.signal });
       if (!controller.signal.aborted) {
         setAgentTrace(response);
         if (response.diagnosis) {
@@ -225,9 +233,8 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
             <small>勾选项仅保存在本页，用于提醒资料是否齐全，不会传给诊断接口。</small>
           </fieldset>
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
-          {session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromDemoMeasurements}>根据演示测点生成诊断</Button>}
-          {!session?.isPreview && <Button type="button" disabled={busy || !deviceId} onClick={diagnoseFromMeasurements}>读取设备测点并诊断</Button>}
-          <Button type="button" disabled={busy || !deviceId || !question.trim()} onClick={runAgent}>{session?.isPreview ? "运行受控 Agent 演示" : "运行受控 Agent"}</Button>
+          <Button type="button" disabled={busy || !deviceId || !question.trim()} onClick={runAgent}>Agent 辅助分析</Button>
+          <small>开始诊断：分析现场描述与知识证据。Agent 辅助分析：同时尝试读取测点、查询历史工单并记录工具步骤。</small>
           {busy && <Button type="button" onClick={() => { request.current?.abort(); setBusy(false); setError("已取消本次诊断，未生成结论。"); }}>取消请求</Button>}
         </form>
         <p className="grounded-note">{session?.isPreview ? "演示测点与资料均为虚构样例；自动生成的内容仅用于展示流程，不代表真实设备诊断。" : "设备型号由服务端档案决定，页面不提交覆盖型号。测点自动提问需要实际采集数据；没有阈值时不会断言超限。"}</p>
@@ -246,9 +253,10 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
             <div><span>原文证据</span><strong>{resultSummary.sources}</strong></div>
             <p>{resultSummary.pending > 0 ? "当前状态：证据待补齐" : "当前状态：仍需人工复核"}</p>
           </section>
-          {result.transport === "api" && !result.is_mock && <p className="model-observability" role="status">
+          {result.transport === "api" && !result.is_mock && result.status === "ok" && <p className="model-observability" role="status">
             真实模型：{result.model_name || "未返回名称"} · 输入 {result.input_tokens || 0} Token · 输出 {result.output_tokens || 0} Token · 合计 {result.total_tokens || 0} Token
           </p>}
+          {result.status === "model_unavailable" && <p role="alert">本次模型调用未完成，仅展示检索证据。未取得实际用量，不能据此判断是否计费。</p>}
           <p className="diagnostic-answer">{result.answer}</p>
           {result.conflicts.length > 0 && <section className="diagnostic-conflicts" aria-label="事实冲突">
             <h3>检测到事实冲突</h3>
@@ -271,9 +279,11 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
           </section>
           <section className="grounded-confirm" aria-label="诊断确认与建单">
             <label>人工风险分级</label>
-            <BelowSelect ariaLabel="人工风险分级" value={riskLevel} disabled={workflowBusy || Boolean(savedDiagnosis)} onChange={setRiskLevel} options={[{ value: "", label: "请选择风险等级" }, { value: "low", label: "低" }, { value: "medium", label: "中" }, { value: "high", label: "高" }]} />
+            <fieldset disabled={workflowBusy || Boolean(savedDiagnosis)} style={{ display: "flex", gap: 24, padding: 16, border: "1px solid #d6e1e9", borderRadius: 6 }}><legend>人工风险等级</legend>{[["low", "低风险"], ["medium", "中风险"], ["high", "高风险"]].map(([value, label]) => <label key={value} style={{ display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}><input type="radio" name="diagnosis-risk" value={value} checked={riskLevel === value} onChange={() => setRiskLevel(value)} />{label}</label>)}</fieldset>
+            {result.status !== "ok" && <p>本次诊断未成功，可选择人工风险等级，但需要成功生成有依据的诊断后才能保存和建单。</p>}
             {session?.isPreview && <><label htmlFor="diagnosis-owner">演示工单负责人</label><select id="diagnosis-owner" value={assignedOwner} disabled={workflowBusy || Boolean(confirmedOrder)} onChange={(event) => setAssignedOwner(event.target.value)}><option value="">请选择</option>{demoOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}</select></>}
             <div className="workflow-actions">
+              {confirmedOrder && <Button onClick={() => onViewOrders?.()}>查看已生成工单 {confirmedOrder.id}</Button>}
               <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.status !== "ok" || !riskLevel || (!session?.isPreview && (result.transport !== "api" || result.is_mock))} onClick={persistDiagnosis}>{savedDiagnosis ? "诊断已保存" : workflowBusy ? "正在处理" : session?.isPreview ? "保存演示诊断" : "保存诊断"}</Button>
               <Button disabled={workflowBusy || !savedDiagnosis || Boolean(confirmedOrder)} onClick={confirmAndCreateOrder}>{confirmedOrder ? "工单已生成" : "人工确认并生成工单"}</Button>
             </div>

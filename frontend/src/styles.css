@@ -363,3 +363,7 @@ body {
 .counterfactual-check ul { margin: 0; padding-left: 17px; color: #4f4537; font-size: 10px; line-height: 1.7; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .knowledge-preview { margin: 10px 14px; padding: 14px; min-height: 80px; max-height: 420px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #324154; background: #f5f8fc; border: 1px solid var(--border); border-radius: 5px; font-size: 12px; line-height: 1.7; }
+.compliance-line { margin-top: 12px; text-align: center; font-size: 11px; }
+.compliance-line a, .compliance-link { color: #6b7c8f; text-decoration: none; }
+.compliance-line a:hover, .compliance-link:hover { color: #1f5f9e; text-decoration: underline; }
+.app-footer .compliance-link { margin-left: auto; padding-left: 16px; }

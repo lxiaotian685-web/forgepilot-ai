@@ -96,6 +96,7 @@ export default function ApiPeoplePage({ session, notify, onLogout, onChanged }) 
 
   return <>
     <div className="page-heading"><div><h1>人员管理</h1><p>管理当前组织成员、岗位及未完成工单转派</p></div><span className="tone-badge tone-success">服务器数据</span></div>
+    <div className="metric-strip"><div><span>组织成员</span><strong>{people.length}</strong><small>人</small></div><div><span>在岗人员</span><strong>{people.filter(p => p.status === "active").length}</strong><small>人</small></div><div><span>维修人员</span><strong>{people.filter(p => p.role === "technician").length}</strong><small>人</small></div><div><span>未完成任务</span><strong>{people.reduce((sum, p) => sum + (p.openWorkOrderCount || 0), 0)}</strong><small>项</small></div></div>
     <div className="toolbar">
       <Input className="search-input" placeholder="搜索姓名、邮箱或岗位" value={filters.query} onChange={(_, data) => setFilters((current) => ({ ...current, query: data.value }))} />
       <BelowSelect value={filters.role} onChange={(role) => setFilters((current) => ({ ...current, role }))} options={[{ value: "", label: "全部岗位" }, ...editableRoles.map(([value, label]) => ({ value, label }))]} />

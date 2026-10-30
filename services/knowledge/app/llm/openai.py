@@ -36,6 +36,10 @@ _SYSTEM_PROMPT = """\
   ]
 }
 规则：fact 的 source_ids 只能引用本次提供的证据编号；不要编造置信度、概率或修改设备参数。
+理解口语和不完整的现场描述，直接回应用户当前问题，禁止照抄固定示例。
+summary 控制在 200 字以内，statements 最多 6 条，补采建议最多 3 条，确保 JSON 完整闭合。
+文档只覆盖部分问题时，分别说明有据部分和未知部分；假设标为 inference，缺失信息标为 pending。
+不要将用户描述当作文档事实，不要将缺少阈值的测点误判为超限。
 若设备事实与文档证据冲突，必须写入 conflicts 并保留双方来源，禁止静默覆盖。
 """
 
@@ -135,6 +139,8 @@ class OpenAILLM(BaseLLM):
             response.raise_for_status()
         except httpx.TimeoutException as exc:
             raise LLMError("模型调用超时") from exc
+        except httpx.HTTPStatusError as exc:
+            raise LLMError(f"模型接口返回 HTTP {exc.response.status_code}") from exc
         except httpx.HTTPError as exc:
             raise LLMError("模型调用失败") from exc
 
@@ -174,6 +180,9 @@ class OpenAILLM(BaseLLM):
         return str(page) if page is not None else "未知"
 
     def _parse(self, data: dict) -> LLMResult:
+        choices = data.get("choices") if isinstance(data, dict) else None
+        if isinstance(choices, list) and choices and isinstance(choices[0], dict) and choices[0].get("finish_reason") == "length":
+            raise LLMError("模型输出达到长度上限，未生成完整诊断")
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:

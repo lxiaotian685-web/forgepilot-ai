@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import EquipmentVisual from "./EquipmentVisual.jsx";
 import {
   Avatar,
   Badge,
@@ -114,6 +115,7 @@ function LoginPage({ onLogin }) {
         <span className="login-kicker">FORGEPILOT · INDUSTRIAL OPERATIONS</span>
         <h1>制造领航</h1>
         <p>面向设备诊断与维修闭环的工业协同工作台。</p>
+        <EquipmentVisual compact />
         <div className="login-safety"><ShieldLock24Regular /><span><strong>按组织与岗位授权</strong><small>登录后只显示当前角色允许访问的模块。</small></span></div>
       </section>
       <section className="login-card">
@@ -135,6 +137,9 @@ function LoginPage({ onLogin }) {
           </form>
         )}
         <small className="login-footnote">请勿在演示环境录入真实生产秘密或个人敏感信息。</small>
+        <div className="compliance-line">
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">粤ICP备2026151829号-2</a>
+        </div>
       </section>
     </main>
   );
@@ -521,7 +526,7 @@ function WorkspaceApp({ session, onLogout }) {
     alerts: isDemoMode
       ? <AlertsPage navigate={navigate} notify={notify} alerts={alerts} trendData={trendData} />
       : <ApiAlertsPage session={session} devices={devices} navigate={navigate} notify={notify} onLogout={onLogout} onChanged={refreshBusinessData} />,
-    diagnosis: <DiagnosisPage devices={devices} session={session} initialDeviceId={pageContext.deviceId || devices[0]?.id || ""} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} demoOwners={managedPeople.filter((person) => person.status === "在岗" && ["维修技师", "维护主管"].includes(person.role)).map((person) => person.name)} demoOrders={visibleOrders} onDemoOrderCreated={(order) => setManagedOrders((current) => [order, ...(current ?? workOrders.map(normalizeWorkOrder))])} />,
+diagnosis: <DiagnosisPage onChanged={refreshBusinessData} onViewOrders={() => navigate("orders")} devices={devices} session={session} initialDeviceId={pageContext.deviceId || devices[0]?.id || ""} initialQuestion={pageContext.alert ? `来源告警 ${pageContext.alert.id}：${pageContext.alert.title}` : ""} demoOwners={managedPeople.filter((person) => person.status === "在岗" && ["维修技师", "维护主管"].includes(person.role)).map((person) => person.name)} demoOrders={visibleOrders} onDemoOrderCreated={(order) => setManagedOrders((current) => [order, ...(current ?? workOrders.map(normalizeWorkOrder))])} />,
     knowledge: isDemoMode
       ? <KnowledgeWorkspace notify={notify} evidence={evidence} />
       : <ApiKnowledgePage session={session} notify={notify} onLogout={onLogout} />,
@@ -547,7 +552,7 @@ function WorkspaceApp({ session, onLogout }) {
           <div className="top-actions"><Badge appearance="tint" title={businessError || (connectedResources.length ? `已连接：${connectedResources.join(", ")}` : "正在连接业务接口")}>{isDemoMode ? "演示数据" : dataSource === "api" ? "业务接口已连接" : dataSource === "error" ? "业务接口异常" : "连接中"}</Badge><Avatar name={session.user.displayName} color="colorful" /><span className="user-name"><strong>{session.user.displayName}</strong><small>{roleLabels[session.role]}</small></span><Button appearance="subtle" icon={<SignOut24Regular />} onClick={() => onLogout()} aria-label="退出登录">退出</Button></div>
         </header>
         <main className="page-content">{pages[activePage]}</main>
-        <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>{isDemoMode ? "演示环境" : "业务数据来自已配置服务"}</span></footer>
+        <footer className="app-footer"><span>ForgePilot 工业设备维护工作台</span><span>{isDemoMode ? "演示环境" : "业务数据来自云端服务"}</span><a className="compliance-link" href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">粤ICP备2026151829号-2</a></footer>
       </div>
       {toast && <div className="toast" role="status"><CheckmarkCircle24Regular />{toast}</div>}
     </div>

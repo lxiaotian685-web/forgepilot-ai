@@ -62,7 +62,7 @@ try {
         LLM_BASE_URL = 'https://api.deepseek.com'
         LLM_MODEL = 'deepseek-flash'
         LLM_TIMEOUT = '45'
-        LLM_MAX_TOKENS = '2048'
+        LLM_MAX_TOKENS = '4096'
         C_REQUIRE_AUTH = "true"
         C_IDENTITY_API_BASE_URL = $businessUrl
         C_DEFAULT_ORGANIZATION_ID = $demoOrganizationId

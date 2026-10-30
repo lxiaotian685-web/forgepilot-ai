@@ -68,8 +68,17 @@ class RAGService:
                 f"设备 {device_id} 的型号与传入的型号不一致，已拒绝检索。",
             )
 
+        retrieval_query = question
+        for phrase, terms in {
+            "发烫": "温度过高 冷却 散热", "很热": "温度过高 冷却",
+            "抖": "振动 轴承", "响": "异响 振动 轴承",
+            "漏水": "泄漏 机械密封", "漏油": "泄漏 润滑 密封",
+            "没劲": "压力不足 负载", "不转": "启动 电机 故障",
+        }.items():
+            if phrase in question:
+                retrieval_query += " " + terms
         evidences = self.kb.search(
-            question,
+            retrieval_query,
             equipment_model=device.knowledge_model,
             top_k=self.top_k,
             organization_id=auth.organization_id if auth else None,
@@ -86,8 +95,10 @@ class RAGService:
 
         try:
             result = self.llm.answer(question, evidences, device=device)
-        except LLMError:
-            return self._degraded(device_id, evidences)
+        except LLMError as exc:
+            response = self._degraded(device_id, evidences)
+            response.answer = f"本次诊断未完成：{exc}。\n" + response.answer
+            return response
 
         statements, has_ungrounded_fact = self._validate_sources(
             result.statements, evidences

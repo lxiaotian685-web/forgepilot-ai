@@ -18,5 +18,5 @@ export function filterAuditRows(rows, { query = "", actor = "", action = "", day
   return rows.filter((row) => (!actor || row.user === actor)
     && (!action || row.action === action)
     && (!cutoff || (Number.isFinite(Date.parse(row.time)) && new Date(row.time) >= cutoff))
-    && (!term || [row.time, row.user, row.action, row.object, row.result].some((value) => String(value || "").toLowerCase().includes(term))));
+    && (!term || [row.id, row.entityId, row.time, row.user, row.action, row.object, row.result, JSON.stringify(row.before || {}), JSON.stringify(row.after || {})].some((value) => String(value || "").toLowerCase().includes(term))));
 }

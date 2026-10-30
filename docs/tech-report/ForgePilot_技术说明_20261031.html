@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>制造领航 ForgePilot 技术说明</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #1d2a38; font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif; font-size: 10.2pt; line-height: 1.65; }
+  h1, h2, h3 { margin: 0; color: #10243a; }
+  h2 { margin: 0 0 8px; padding-left: 10px; border-left: 4px solid #1f6feb; font-size: 17pt; line-height: 1.3; }
+  h3 { margin: 14px 0 6px; font-size: 11.5pt; }
+  p { margin: 5px 0 8px; }
+  ul, ol { margin: 5px 0 9px; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .muted { color: #5b6b7c; }
+  .small { font-size: 8.8pt; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .cover { height: 262mm; padding: 18mm 14mm; color: #fff; background: linear-gradient(150deg, #0a1f33 0%, #0f3355 55%, #124a72 100%); display: flex; flex-direction: column; justify-content: space-between; }
+  .cover .kicker { color: #8fc2ff; letter-spacing: .18em; font-size: 9pt; }
+  .cover h1 { margin-top: 10mm; color: #fff; font-size: 34pt; letter-spacing: .04em; }
+  .cover .sub { margin-top: 6mm; color: #cfe4ff; font-size: 14pt; }
+  .cover .line { width: 46mm; height: 3px; margin: 8mm 0; background: #4f9cf9; }
+  .cover .doc { font-size: 12pt; color: #e8f2ff; }
+  .cover .meta { margin-top: 10mm; color: #a9c8e8; font-size: 9.5pt; line-height: 1.9; }
+  .cover img { width: 100%; margin-top: 8mm; border: 1px solid rgba(255,255,255,.25); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+  .toc { margin: 6px 0 0; padding: 0; list-style: none; columns: 2; column-gap: 14mm; }
+  .toc li { margin: 5px 0; padding-bottom: 3px; border-bottom: 1px dotted #c8d4e1; font-size: 9.6pt; }
+  .toc span { float: right; color: #1f6feb; }
+  .lead { padding: 10px 12px; background: #f1f6fc; border-left: 3px solid #1f6feb; font-size: 9.8pt; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { padding: 10px 12px; background: #f7f9fc; border: 1px solid #dde7f1; border-radius: 4px; }
+  .card strong { display: block; margin-bottom: 3px; color: #0f3355; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.2pt; }
+  th { padding: 6px 8px; color: #fff; background: #143a5c; text-align: left; font-weight: 600; }
+  td { padding: 6px 8px; border-bottom: 1px solid #dde7f1; vertical-align: top; }
+  tr:nth-child(even) td { background: #f7f9fc; }
+  .shot { margin: 8px 0 4px; }
+  .shot img { width: 100%; border: 1px solid #ccd9e6; border-radius: 3px; }
+  .shot figcaption { margin-top: 3px; color: #5b6b7c; font-size: 8.4pt; text-align: center; }
+  .arch { margin: 8px 0; padding: 10px; background: #f7f9fc; border: 1px solid #dde7f1; }
+  .arch-row { display: flex; align-items: stretch; gap: 8px; margin: 5px 0; }
+  .arch-box { flex: 1; padding: 8px 9px; color: #10243a; background: #fff; border: 1px solid #b9cde2; border-top: 3px solid #1f6feb; border-radius: 3px; font-size: 8.8pt; }
+  .arch-box b { display: block; font-size: 9.6pt; }
+  .arch-box small { color: #5b6b7c; }
+  .arrow { align-self: center; color: #1f6feb; font-size: 13pt; }
+  .flow { display: flex; gap: 6px; margin: 8px 0; }
+  .flow div { flex: 1; padding: 8px 6px; text-align: center; background: #eef4fb; border: 1px solid #c9d9ea; border-radius: 3px; font-size: 8.6pt; }
+  .flow div b { display: block; color: #1f6feb; font-size: 10pt; }
+  .pill { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 7px; color: #0f3355; background: #e8f1fb; border: 1px solid #c6dcf2; border-radius: 10px; font-size: 8.4pt; }
+  .footnote { margin-top: 10px; padding-top: 6px; border-top: 1px solid #dde7f1; color: #7a8a9b; font-size: 8pt; }
+  code { padding: 1px 4px; background: #eef2f7; border-radius: 3px; font-family: Consolas, monospace; font-size: 8.8pt; }
+  pre { margin: 6px 0; padding: 9px 10px; overflow: hidden; color: #e6f0fb; background: #10243a; border-radius: 3px; font-family: Consolas, monospace; font-size: 8.4pt; line-height: 1.5; }
+  .two-col { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; }
+  .kpi { display: flex; gap: 8px; margin: 8px 0; }
+  .kpi div { flex: 1; padding: 8px; text-align: center; background: #f1f6fc; border: 1px solid #d5e3f2; border-radius: 3px; }
+  .kpi b { display: block; color: #1f6feb; font-size: 15pt; line-height: 1.3; }
+  .kpi span { color: #5b6b7c; font-size: 8.2pt; }
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div>
+    <div class="kicker">第九届传智杯 AI WEB 网页开发挑战赛 · 技术说明文档</div>
+    <h1>制造领航<br />ForgePilot</h1>
+    <div class="sub">面向中小制造企业的设备维护 AI 工作台</div>
+    <div class="line"></div>
+    <div class="doc">设备台账 · 证据检索 · AI 辅助诊断 · 人工确认 · 工单闭环 · 审计追踪</div>
+  </div>
+  <div>
+    <img src="../screenshots/02-overview.png" alt="维护总览" />
+    <div class="meta">
+      团队：梁晓添（产品 / 前端 / 集成 / 部署）· 林同学（业务后端 / 视频）· 龚同学（知识检索与诊断）<br />
+      指导教师：丁老师　|　版本：v1.0　|　日期：2026-10-31<br />
+      在线演示：https://forgepilot.xiaotianworks.cn/　|　代码仓库：https://github.com/lxiaotian685-web/forgepilot-ai
+    </div>
+  </div>
+</section>
+
+<section class="page">
+  <h2>摘要</h2>
+  <p class="lead">ForgePilot 把制造企业设备维护中分散的“设备档案、说明书知识、现场现象、维修任务、操作记录”收敛到一个 Web 工作台，用检索增强生成（RAG）与真实大模型给出**有证据、可核对、需人工确认**的诊断建议，再把建议转化为可跟踪的维修工单和审计记录。</p>
+  <div class="kpi">
+    <div><b>6</b><span>演示设备</span></div>
+    <div><b>3</b><span>诊断证据来源</span></div>
+    <div><b>1,904</b><span>单次诊断 Token</span></div>
+    <div><b>2</b><span>云端服务</span></div>
+  </div>
+  <h3>文档结构</h3>
+  <ol class="toc">
+    <li>1. 项目背景与需求 <span>03</span></li>
+    <li>2. 总体架构 <span>04</span></li>
+    <li>3. 数据模型与权限 <span>05</span></li>
+    <li>4. AI 方案：RAG 与证据诊断 <span>06</span></li>
+    <li>5. 人工在环与受控 Agent <span>07</span></li>
+    <li>6. 核心功能与界面 <span>08</span></li>
+    <li>7. 诊断闭环实拍 <span>09</span></li>
+    <li>8. 知识与审计 <span>11</span></li>
+    <li>9. 关键实现 <span>12</span></li>
+    <li>10. 测试与质量 <span>13</span></li>
+    <li>11. 安全、数据与合规 <span>14</span></li>
+    <li>12. 创新点与展望 <span>15</span></li>
+    <li>附录：运行与账号 <span>16</span></li>
+  </ol>
+  <h3>关键词</h3>
+  <p><span class="pill">RAG</span><span class="pill">DeepSeek</span><span class="pill">证据引用</span><span class="pill">结构化输出</span><span class="pill">Human-in-the-loop</span><span class="pill">FastAPI</span><span class="pill">React</span><span class="pill">CloudBase</span></p>
+  <div class="footnote">说明：本文档中的设备、告警、工单和说明书均为虚构演示数据；在线演示接入服务端真实 DeepSeek，结论仍需人工核验，不代表企业真实诊断结论。</div>
+</section>
+
+<section class="page">
+  <h2>1. 项目背景与需求</h2>
+  <h3>1.1 问题</h3>
+  <div class="grid2">
+    <div class="card"><strong>信息分散</strong>设备运行数据在监控系统，说明书在共享盘或个人电脑，维修任务在表格或聊天群里，三者无法互相对照。</div>
+    <div class="card"><strong>经验依赖</strong>现场判断依赖老师傅经验，新人难以快速定位“应该先查什么”，也难以说明依据。</div>
+    <div class="card"><strong>过程不可追溯</strong>诊断结论、谁确认、何时建单、改了哪些字段，缺少统一记录。</div>
+    <div class="card"><strong>AI 不可信</strong>直接让大模型给结论，容易出现无依据回答、引用错文档、把推断当事实。</div>
+  </div>
+  <h3>1.2 目标</h3>
+  <ul>
+    <li>用一个工作台串起：设备查询 → 证据检索 → AI 辅助诊断 → 人工确认 → 生成工单 → 维修验收 → 审计追踪。</li>
+    <li>AI 的每一个判断都能回到说明书原文；不能回到原文的内容必须明确标注为推断或待验证。</li>
+    <li>模型只提建议，保存诊断、确认风险、生成工单都由人触发，并且幂等、可审计。</li>
+    <li>首条验收路线固定为演示设备 <b>AC-07 螺杆空气压缩机</b>，不使用未标明的静态数据伪装真实接口。</li>
+  </ul>
+  <h3>1.3 非目标</h3>
+  <ul>
+    <li>不做设备远程控制，不自动执行停机、启机或参数下发。</li>
+    <li>不在没有授权数据时宣称企业真实诊断能力；当前全部为虚构演示数据。</li>
+    <li>不把系统做成通用聊天机器人，而是围绕设备维护流程的受控工作流。</li>
+  </ul>
+  <div class="footnote">对应比赛评分：AI 深度、创新、前端工程、实用性、用户体验、社会价值与商业潜力。</div>
+</section>
+
+<section class="page">
+  <h2>2. 总体架构</h2>
+  <div class="arch">
+    <div class="arch-row">
+      <div class="arch-box"><b>浏览器</b><small>React 18 + Vite + Fluent UI<br />设备 / 告警 / 诊断 / 知识 / 工单 / 人员 / 审计</small></div>
+    </div>
+    <div class="arch-row"><div class="arrow">↓ Bearer Token</div><div class="arrow">↓ Bearer Token</div></div>
+    <div class="arch-row">
+      <div class="arch-box"><b>业务服务 services/business</b><small>FastAPI · SQLAlchemy · Alembic<br />登录、组织/岗位权限、设备、测点、告警、工单、诊断保存、审计</small></div>
+      <div class="arch-box"><b>知识服务 services/knowledge</b><small>FastAPI · BM25 · OpenAI 兼容适配器<br />文档解析、检索、证据引用、结构化诊断、受控 Agent</small></div>
+    </div>
+    <div class="arch-row"><div class="arrow">↓</div><div class="arrow">↓</div></div>
+    <div class="arch-row">
+      <div class="arch-box"><b>数据层</b><small>SQLite（演示）/ PostgreSQL（生产迁移）</small></div>
+      <div class="arch-box"><b>知识与模型</b><small>JSON 知识库（单实例）/ 持久化存储；DeepSeek OpenAI 兼容接口</small></div>
+    </div>
+  </div>
+  <h3>2.1 服务边界</h3>
+  <table>
+    <tr><th>服务</th><th>职责</th><th>不负责</th></tr>
+    <tr><td>前端</td><td>页面、交互、权限导航、证据阅读、调用两个 API</td><td>不持有模型密钥，不伪造接口数据</td></tr>
+    <tr><td>业务服务</td><td>身份与组织、设备事实、告警/工单状态机、诊断落库、审计</td><td>不调用大模型</td></tr>
+    <tr><td>知识服务</td><td>文档解析检索、模型调用、引用校验、结构化诊断、只读 Agent</td><td>不直接建单，不操作设备</td></tr>
+  </table>
+  <h3>2.2 关键设计</h3>
+  <ul>
+    <li>身份由业务服务签发 Bearer Token；知识服务每次请求回查业务服务确认身份，不信任客户端伪造组织头。</li>
+    <li>前端有 <code>mock | api</code> 两种数据模式；API 模式请求失败会明确报错，不回退成演示数据。</li>
+    <li>知识服务保持单实例 + 持久化卷；多实例前必须先改造知识库存储。</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h2>3. 数据模型与权限</h2>
+  <h3>3.1 核心对象</h3>
+  <table>
+    <tr><th>对象</th><th>关键字段</th><th>说明</th></tr>
+    <tr><td>Organization / Membership</td><td>id、code、role</td><td>组织隔离；角色 owner / admin / manager / technician / viewer</td></tr>
+    <tr><td>Device</td><td>device_id、model、plant、health、status</td><td>首条演示设备 AC-07</td></tr>
+    <tr><td>DeviceParameter</td><td>name、value、unit、threshold</td><td>设备专属测点，不同设备指标不同</td></tr>
+    <tr><td>Alert</td><td>code、level、status、owner</td><td>待确认 → 处理中 → 已关闭</td></tr>
+    <tr><td>WorkOrder</td><td>code、status、priority、owner、plan</td><td>列表 / 看板 / 日历；合法状态流转</td></tr>
+    <tr><td>Diagnosis</td><td>status、risk、model、tokens、sources</td><td>只有非模拟且证据校验通过才允许保存</td></tr>
+    <tr><td>AuditLog</td><td>actor、action、entity、before/after</td><td>诊断、建单、确认、人员变更均可追溯</td></tr>
+  </table>
+  <h3>3.2 权限与隔离</h3>
+  <ul>
+    <li>导航按岗位显示；维修人员只能处理本人告警/工单，主管负责验收与取消。</li>
+    <li>所有查询带组织条件；跨组织设备返回 403，不泄露是否存在。</li>
+    <li>人员停用前必须选择未完成工单接收人，转派写入审计。</li>
+    <li>知识文档上传、删除限制管理岗位，并校验组织归属。</li>
+  </ul>
+  <h3>3.3 幂等与事务</h3>
+  <p>人工确认生成工单时，以诊断 ID 作为幂等键；重复确认返回同一张工单。保存诊断、确认、建单在同一事务边界内完成，失败整体回滚，避免“诊断已保存但工单只建了一半”。</p>
+  <div class="footnote">实现位置：services/business/app/api、app/security.py；迁移见 services/business/alembic。</div>
+</section>
+
+<section class="page">
+  <h2>4. AI 方案：RAG 与证据诊断</h2>
+  <div class="flow">
+    <div><b>1 解析</b>说明书文本抽取与分块</div>
+    <div><b>2 检索</b>BM25 + 设备型号/组织过滤</div>
+    <div><b>3 组装</b>问题 + 设备事实 + 证据片段</div>
+    <div><b>4 生成</b>DeepSeek 结构化输出</div>
+    <div><b>5 校验</b>引用回查 + 降级</div>
+  </div>
+  <h3>4.1 为什么先检索再生成</h3>
+  <p>设备维护是强证据场景。模型参数里的“常识”不能替代本厂说明书。ForgePilot 先检索与当前设备型号匹配的说明书片段，把原文和来源一并交给模型，要求它只基于给定证据回答；检索不到足够证据时直接返回“证据不足”，而不是编一个答案。</p>
+  <h3>4.2 证据与引用</h3>
+  <ul>
+    <li>每条证据带文档标题、页码/片段、设备型号、组织、相似度分数。</li>
+    <li>模型输出必须引用证据 ID；服务端逐条校验引用是否存在于本次检索结果。</li>
+    <li>存在无效引用时整体降级：替换原回答与摘要，标记 <code>status=degraded</code>，前端不允许保存为正式诊断。</li>
+    <li>设备型号不一致时拒绝检索（<code>model_mismatch</code>），避免 AC-07 查到 CNC 手册。</li>
+  </ul>
+  <h3>4.3 结构化诊断</h3>
+  <table>
+    <tr><th>字段</th><th>含义</th><th>页面呈现</th></tr>
+    <tr><td>statements.fact</td><td>文档直接支持的内容</td><td>文档陈述</td></tr>
+    <tr><td>statements.inference</td><td>模型基于证据的推断</td><td>模型推断</td></tr>
+    <tr><td>statements.pending</td><td>仍需现场确认的内容</td><td>待验证项</td></tr>
+    <tr><td>conflicts</td><td>资料之间或资料与现场描述冲突</td><td>冲突提示</td></tr>
+    <tr><td>verificationSuggestions</td><td>建议补采的测点/工况</td><td>证据补采清单</td></tr>
+    <tr><td>model / tokens</td><td>模型名与输入/输出/合计 Token</td><td>结果顶部与诊断记录</td></tr>
+  </table>
+</section>
+
+<section class="page">
+  <h2>5. 人工在环与受控 Agent</h2>
+  <h3>5.1 人机分工</h3>
+  <div class="grid2">
+    <div class="card"><strong>模型负责</strong>检索证据、归纳文档陈述、提出推断、列出待验证项、给出补采建议。</div>
+    <div class="card"><strong>人负责</strong>判断现场风险等级、决定是否采纳、保存诊断、确认生成工单、完成维修验收。</div>
+  </div>
+  <h3>5.2 为什么不让模型直接建单</h3>
+  <ul>
+    <li>诊断错误会带来停机、备件和安全风险，必须有人承担确认责任。</li>
+    <li>模型无法知道现场是否已断电、是否具备备件、是否影响生产计划。</li>
+    <li>人工确认后建单，才能把“谁确认、依据哪些证据、何时建单”写进审计。</li>
+  </ul>
+  <h3>5.3 受控只读 Agent</h3>
+  <p><code>POST /api/v1/agent/assist</code> 执行固定白名单工具：设备查询 → 同设备历史工单 → 证据诊断。每一步返回状态（ok / unavailable）和数量，前端逐步展示；工具名、状态、数量写入业务服务审计，不发送提问原文或模型回答。Agent 不修改设备、不创建工单，也不能绕过人工确认。</p>
+  <h3>5.4 可观测性</h3>
+  <p>诊断响应返回模型 provider、model、输入/输出/合计 Token；诊断保存时记录模型来源，便于在工单与审计中回溯“这条建议由哪个模型、消耗多少 Token 生成”。</p>
+  <pre>{
+  "status": "ok",
+  "is_mock": false,
+  "model": "deepseek-flash",
+  "input_tokens": 890,
+  "output_tokens": 1014,
+  "total_tokens": 1904,
+  "sources": [ ... 3 条证据 ... ],
+  "statements": [fact, inference, pending]
+}</pre>
+</section>
+
+<section class="page">
+  <h2>6. 核心功能与界面</h2>
+  <h3>6.1 维护总览与设备中心</h3>
+  <div class="two-col">
+    <figure class="shot"><img src="../screenshots/02-overview.png" alt="维护总览" /><figcaption>维护总览：健康度、告警、工单、最近诊断</figcaption></figure>
+    <figure class="shot"><img src="../screenshots/03-devices.png" alt="设备中心" /><figcaption>设备中心：专属测点、趋势与筛选</figcaption></figure>
+  </div>
+  <p>总览按当前组织实时聚合；不同设备使用不同指标，切换设备后测点、趋势、告警和资料摘要同步更新。设备导入支持 CSV 模板与扫码内容录入，扫描依赖浏览器 <code>BarcodeDetector</code>，同时提供手动粘贴。</p>
+  <h3>6.2 告警与工单</h3>
+  <div class="two-col">
+    <figure class="shot"><img src="../screenshots/04-alerts.png" alt="告警中心" /><figcaption>告警中心：页签计数、组合筛选、指派与处理</figcaption></figure>
+    <figure class="shot"><img src="../screenshots/07-work-orders.png" alt="维护工单" /><figcaption>维护工单：列表 / 看板 / 日历</figcaption></figure>
+  </div>
+  <p>告警区分待确认、处理中、已关闭；工单支持设备与负责人指派、优先级、计划时间、步骤勾选、提交验收、退回、完成和取消。草稿可删除，正式工单取消保留痕迹。</p>
+</section>
+
+<section class="page">
+  <h2>7. 诊断闭环实拍</h2>
+  <figure class="shot"><img src="../screenshots/05-diagnosis.png" alt="诊断工作台" /><figcaption>AC-07 真实 DeepSeek 诊断：文档陈述 3 条、模型推断 1 条、待验证 3 条、证据 3 条，Token 1,904</figcaption></figure>
+  <h3>7.1 一次完整操作</h3>
+  <ol>
+    <li>从告警或设备页进入诊断工作台，目标设备自动带入 AC-07。</li>
+    <li>输入现场描述：“运行一段时间后越来越烫，排气温度接近预警，应该先检查什么？”</li>
+    <li>系统检索说明书证据，调用 DeepSeek，返回事实 / 推断 / 待验证三类内容。</li>
+    <li>右侧证据阅读器逐条核对原文；冲突与补采建议单独展示。</li>
+    <li>人工选择风险等级 → 保存诊断 → 确认生成工单，编号贯穿后续。</li>
+    <li>在工单页指派、排期、推进状态；在审计页按编号追溯诊断与建单。</li>
+  </ol>
+  <p class="muted small">截图为线上演示环境实拍，模型信息、Token 用量和证据数量均来自真实接口响应。</p>
+</section>
+
+<section class="page">
+  <h2>8. 知识与审计</h2>
+  <div class="two-col">
+    <figure class="shot"><img src="../screenshots/06-knowledge.png" alt="知识证据" /><figcaption>知识证据：上传、解析预览、检索引用</figcaption></figure>
+    <figure class="shot"><img src="../screenshots/09-audit.png" alt="审计记录" /><figcaption>审计记录：操作人、对象、前后变更</figcaption></figure>
+  </div>
+  <h3>8.1 知识管理</h3>
+  <ul>
+    <li>支持虚构说明书上传，服务端解析后返回文本预览；管理岗位可删除误上传文档。</li>
+    <li>文档按组织隔离，检索时同时按设备型号过滤，避免跨设备引用。</li>
+    <li>引用保留文档标题、片段、页码与相似度，前端可点击定位原文。</li>
+  </ul>
+  <h3>8.2 审计追踪</h3>
+  <ul>
+    <li>登录、告警处理、工单创建/编辑/验收/取消、诊断保存/确认、人员改岗与转派均写审计。</li>
+    <li>记录操作人、时间、对象类型与 ID、动作、前后字段变化。</li>
+    <li>Agent 工具调用单独记录工具名、状态和数量，不记录提问原文与模型回答。</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h2>9. 关键实现</h2>
+  <h3>9.1 前端适配层</h3>
+  <p>所有请求集中在 <code>frontend/src/services/api.js</code>：统一注入 Bearer Token、组织标识、错误码映射与超时；<code>mock</code> 与 <code>api</code> 两种模式共用页面组件，避免两套 UI。API 模式失败只提示错误，不回退演示数据。</p>
+  <h3>9.2 身份与权限</h3>
+  <p>业务服务用随机 <code>AUTH_SECRET</code> 签发 Token，解析后得到组织、用户、角色；知识服务通过 <code>C_IDENTITY_API_BASE_URL</code> 回查 <code>/api/v1/auth/me</code>，逐请求透传身份。生产环境缺少身份服务配置时拒绝启动，避免“裸奔”。</p>
+  <h3>9.3 诊断保存与建单</h3>
+  <p>只有 <code>is_mock=false</code> 且证据校验通过、状态为 <code>ok</code> 的诊断才允许保存；确认接口以诊断 ID 幂等，重复请求返回同一工单；建单与诊断状态更新在同一事务内，异常回滚。</p>
+  <h3>9.4 云端部署</h3>
+  <table>
+    <tr><th>层</th><th>实现</th><th>说明</th></tr>
+    <tr><td>前端</td><td>CloudBase 静态托管 + 自定义域名</td><td>Vite 构建为 api 模式，API 地址只含公开地址</td></tr>
+    <tr><td>业务</td><td>CloudBase 云托管 forgepilot-business</td><td>容器启动自动种子数据；min=1 常驻</td></tr>
+    <tr><td>知识</td><td>CloudBase 云托管 forgepilot-knowledge</td><td>演示说明书随镜像打包；DeepSeek 密钥仅服务端环境变量</td></tr>
+    <tr><td>域名</td><td>forgepilot.xiaotianworks.cn</td><td>HTTPS + ICP 备案号页脚</td></tr>
+  </table>
+  <h3>9.5 关键取舍</h3>
+  <ul>
+    <li>选择 BM25 而非向量库：演示资料规模小、可解释、零额外基础设施；接口预留替换空间。</li>
+    <li>选择单进程 JSON 知识库：先保证可运行与可复现，明确标注多实例前必须迁移。</li>
+    <li>选择“证据不足就降级”：宁可少答，不把无依据内容包装成诊断。</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h2>10. 测试与质量</h2>
+  <h3>10.1 自动化测试</h3>
+  <ul>
+    <li>前端：纯函数、筛选、状态流转、权限导航、API 契约与空数据/401/403 场景。</li>
+    <li>业务服务：登录、组织隔离、设备、告警、工单状态机、诊断保存、幂等建单、事务回滚、审计。</li>
+    <li>知识服务：解析、检索、引用校验、无答案、无效引用降级、模型失败、Agent 工具状态。</li>
+    <li>GitHub Actions：Frontend CI 与 Backend CI 在 <code>main</code> 上均为通过状态。</li>
+  </ul>
+  <h3>10.2 RAG 离线评测</h3>
+  <table>
+    <tr><th>指标</th><th>结果</th><th>说明</th></tr>
+    <tr><td>检索命中</td><td>16 / 16</td><td>问题能命中对应设备说明书片段</td></tr>
+    <tr><td>引用准确</td><td>16 / 16</td><td>回答引用均可在检索结果中找到</td></tr>
+    <tr><td>无答案识别</td><td>4 / 4</td><td>证据不足时明确返回 no_answer</td></tr>
+  </table>
+  <h3>10.3 真实模型验收</h3>
+  <p>线上演示使用 <code>deepseek-flash</code> 完成 AC-07 诊断：返回 3 条证据、1,904 Token，页面显示模型名与用量；诊断保存、人工确认、幂等建单和审计查询均在同一环境实测通过。</p>
+  <h3>10.4 仍需补强的测试</h3>
+  <ul>
+    <li>真实企业数据下的阈值与工况规则（当前只有演示测点，不自动断言超限）。</li>
+    <li>多实例知识库一致性、持久化存储故障恢复。</li>
+    <li>更大规模说明书集的检索质量与延迟。</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h2>11. 安全、数据与合规</h2>
+  <h3>11.1 数据边界</h3>
+  <ul>
+    <li>设备、告警、工单、说明书均为虚构演示数据，未使用未授权企业原始资料。</li>
+    <li>仓库只提交 <code>.env.example</code>；模型密钥、数据库口令、登录令牌不进入 Git。</li>
+    <li>企业数据接入前需确认授权主体、脱敏样例、使用范围（比赛/课程/GitHub/作品集）、保密与删除要求。</li>
+  </ul>
+  <h3>11.2 应用安全</h3>
+  <ul>
+    <li>身份由服务端解析，不信任客户端伪造组织/用户头。</li>
+    <li>模型密钥只在知识服务环境变量；前端仅配置公开 API 地址。</li>
+    <li>CORS 限定自定义域名；生产环境要求 HTTPS、独立密钥与受控来源。</li>
+    <li>Agent 白名单只读工具，落库与建单必须人工触发。</li>
+  </ul>
+  <h3>11.3 备案与页面标识</h3>
+  <p>站点已完成 ICP 备案并在页脚展示备案号；公安联网备案按流程办理。演示页明确标注“虚构演示数据 / 请勿录入真实敏感信息”。</p>
+  <h3>11.4 当前限制</h3>
+  <ul>
+    <li>云端容器使用 SQLite 与 JSON 知识库，重新部署或实例重启会恢复种子数据。</li>
+    <li>演示账号公开，仅用于评审与体验；不承载真实生产数据。</li>
+    <li>尚未接入企业真实传感器与阈值规则，不能宣称自动判定设备超限。</li>
+  </ul>
+</section>
+
+<section class="page">
+  <h2>12. 创新点与展望</h2>
+  <h3>12.1 创新点</h3>
+  <div class="grid2">
+    <div class="card"><strong>证据优先的诊断 UI</strong>把“文档陈述 / 模型推断 / 待验证项”分栏呈现，AI 输出从一段话变成可核对的清单。</div>
+    <div class="card"><strong>引用校验与整体降级</strong>无效引用不是悄悄删掉，而是整体降级并禁止保存，避免“看起来完整”的错误诊断。</div>
+    <div class="card"><strong>人工在环的建单闭环</strong>模型建议不直接变成任务，风险分级与建单由人确认，并用幂等键保证重复操作安全。</div>
+    <div class="card"><strong>可观测与可追溯</strong>模型名、Token 用量、证据数量进入诊断记录与审计，能回答“这条建议怎么来的”。</div>
+  </div>
+  <h3>12.2 展望</h3>
+  <ul>
+    <li>接入企业授权的设备手册与维修记录，建立按设备型号的阈值与工况规则。</li>
+    <li>知识库迁移到向量检索 + 持久化数据库，支持多实例与增量更新。</li>
+    <li>增加设备二维码扫码定位、移动端维修验收与离线草稿。</li>
+    <li>在受控范围内扩展 Agent 工具（备件库存、排班、工单优先级建议），继续坚持只读与人工确认。</li>
+  </ul>
+  <h3>12.3 结语</h3>
+  <p>ForgePilot 不追求“让 AI 替人修设备”，而是让维护人员在每一步都能看到依据、做出判断、留下记录。对一个面向中小制造企业的作品来说，可信、可追溯、可落地，比模型参数更重要。</p>
+</section>
+
+<section class="page">
+  <h2>附录：运行、账号与仓库</h2>
+  <h3>A. 在线演示</h3>
+  <table>
+    <tr><th>项目</th><th>值</th></tr>
+    <tr><td>地址</td><td>https://forgepilot.xiaotianworks.cn/</td></tr>
+    <tr><td>账号</td><td>demo@example.com</td></tr>
+    <tr><td>密码</td><td>ForgePilot123!</td></tr>
+    <tr><td>组织代码</td><td>选填，留空</td></tr>
+    <tr><td>能力</td><td>真实登录、真实 DeepSeek 诊断、保存诊断、人工确认生成工单、审计查询</td></tr>
+  </table>
+  <h3>B. 本地运行</h3>
+  <pre># Windows（Python 3.10+ / Node.js 20+ / PowerShell 7.4+）
+.\scripts\quickstart.ps1
+# 打开 http://127.0.0.1:5180/forgepilot/
+
+# 使用真实 DeepSeek
+$env:DEEPSEEK_API_KEY = "..."
+.\scripts\start-demo.ps1 -DeepSeek</pre>
+  <h3>C. 仓库与文档</h3>
+  <ul>
+    <li>代码仓库：https://github.com/lxiaotian685-web/forgepilot-ai</li>
+    <li>部署说明：docs/CLOUDBASE_DEPLOY.md</li>
+    <li>Linux 运行：docs/RUN_LINUX.md</li>
+    <li>RAG 评测：services/knowledge/docs/real-rag-report.md</li>
+    <li>界面截图：docs/screenshots</li>
+  </ul>
+  <h3>D. 目录结构</h3>
+  <pre>frontend/                 React + Vite + Fluent UI
+services/business/        FastAPI 业务服务（登录、设备、告警、工单、审计）
+services/knowledge/       FastAPI 知识服务（解析、检索、诊断、Agent）
+docs/                     部署、数据库、截图与技术说明
+scripts/                  本地启动、数据库准备、部署检查</pre>
+  <div class="footnote">© 2026 制造领航 ForgePilot 团队。本文档使用虚构演示数据；企业数据与真实模型输出均需人工核验。</div>
+</section>
+
+</body>
+</html>

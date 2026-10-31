@@ -6,6 +6,7 @@
 [![Frontend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml)
 [![Backend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![演示视频](https://img.shields.io/badge/演示视频-B站-00a1d6)](https://b23.tv/4HPzoyw)
 
 > 第九届传智杯 AI WEB 网页开发挑战赛参赛作品。仓库使用**虚构演示数据**；在线演示接入服务端真实 DeepSeek，诊断结论仍需人工核验，不代表企业真实诊断结论。
 
@@ -170,7 +171,7 @@ A/B/C 功能分支与各轮 Pull Request 保留了细粒度开发历史；来源
 - 技术 PDF：[ForgePilot 技术说明（16 页）](docs/tech-report/ForgePilot_技术说明_20261031.pdf)
 - 技术 PDF 源文件：[HTML 版](docs/tech-report/ForgePilot_技术说明_20261031.html)
 - GitHub Release：[v1.0.0 竞赛提交版本](https://github.com/lxiaotian685-web/forgepilot-ai/releases/tag/v1.0.0)（附技术 PDF 下载）
-- 5–8 分钟普通话 1080p 演示视频：待补充链接
+- 5–8 分钟普通话 1080p 演示视频：[B 站 · 制造领航 ForgePilot](https://b23.tv/4HPzoyw)
 - 校赛公告：[东莞理工学院计算机学院校赛公告](https://cs.dgut.edu.cn/info/1034/19118.htm)
 - 社交预览图：[docs/social-preview.png](docs/social-preview.png)（在仓库 Settings → Social preview 上传）
 

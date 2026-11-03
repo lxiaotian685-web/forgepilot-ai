@@ -329,7 +329,7 @@ erDiagram
 | 审计字段 | | | 四列 |
 
 约束：`UNIQUE (organization_id, code) WHERE deleted_at IS NULL`。
-确认语义：只有 `status = confirmed` 且 `confirmed_by/confirmed_at` 有值的诊断才能创建工单。
+现场核验语义：AI 初步分析以 `draft` 保存并可通过诊断派单接口创建唯一关联核验工单；工单验收完成后才转为 `confirmed` 并写入 `confirmed_by/confirmed_at`。通用工单创建接口仍不允许对未确认诊断重复建单。
 
 ### 4.10 work_orders（维护工单）
 

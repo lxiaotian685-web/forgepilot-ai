@@ -328,8 +328,8 @@ def get_diagnosis(
     )
 
 
-@router.post("/{diagnosis_id}/confirm")
-def confirm_diagnosis(
+@router.post("/{diagnosis_id}/dispatch")
+def dispatch_diagnosis_verification(
     diagnosis_id: str,
     payload: DiagnosisConfirm | None = None,
     context: RequestContext = Depends(get_context),
@@ -343,7 +343,7 @@ def confirm_diagnosis(
         raise api_error(
             409,
             "INVALID_STATE",
-            "诊断已拒绝，不能确认",
+            "诊断已拒绝，不能派发现场核验工单",
             {"diagnosisId": diagnosis.code, "status": diagnosis.status},
         )
 
@@ -367,7 +367,7 @@ def confirm_diagnosis(
         if diagnosis.confirmed_by
         else None
     )
-    if diagnosis.status == "confirmed" and existing_order is not None:
+    if existing_order is not None:
         owner = (
             db.get(User, existing_order.owner_user_id)
             if existing_order.owner_user_id
@@ -392,7 +392,7 @@ def confirm_diagnosis(
     )
     title = (
         payload.title if payload and payload.title else None
-    ) or f"{device.code} 诊断处理：{diagnosis.conclusion or diagnosis.code}"[:255]
+    ) or f"{device.code} 现场诊断核验：{diagnosis.conclusion or diagnosis.code}"[:255]
     description = (
         payload.description
         if payload and payload.description is not None
@@ -405,25 +405,6 @@ def confirm_diagnosis(
             raise api_error(422, "VALIDATION_ERROR", "计划结束日期不能早于开始日期")
 
     try:
-        if diagnosis.status != "confirmed":
-            before = {"status": diagnosis.status}
-            diagnosis.status = "confirmed"
-            diagnosis.confirmed_by = context.user_id
-            diagnosis.confirmed_at = utcnow()
-            after = {"status": diagnosis.status}
-            if payload and payload.note:
-                after["note"] = payload.note
-            write_audit(
-                db,
-                organization_id=context.organization_id,
-                actor_user_id=context.user_id,
-                action="diagnosis.confirm",
-                entity_type="diagnosis",
-                entity_id=diagnosis.id,
-                before=before,
-                after=after,
-            )
-
         if existing_order is None:
             now = utcnow()
             existing_order = WorkOrder(

@@ -6,7 +6,7 @@ const labels = { code: "业务编号", status: "状态", priority: "优先级", 
 const values = { pending: "待处理", in_progress: "处理中", completed: "已完成", cancelled: "已取消", p1: "紧急", p2: "高", p3: "中", p4: "低" };
 const format = value => value == null ? "未记录" : typeof value === "object" ? Object.entries(value).map(([key, item]) => `${labels[key] || key}：${format(item)}`).join("；") : values[value] || String(value);
 const localTime = value => Number.isNaN(Date.parse(value)) ? value : new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
-const actionLabel = value => ({ "work_order.create": "创建工单", "work_order.update": "修改工单", "diagnosis.confirm": "确认诊断", "diagnosis.create": "保存诊断", "agent.assist": "Agent 辅助分析", "auth.login": "登录", "member.create": "新增人员", "alert.update": "更新告警", "audit.archive": "删除审计记录" }[value] || value);
+const actionLabel = value => ({ "work_order.create": "派发现场工单", "work_order.update": "更新工单", "diagnosis.confirm": "现场核验完成并确认诊断", "diagnosis.create": "保存 AI 初步分析", "agent.assist": "Agent 辅助分析", "auth.login": "登录", "member.create": "新增人员", "alert.update": "更新告警", "audit.archive": "删除审计记录" }[value] || value);
 export default function AuditWorkspace({ auditRows, isServer = false, onRefresh, onDelete, onEdit, busy, error }) {
   const [draft, setDraft] = useState(null);
   const [deletingId, setDeletingId] = useState(null);

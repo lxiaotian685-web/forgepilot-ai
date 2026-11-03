@@ -115,18 +115,18 @@ export function buildDemoMeasurementQuestion(deviceId) {
   return `${deviceId} 演示测点：${metrics.map((item) => `${item.label} ${item.value}${item.unit}（${item.limit}）`).join("；")}。请根据这些虚构示例数据列出需要现场复核的项目。`;
 }
 
-export function createDemoDiagnosisOrder({ deviceId, riskLevel, owner, diagnosisId, answer, now = new Date() }) {
+export function createDemoDiagnosisOrder({ deviceId, riskLevel, owner, diagnosisId, answer, verificationItems = [], now = new Date() }) {
   if (!deviceProfiles[deviceId]) throw new Error("请选择有效的演示设备。");
   if (!owner?.trim()) throw new Error("请选择演示工单负责人。");
   const priority = { high: "P1 紧急", medium: "P2 高", low: "P3 中" }[riskLevel];
-  if (!priority || !diagnosisId) throw new Error("请先保存人工分级的演示诊断。");
+  if (!priority || !diagnosisId) throw new Error("请先保存人工分级的演示 AI 初步分析。");
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const dateText = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   return {
-    id: `DEMO-WO-${now.getTime()}`, title: `${deviceId} 诊断复核与现场检查`, deviceId,
+    id: `DEMO-WO-${now.getTime()}`, title: `${deviceId} 现场诊断核验`, deviceId,
     owner: owner.trim(), priority, status: "待处理", startDate: dateText(now), dueDate: dateText(tomorrow),
-    description: `来源演示诊断 ${diagnosisId}。${answer}`, checklist: [false, false, false],
+    description: [`来源演示 AI 初步分析 ${diagnosisId}。${answer}`, ...verificationItems.map((item, index) => `${index + 1}. ${item}`)].join("\n"), checklist: [false, false, false],
     updated: "刚刚", draft: false,
   };
 }
@@ -159,7 +159,7 @@ function demoDiagnosis(deviceId, question) {
   }, deviceId);
 }
 
-export async function requestDiagnosis({ deviceId, question, signal, session }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
+export async function requestDiagnosis({ deviceId, question, context = {}, signal, session }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
   if (!deviceId || !question.trim()) throw new Error("请选择设备并填写现场现象。");
   if (signal?.aborted) throw new DOMException("请求已取消", "AbortError");
   if ((config.VITE_DATA_MODE || "mock") === "mock") {
@@ -179,7 +179,13 @@ export async function requestDiagnosis({ deviceId, question, signal, session }, 
   try {
     const response = await fetcher(`${base}/api/v1/chat`, {
       method: "POST", headers, signal: controller.signal,
-      body: JSON.stringify({ device_id: deviceId, question: question.trim() }),
+      body: JSON.stringify({
+        device_id: deviceId,
+        question: question.trim(),
+        sampled_at: context.sampledAt || null,
+        measurement_point: context.measurementPoint?.trim() || null,
+        operating_mode: context.operatingMode || null,
+      }),
     });
     if (!response.ok) throw new Error(`诊断请求失败（HTTP ${response.status}），未生成新结论。`);
     return { ...normalizeDiagnosis(await response.json(), deviceId), transport: "api" };

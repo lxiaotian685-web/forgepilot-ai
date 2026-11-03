@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { confirmDiagnosis, diagnosisEvidenceSnapshot, loadDiagnosisAudit, saveDiagnosis } from "../src/services/workflow.js";
+import { diagnosisEvidenceSnapshot, dispatchDiagnosisVerification, loadDiagnosisAudit, saveDiagnosis } from "../src/services/workflow.js";
 
 const config = {
   VITE_DATA_MODE: "api",
@@ -31,11 +31,12 @@ function diagnosis() {
 }
 
 test("builds an auditable evidence snapshot without UI-only fields", () => {
-  const snapshot = diagnosisEvidenceSnapshot(diagnosis());
+  const snapshot = diagnosisEvidenceSnapshot(diagnosis(), { sampledAt: "2026-11-03T10:30", measurementPoint: "驱动端", operatingMode: "稳定负载" });
   assert.equal(snapshot.sources[0].id, "doc@v1#p2c0");
   assert.equal(Object.hasOwn(snapshot.sources[0], "reference"), false);
   assert.equal(Object.hasOwn(snapshot.statements[0], "sourceKey"), false);
   assert.equal(snapshot.verificationSuggestions[0].to_verify, "轴承状态");
+  assert.equal(snapshot.diagnosisContext.measurementPoint, "驱动端");
   assert.deepEqual(snapshot.model, {
     provider: "openai-compatible", name: "deepseek-chat", inputTokens: 512, outputTokens: 128, totalTokens: 640,
   });
@@ -43,7 +44,7 @@ test("builds an auditable evidence snapshot without UI-only fields", () => {
 
 test("saves only verified real API diagnosis using the B contract", async () => {
   const saved = await saveDiagnosis({
-    deviceId: "AC-07", question: " 振动异常 ", result: diagnosis(), riskLevel: "high", session,
+    deviceId: "AC-07", question: " 振动异常 ", result: diagnosis(), riskLevel: "high", diagnosisContext: { operatingMode: "稳定负载" }, session,
   }, config, async (url, options) => {
     assert.equal(url, "https://business.example.test/api/v1/diagnoses");
     assert.equal(options.headers.Authorization, "Bearer current-user-token");
@@ -54,6 +55,7 @@ test("saves only verified real API diagnosis using the B contract", async () => 
     assert.equal(body.evidence.sources[0].id, "doc@v1#p2c0");
     assert.equal(body.modelSource, "c-rag-api:deepseek-chat");
     assert.equal(body.evidence.model.totalTokens, 640);
+    assert.equal(body.evidence.diagnosisContext.operatingMode, "稳定负载");
     return { ok: true, json: async () => ({ id: "DIAG-001", status: "draft" }) };
   });
   assert.equal(saved.id, "DIAG-001");
@@ -66,14 +68,15 @@ test("refuses demo, degraded and unclassified diagnosis saves", async () => {
   await assert.rejects(saveDiagnosis({ deviceId: "AC-07", question: "x", result: diagnosis(), riskLevel: "low" }, config), /登录会话/);
 });
 
-test("confirms idempotently through B and requires both returned records", async () => {
-  const value = await confirmDiagnosis({ diagnosisId: "DIAG-001", priority: "P1 紧急", note: "已现场确认", session }, config, async (url, options) => {
-    assert.equal(url, "https://business.example.test/api/v1/diagnoses/DIAG-001/confirm");
-    assert.deepEqual(JSON.parse(options.body), { priority: "P1 紧急", note: "已现场确认" });
-    return { ok: true, json: async () => ({ diagnosis: { id: "DIAG-001" }, workOrder: { id: "WO-001" } }) };
+test("dispatches field verification through B and requires both returned records", async () => {
+  const value = await dispatchDiagnosisVerification({ diagnosisId: "DIAG-001", priority: "P1 紧急", description: "核对振动频谱", session }, config, async (url, options) => {
+    assert.equal(url, "https://business.example.test/api/v1/diagnoses/DIAG-001/dispatch");
+    assert.deepEqual(JSON.parse(options.body), { priority: "P1 紧急", description: "核对振动频谱" });
+    return { ok: true, json: async () => ({ diagnosis: { id: "DIAG-001", status: "draft" }, workOrder: { id: "WO-001", status: "待处理" } }) };
   });
   assert.equal(value.workOrder.id, "WO-001");
-  await assert.rejects(confirmDiagnosis({ diagnosisId: "" }, config), /先保存/);
+  assert.equal(value.diagnosis.status, "draft");
+  await assert.rejects(dispatchDiagnosisVerification({ diagnosisId: "" }, config), /先保存/);
 });
 
 test("loads diagnosis audit with encoded query and validates pagination", async () => {
@@ -100,11 +103,11 @@ test("discovers the internal diagnosis entity id from its business code", async 
   assert.equal(items[0].action, "diagnosis.confirm");
 });
 
-test("surfaces the B error message and never treats malformed success as confirmation", async () => {
-  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001", session }, config, async () => ({
+test("surfaces the B error message and never treats malformed success as dispatch", async () => {
+  await assert.rejects(dispatchDiagnosisVerification({ diagnosisId: "DIAG-001", session }, config, async () => ({
     ok: false, status: 409, json: async () => ({ error: { message: "诊断已拒绝" } }),
   })), /诊断已拒绝/);
-  await assert.rejects(confirmDiagnosis({ diagnosisId: "DIAG-001", session }, config, async () => ({
+  await assert.rejects(dispatchDiagnosisVerification({ diagnosisId: "DIAG-001", session }, config, async () => ({
     ok: true, json: async () => ({ diagnosis: { id: "DIAG-001" } }),
-  })), /缺少诊断或工单编号/);
+  })), /缺少初步分析或工单编号/);
 });

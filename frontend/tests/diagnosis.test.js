@@ -91,10 +91,20 @@ test("POSTs current C contract without overriding equipment model", async () => 
     assert.equal(url, "https://rag.example.test/api/v1/chat");
     assert.equal(options.method, "POST"); assert.equal(options.headers["X-User-Id"], "user-1");
     assert.equal(options.headers["X-Organization-Id"], "org-1");
-    assert.deepEqual(JSON.parse(options.body), { device_id: "AC-07", question: "振动异常" });
+    assert.deepEqual(JSON.parse(options.body), { device_id: "AC-07", question: "振动异常", sampled_at: null, measurement_point: null, operating_mode: null });
     return { ok: true, json: async () => ({ ...payload(), is_mock: false }) };
   });
   assert.equal(result.transport, "api"); assert.equal(result.is_mock, false);
+});
+
+test("sends structured diagnosis context to C", async () => {
+  await requestDiagnosis({ ...apiInput, context: { sampledAt: "2026-11-03T10:30", measurementPoint: "驱动端，振动 mm/s", operatingMode: "稳定负载" } }, config, async (_url, options) => {
+    assert.deepEqual(JSON.parse(options.body), {
+      device_id: "AC-07", question: "振动异常", sampled_at: "2026-11-03T10:30",
+      measurement_point: "驱动端，振动 mm/s", operating_mode: "稳定负载",
+    });
+    return { ok: true, json: async () => payload() };
+  });
 });
 
 test("forwards the current session bearer token to C", async () => {

@@ -44,6 +44,7 @@ import {
 } from "recharts";
 import * as demoData from "./data";
 import { importDevices, loadDeviceParameters, loadWorkspaceData } from "./services/api";
+import { buildDeviceProfile, formatRecordedAt } from "./services/deviceProfile.js";
 import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
 import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
@@ -286,9 +287,11 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, 
     setLiveProfile(null);
     loadDeviceParameters(selected.id, accessToken).then((items) => {
       if (!active) return;
+      const grouped = buildDeviceProfile(items);
       setLiveProfile({ id: selected.id, profile: items.length ? {
-        updatedAt: items[0].recordedAt || "尚未记录采集时间",
-        metrics: items.map((item) => ({ label: item.name, value: item.value, unit: item.unit || "", limit: "未配置阈值", tone: "neutral" })),
+        updatedAt: grouped.latest,
+        metrics: grouped.sensors.map((item) => ({ label: item.label, value: item.value, unit: item.unit || "", limit: item.note, tone: "neutral" })),
+        nameplate: grouped.nameplate,
         trend: [], series: [], alertSummary: "查看告警中心", documents: [],
       } : null });
     }).catch((error) => { if (active) notify(`设备测点读取失败：${error.message}`); });
@@ -364,8 +367,8 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, 
         {selected ? <aside className="panel detail-drawer">
           <div className="drawer-heading"><div><small>设备档案与最近测点</small><h2>{selected.id} {selected.name}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="关闭预览" onClick={() => setPreviewClosed(true)} /></div>
           <div className="equipment-identity"><span>{selected.type} · {selected.plant || "未分配厂区"}</span><strong>{selected.location}</strong></div>
-          <div className="health-callout"><span>综合健康评分</span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
-          {profile ? <><div className="profile-freshness">采集时间：{profile.updatedAt}</div><h3>关键运行指标</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div><DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、")}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，指标尚未接入</strong><span>该设备暂无已上报测点；可在设备参数接口配置和采集。</span></div>}
+          <div className="health-callout"><span>档案健康评分<small>演示基线，非实时计算</small></span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
+          {profile ? <><div className="profile-freshness">最近采集：{formatRecordedAt(profile.updatedAt)}</div>{profile.metrics.length > 0 && <><h3>最近运行测点</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div></>}{profile.nameplate?.length > 0 && <><h3>设备铭牌参数</h3><div className="sensor-list">{profile.nameplate.map((metric) => <div key={metric.name}><span>{metric.label}</span><strong>{metric.value} <small>{metric.unit}</small></strong><small>{metric.note}</small></div>)}</div></>}<DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、") || "暂无关联资料"}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，运行测点尚未接入</strong><span>该设备暂无已上报测点；可通过设备参数接口接入采集数据。</span></div>}
           <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis", { deviceId: selected.id })}>发起诊断</Button>
         </aside> : <aside className="panel detail-drawer"><div className="device-empty">请先选择设备</div></aside>}
       </div>

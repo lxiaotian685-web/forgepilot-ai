@@ -37,6 +37,9 @@ class RAGService:
         question: str,
         equipment_model: str | None = None,
         auth: DeviceAuth | None = None,
+        sampled_at: str | None = None,
+        measurement_point: str | None = None,
+        operating_mode: str | None = None,
     ) -> ChatResponse:
         try:
             device = self.device_provider.get_device(device_id, auth=auth)
@@ -68,7 +71,14 @@ class RAGService:
                 f"设备 {device_id} 的型号与传入的型号不一致，已拒绝检索。",
             )
 
-        retrieval_query = question
+        context_lines = [
+            f"采样时间：{sampled_at}" if sampled_at else "",
+            f"测点与单位：{measurement_point}" if measurement_point else "",
+            f"运行工况：{operating_mode}" if operating_mode else "",
+        ]
+        context_text = "\n".join(line for line in context_lines if line)
+        grounded_question = f"{question}\n\n现场诊断上下文：\n{context_text}" if context_text else question
+        retrieval_query = grounded_question
         for phrase, terms in {
             "发烫": "温度过高 冷却 散热", "很热": "温度过高 冷却",
             "抖": "振动 轴承", "响": "异响 振动 轴承",
@@ -94,7 +104,7 @@ class RAGService:
             )
 
         try:
-            result = self.llm.answer(question, evidences, device=device)
+            result = self.llm.answer(grounded_question, evidences, device=device)
         except LLMError as exc:
             response = self._degraded(device_id, evidences)
             response.answer = f"本次诊断未完成：{exc}。\n" + response.answer

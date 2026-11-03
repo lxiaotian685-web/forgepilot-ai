@@ -92,21 +92,21 @@ def test_create_diagnosis_rejects_alert_from_other_device(api):
     assert error["details"]["alertId"] == "ALT-0938"
 
 
-def test_confirm_creates_linked_work_order(api):
+def test_dispatch_creates_linked_verification_order_without_confirming(api):
     client, ids, session_factory = api
     created = create_diagnosis(client, ids, device="AC-07")
     diagnosis_code = created.json()["id"]
 
-    confirmed = client.post(
-        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+    dispatched = client.post(
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
         headers=auth(ids, user="tech@example.com"),
     )
-    assert confirmed.status_code == 200
-    body = confirmed.json()
-    assert body["diagnosis"]["status"] == "confirmed"
-    assert body["diagnosis"]["statusLabel"] == "已确认"
-    assert body["diagnosis"]["confirmedBy"] == "张工"
-    assert body["diagnosis"]["confirmedAt"] is not None
+    assert dispatched.status_code == 200
+    body = dispatched.json()
+    assert body["diagnosis"]["status"] == "draft"
+    assert body["diagnosis"]["statusLabel"] == "草稿"
+    assert body["diagnosis"]["confirmedBy"] is None
+    assert body["diagnosis"]["confirmedAt"] is None
     assert body["diagnosis"]["workOrderId"] == body["workOrder"]["id"]
     assert body["workOrder"]["deviceId"] == "AC-07"
     assert body["workOrder"]["diagnosisId"] == diagnosis_code
@@ -121,8 +121,8 @@ def test_confirm_creates_linked_work_order(api):
                 WorkOrder.code == body["workOrder"]["id"]
             )
         )
-        assert diagnosis.status == "confirmed"
-        assert diagnosis.confirmed_by == ids["users"]["tech@example.com"]
+        assert diagnosis.status == "draft"
+        assert diagnosis.confirmed_by is None
         assert order.diagnosis_id == diagnosis.id
         assert order.device_id == diagnosis.device_id
 
@@ -132,17 +132,17 @@ def test_confirm_creates_linked_work_order(api):
     assert refreshed.json()["workOrderId"] == body["workOrder"]["id"]
 
 
-def test_confirm_is_idempotent(api):
+def test_dispatch_is_idempotent(api):
     client, ids, session_factory = api
     created = create_diagnosis(client, ids, device="AC-07")
     diagnosis_code = created.json()["id"]
 
     first = client.post(
-        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
         headers=auth(ids, user="tech@example.com"),
     )
     second = client.post(
-        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
         headers=auth(ids, user="tech@example.com"),
     )
     assert first.status_code == 200
@@ -168,15 +168,40 @@ def test_confirm_is_idempotent(api):
             )
         ).all()
         assert len(orders) == 1
-        assert len(confirm_audits) == 1
+        assert len(confirm_audits) == 0
 
 
-def test_confirm_rejects_read_only_assignee_without_changing_diagnosis(api):
+def test_cancelled_verification_order_keeps_diagnosis_unconfirmed(api):
+    client, ids, _ = api
+    created = create_diagnosis(client, ids, device="AC-07")
+    diagnosis_code = created.json()["id"]
+    dispatched = client.post(
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
+        headers=auth(ids, user="tech@example.com"),
+    )
+    order_code = dispatched.json()["workOrder"]["id"]
+
+    cancelled = client.patch(
+        f"/api/v1/work-orders/{order_code}",
+        json={"status": "已取消", "cancelReason": "现场条件不具备，需重新排期"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert cancelled.status_code == 200
+
+    diagnosis = client.get(
+        f"/api/v1/diagnoses/{diagnosis_code}", headers=auth(ids)
+    ).json()
+    assert diagnosis["status"] == "draft"
+    assert diagnosis["confirmedBy"] is None
+    assert diagnosis["confirmedAt"] is None
+
+
+def test_dispatch_rejects_read_only_assignee_without_changing_diagnosis(api):
     client, ids, session_factory = api
     created = create_diagnosis(client, ids)
     code = created.json()["id"]
     response = client.post(
-        f"/api/v1/diagnoses/{code}/confirm",
+        f"/api/v1/diagnoses/{code}/dispatch",
         json={"ownerId": str(ids["users"]["viewer@example.com"])},
         headers=auth(ids, user="tech@example.com"),
     )
@@ -187,11 +212,11 @@ def test_confirm_rejects_read_only_assignee_without_changing_diagnosis(api):
         assert session.scalar(select(WorkOrder).where(WorkOrder.diagnosis_id == diagnosis.id)) is None
 
 
-def test_confirm_persists_valid_schedule_and_rejects_invalid_range(api):
+def test_dispatch_persists_valid_schedule_and_rejects_invalid_range(api):
     client, ids, _ = api
     created = create_diagnosis(client, ids)
     code = created.json()["id"]
-    url = f"/api/v1/diagnoses/{code}/confirm"
+    url = f"/api/v1/diagnoses/{code}/dispatch"
     headers = auth(ids, user="tech@example.com")
     invalid = client.post(
         url,
@@ -209,7 +234,7 @@ def test_confirm_persists_valid_schedule_and_rejects_invalid_range(api):
     assert valid.json()["workOrder"]["dueAt"].startswith("2026-11-03")
 
 
-def test_confirm_cross_org_rejected(api):
+def test_dispatch_cross_org_rejected(api):
     client, ids, session_factory = api
     created = create_diagnosis(
         client,
@@ -222,7 +247,7 @@ def test_confirm_cross_org_rejected(api):
     diagnosis_code = created.json()["id"]
 
     response = client.post(
-        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
         headers=auth(ids, user="tech@example.com"),
     )
     assert response.status_code == 404
@@ -274,7 +299,7 @@ def test_work_order_rejects_cross_device_diagnosis(api):
     assert error["details"]["diagnosisId"] == "DIAG-20250518-0941"
 
 
-def test_confirm_rolls_back_on_failure(api, monkeypatch):
+def test_dispatch_rolls_back_on_failure(api, monkeypatch):
     client, ids, session_factory = api
     diagnosis_code = "DIAG-20250518-0938"
 
@@ -284,7 +309,7 @@ def test_confirm_rolls_back_on_failure(api, monkeypatch):
     monkeypatch.setattr("app.api.diagnoses.write_audit", boom)
     with pytest.raises(RuntimeError):
         client.post(
-            f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+            f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
             headers=auth(ids, user="tech@example.com"),
         )
 
@@ -310,11 +335,11 @@ def test_diagnosis_write_requires_technician(api):
     )
     assert denied_create.status_code == 403
 
-    denied_confirm = client.post(
-        "/api/v1/diagnoses/DIAG-20250518-0938/confirm",
+    denied_dispatch = client.post(
+        "/api/v1/diagnoses/DIAG-20250518-0938/dispatch",
         headers=auth(ids, user="viewer@example.com"),
     )
-    assert denied_confirm.status_code == 403
+    assert denied_dispatch.status_code == 403
 
 
 def test_audit_events_requires_manager(api):
@@ -345,14 +370,49 @@ def test_audit_events_org_isolation(api):
     assert north.json()["total"] == 0
 
 
-def test_audit_events_records_confirmation_and_work_order(api):
+def test_audit_events_confirm_only_after_verification_order_completion(api):
     client, ids, _ = api
     created = create_diagnosis(client, ids, device="AC-07")
     diagnosis_code = created.json()["id"]
-    client.post(
-        f"/api/v1/diagnoses/{diagnosis_code}/confirm",
+    dispatched = client.post(
+        f"/api/v1/diagnoses/{diagnosis_code}/dispatch",
         headers=auth(ids, user="tech@example.com"),
     )
+    work_order_id = dispatched.json()["workOrder"]["id"]
+
+    before_completion = client.get(
+        "/api/v1/audit-events",
+        params={"action": "diagnosis.confirm"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert all(
+        item["entityId"] != dispatched.json()["diagnosis"]["entityId"]
+        for item in before_completion.json()["items"]
+    )
+
+    manager_headers = auth(ids, user="manager@example.com")
+    assert client.patch(
+        f"/api/v1/work-orders/{work_order_id}",
+        json={"status": "处理中"},
+        headers=manager_headers,
+    ).status_code == 200
+    assert client.patch(
+        f"/api/v1/work-orders/{work_order_id}",
+        json={"status": "待验收"},
+        headers=manager_headers,
+    ).status_code == 200
+    completed = client.patch(
+        f"/api/v1/work-orders/{work_order_id}",
+        json={"status": "已完成", "actionTaken": "完成现场核验并回填测量结果"},
+        headers=manager_headers,
+    )
+    assert completed.status_code == 200
+
+    diagnosis = client.get(
+        f"/api/v1/diagnoses/{diagnosis_code}", headers=auth(ids)
+    ).json()
+    assert diagnosis["status"] == "confirmed"
+    assert diagnosis["confirmedAt"] is not None
 
     confirmations = client.get(
         "/api/v1/audit-events",
@@ -365,7 +425,6 @@ def test_audit_events_records_confirmation_and_work_order(api):
     entry = items[0]
     assert entry["action"] == "diagnosis.confirm"
     assert entry["entityType"] == "diagnosis"
-    assert entry["user"] == "张工"
     assert entry["result"] == "成功"
 
     orders = client.get(

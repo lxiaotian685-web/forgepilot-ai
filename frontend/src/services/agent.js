@@ -1,9 +1,9 @@
 import { normalizeDiagnosis, requestDiagnosis } from "./diagnosis.js";
 
-export async function requestAgent({ deviceId, question, session, orders = [], signal }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
+export async function requestAgent({ deviceId, question, context = {}, session, orders = [], signal }, config = import.meta.env || {}, fetcher = globalThis.fetch) {
   if (!deviceId || !question?.trim()) throw new Error("请选择设备并填写现场现象。");
   if ((config.VITE_DATA_MODE || "mock") === "mock") {
-    const diagnosis = await requestDiagnosis({ deviceId, question, session, signal }, config, fetcher);
+    const diagnosis = await requestDiagnosis({ deviceId, question, context, session, signal }, config, fetcher);
     const history = orders.filter((order) => order.deviceId === deviceId).slice(0, 5).map((order) => ({
       id: order.id, device_id: deviceId, title: order.title, status: order.status,
     }));
@@ -28,7 +28,7 @@ export async function requestAgent({ deviceId, question, session, orders = [], s
       Authorization: `Bearer ${session.accessToken}`,
       "X-Organization-Id": session.organization.id, "X-User-Id": session.user.id,
     },
-    body: JSON.stringify({ device_id: deviceId, question: question.trim() }),
+    body: JSON.stringify({ device_id: deviceId, question: question.trim(), sampled_at: context.sampledAt || null, measurement_point: context.measurementPoint?.trim() || null, operating_mode: context.operatingMode || null }),
   });
   if (!response.ok) throw new Error(`Agent 请求失败（HTTP ${response.status}）。`);
   const payload = await response.json();

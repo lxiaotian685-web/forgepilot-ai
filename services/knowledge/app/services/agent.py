@@ -83,6 +83,9 @@ class AgentService:
         diagnosis = self.rag.diagnose(
             device_id=request.device_id, question=request.question,
             equipment_model=request.equipment_model, auth=auth,
+            sampled_at=request.sampled_at,
+            measurement_point=request.measurement_point,
+            operating_mode=request.operating_mode,
         )
         usable = diagnosis.status == "ok" and bool(diagnosis.sources)
         steps.append(ToolStep(

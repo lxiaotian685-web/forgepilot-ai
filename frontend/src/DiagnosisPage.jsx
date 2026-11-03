@@ -3,7 +3,7 @@ import { Button } from "@fluentui/react-components";
 import { BookOpen24Regular, Play24Regular, Pulse24Regular } from "@fluentui/react-icons";
 import { buildDemoMeasurementQuestion, createDemoDiagnosisOrder, demoEvidenceSources, diagnosisStatuses, requestDiagnosis, summarizeDiagnosis } from "./services/diagnosis";
 import { requestAgent } from "./services/agent.js";
-import { confirmDiagnosis, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
+import { dispatchDiagnosisVerification, loadDiagnosisAudit, saveDiagnosis } from "./services/workflow";
 import { loadDeviceParameters } from "./services/api.js";
 import { buildMeasurementQuestion } from "./services/measurementPrompt.js";
 import BelowSelect from "./BelowSelect.jsx";
@@ -18,8 +18,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeSource, setActiveSource] = useState(null);
-  const [contextChecks, setContextChecks] = useState({ sampledAt: false, measuringPoint: false, operatingMode: false });
-  const [verifiedItems, setVerifiedItems] = useState({});
+  const [diagnosisContext, setDiagnosisContext] = useState({ sampledAt: "", measurementPoint: "", operatingMode: "" });
   const [riskLevel, setRiskLevel] = useState("");
   const [assignedOwner, setAssignedOwner] = useState(demoOwners[0] || "");
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -39,7 +38,6 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     setResult(null);
     setError("");
     setActiveSource(null);
-    setVerifiedItems({});
     setRiskLevel("");
     setSavedDiagnosis(null);
     setConfirmedOrder(null);
@@ -57,65 +55,65 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
         if (!["low", "medium", "high"].includes(riskLevel)) throw new Error("请先选择人工风险等级。");
         const saved = { id: `DEMO-DIAG-${Date.now()}`, riskLevel };
         setSavedDiagnosis(saved);
-        setWorkflowMessage(`演示诊断 ${saved.id} 已保留在本次会话，未写入服务器。`);
+        setWorkflowMessage(`演示 AI 初步分析 ${saved.id} 已保留在本次会话，未写入服务器。`);
         return;
       }
-      const saved = await saveDiagnosis({ deviceId, question, result, riskLevel, session });
+      const saved = await saveDiagnosis({ deviceId, question, result, riskLevel, diagnosisContext, session });
       setSavedDiagnosis(saved);
-      setWorkflowMessage(`诊断 ${saved.id} 已保存，等待人工确认。`);
+      setWorkflowMessage(`AI 初步分析 ${saved.id} 已保存，可派发现场核验工单。`);
     } catch (failure) {
-      setWorkflowMessage(failure.message || "诊断保存失败。");
+      setWorkflowMessage(failure.message || "AI 初步分析保存失败。");
     } finally {
       setWorkflowBusy(false);
     }
   }
 
-  async function confirmAndCreateOrder() {
+  async function dispatchVerificationOrder() {
     if (workflowBusy || !savedDiagnosis?.id) return;
     setWorkflowBusy(true);
     setWorkflowMessage("");
     try {
       if (session?.isPreview) {
-        const order = createDemoDiagnosisOrder({ deviceId, riskLevel, owner: assignedOwner, diagnosisId: savedDiagnosis.id, answer: result.answer });
+        const order = createDemoDiagnosisOrder({ deviceId, riskLevel, owner: assignedOwner, diagnosisId: savedDiagnosis.id, answer: result.answer, verificationItems });
         onDemoOrderCreated?.(order);
         setConfirmedOrder(order);
-        setWorkflowMessage(`演示工单 ${order.id} 已加入本次会话的工单列表；未写入服务器。`);
+        setWorkflowMessage(`演示现场核验工单 ${order.id} 已加入本次会话；完成前不代表诊断已确认。`);
         return;
       }
-      const confirmed = await confirmDiagnosis({
+      const dispatched = await dispatchDiagnosisVerification({
         diagnosisId: savedDiagnosis.id,
-        title: `${deviceId} 诊断处理`,
+        title: `${deviceId} 现场诊断核验`,
+        description: [`AI 初步分析：${result.summary || result.answer}`, "现场核验任务：", ...verificationItems.map((item, index) => `${index + 1}. ${item}`)].join("\n"),
         priority: riskLevel === "high" ? "P1 紧急" : riskLevel === "medium" ? "P2 高" : "P3 中",
-        note: "前端诊断工作台人工确认",
         session,
       });
-      setSavedDiagnosis(confirmed.diagnosis);
-      setConfirmedOrder(confirmed.workOrder);
-      setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已保存，可点击查看工单。`);
-      try { await onChanged?.(); } catch { setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已保存，但总览刷新失败，请刷新工单列表。`); }
+      setSavedDiagnosis(dispatched.diagnosis);
+      setConfirmedOrder(dispatched.workOrder);
+      setWorkflowMessage(`现场核验工单 ${dispatched.workOrder.id} 已派发；工单验收前诊断仍未确认。`);
+      try { await onChanged?.(); } catch { setWorkflowMessage(`现场核验工单 ${dispatched.workOrder.id} 已派发，但总览刷新失败，请刷新工单列表。`); }
       let events = [];
       try {
         events = await loadDiagnosisAudit({ diagnosisId: savedDiagnosis.id, session });
       } catch (auditFailure) {
-        setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已生成。审计记录暂无法读取：${auditFailure.message}`);
+        setWorkflowMessage(`现场核验工单 ${dispatched.workOrder.id} 已生成。审计记录暂无法读取：${auditFailure.message}`);
       }
       setAuditEvents(events);
-      if (events.length) setWorkflowMessage(`工单 ${confirmed.workOrder.id} 已生成，并核对 ${events.length} 条诊断审计记录。`);
+      if (events.length) setWorkflowMessage(`现场核验工单 ${dispatched.workOrder.id} 已生成，并核对 ${events.length} 条相关审计记录。`);
     } catch (failure) {
-      setWorkflowMessage(failure.message || "人工确认失败。");
+      setWorkflowMessage(failure.message || "现场核验工单派发失败。");
     } finally {
       setWorkflowBusy(false);
     }
   }
 
-  async function runDiagnosis(nextQuestion) {
+  async function runDiagnosis(nextQuestion, context = diagnosisContext) {
     if (busy) return;
     const controller = new AbortController();
     request.current = controller;
     clearResult();
     setBusy(true);
     try {
-      const response = await requestDiagnosis({ deviceId, question: nextQuestion, signal: controller.signal, session });
+      const response = await requestDiagnosis({ deviceId, question: nextQuestion, context, signal: controller.signal, session });
       if (!controller.signal.aborted) {
         setResult(response);
         setActiveSource(response.sources[0]?.key || null);
@@ -140,9 +138,11 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
       const measurements = await loadDeviceParameters(deviceId, session.accessToken);
       const nextQuestion = buildMeasurementQuestion(deviceId, measurements);
       setQuestion(nextQuestion);
-      setContextChecks((current) => ({ ...current, sampledAt: measurements.some((item) => item.recordedAt), measuringPoint: true }));
+      const latest = measurements.map((item) => item.recordedAt).filter(Boolean).sort().at(-1);
+      const nextContext = { ...diagnosisContext, sampledAt: latest ? latest.slice(0, 16) : diagnosisContext.sampledAt, measurementPoint: measurements.length ? `${deviceId} 设备参数接口（${measurements.map((item) => `${item.name} ${item.unit || "无单位"}`).join("、")}）` : diagnosisContext.measurementPoint };
+      setDiagnosisContext(nextContext);
       setBusy(false);
-      await runDiagnosis(nextQuestion);
+      await runDiagnosis(nextQuestion, nextContext);
     } catch (failure) { setBusy(false); setError(failure.message); }
   }
 
@@ -150,8 +150,9 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
     try {
       const nextQuestion = buildDemoMeasurementQuestion(deviceId);
       setQuestion(nextQuestion);
-      setContextChecks({ sampledAt: true, measuringPoint: true, operatingMode: false });
-      await runDiagnosis(nextQuestion);
+      const nextContext = { ...diagnosisContext, sampledAt: "2026-05-18T17:44", measurementPoint: `${deviceId} 演示测点（振动 mm/s、温度 °C）` };
+      setDiagnosisContext(nextContext);
+      await runDiagnosis(nextQuestion, nextContext);
     } catch (failure) { setError(failure.message); }
   }
 
@@ -168,7 +169,7 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
         analysisQuestion = `${question}\n\n设备测点上下文：\n${measured}`.slice(0, 2000);
       } catch { /* Keep the user's question when measurements are unavailable. */ }
       if (controller.signal.aborted) return;
-      const response = await requestAgent({ deviceId, question: analysisQuestion, session, orders: demoOrders, signal: controller.signal });
+      const response = await requestAgent({ deviceId, question: analysisQuestion, context: diagnosisContext, session, orders: demoOrders, signal: controller.signal });
       if (!controller.signal.aborted) {
         setAgentTrace(response);
         if (response.diagnosis) {
@@ -191,18 +192,12 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
   const pending = result?.statements.filter((item) => item.type === "pending") || [];
   const suggestions = result?.verification_suggestions || [];
   const selectedDevice = devices.find((item) => item.id === deviceId);
-  const contextLabels = {
-    sampledAt: "已记录采样时间",
-    measuringPoint: "已注明测点与单位",
-    operatingMode: "已确认当前工况",
-  };
-  const preparedCount = Object.values(contextChecks).filter(Boolean).length;
+  const preparedCount = Object.values(diagnosisContext).filter((value) => value.trim()).length;
   const resultSummary = summarizeDiagnosis(result);
   const verificationItems = [
     ...pending.map((item) => item.text),
     ...suggestions.map((item) => `${item.missing_evidence}：${item.to_verify}`),
   ];
-  const verifiedCount = verificationItems.filter((_, index) => verifiedItems[index]).length;
 
   return <>
     <header className="page-header"><div><h1>诊断工作台</h1><p>先核对证据，再形成判断。诊断建议不能替代现场专业确认。</p></div></header>
@@ -226,11 +221,10 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
           <small>请写明时间、测点和单位。不要输入企业敏感信息。</small>
           <fieldset className="context-checks">
             <legend><span>诊断准备度</span><strong>{preparedCount}/3 已补充</strong></legend>
-            {Object.entries(contextLabels).map(([key, label]) => <label key={key}>
-              <input type="checkbox" checked={contextChecks[key]} onChange={(event) => setContextChecks((current) => ({ ...current, [key]: event.target.checked }))} />
-              <span>{label}</span>
-            </label>)}
-            <small>勾选项仅保存在本页，用于提醒资料是否齐全，不会传给诊断接口。</small>
+            <label><span>采样时间</span><input type="datetime-local" value={diagnosisContext.sampledAt} onChange={(event) => setDiagnosisContext((current) => ({ ...current, sampledAt: event.target.value }))} /></label>
+            <label><span>测点与单位</span><input type="text" maxLength={200} placeholder="如：驱动端轴承，振动 mm/s" value={diagnosisContext.measurementPoint} onChange={(event) => setDiagnosisContext((current) => ({ ...current, measurementPoint: event.target.value }))} /></label>
+            <label><span>当前工况</span><select value={diagnosisContext.operatingMode} onChange={(event) => setDiagnosisContext((current) => ({ ...current, operatingMode: event.target.value }))}><option value="">请选择</option><option value="稳定负载">稳定负载</option><option value="启动升速">启动升速</option><option value="卸载运行">卸载运行</option><option value="停机状态">停机状态</option><option value="工况未知">工况未知</option></select></label>
+            <small>这些字段会随诊断请求发送给 AI，并写入 AI 初步分析快照；缺项时仍可分析，但结论可靠性会受限。</small>
           </fieldset>
           <Button appearance="primary" type="submit" icon={<Play24Regular />} disabled={busy || !question.trim()}>{busy ? "正在请求诊断" : "开始诊断"}</Button>
           <Button type="button" disabled={busy || !deviceId || !question.trim()} onClick={runAgent}>Agent 辅助分析</Button>
@@ -272,10 +266,10 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
                 : <small>{item.source ? `引用未唯一匹配：${item.source}` : "未提供直接引用，需人工核对"}</small>}
             </div>
           </article>)}</div>
-          <section className="verification-next"><div className="verification-heading"><h3>证据补采清单</h3>{verificationItems.length > 0 && <strong>{verifiedCount}/{verificationItems.length} 已现场核对</strong>}</div>{verificationItems.length
-            ? <div className="verification-list">{verificationItems.map((item, index) => <label key={index} className={verifiedItems[index] ? "checked" : ""}><input type="checkbox" checked={Boolean(verifiedItems[index])} onChange={(event) => setVerifiedItems((current) => ({ ...current, [index]: event.target.checked }))} /><span>{item}</span></label>)}</div>
+          <section className="verification-next"><div className="verification-heading"><h3>现场核验任务</h3>{verificationItems.length > 0 && <strong>{verificationItems.length} 项待执行</strong>}</div>{verificationItems.length
+            ? <ol className="verification-list">{verificationItems.map((item, index) => <li key={index}><span>{item}</span></li>)}</ol>
             : <p>服务端未提供待验证项，不能据此认为已经验证充分。请补充现场记录并由维护人员复核。</p>}
-            <small>勾选记录仅在当前页面生效。演示规则不展示诊断置信度或预测概率。</small>
+            <small>这些是将随工单下发的现场任务，不是已完成项。工单验收完成后，诊断才进入人工已确认状态。</small>
           </section>
           <section className="grounded-confirm" aria-label="诊断确认与建单">
             <label>人工风险分级</label>
@@ -284,12 +278,12 @@ export default function DiagnosisPage({ devices, session, initialDeviceId = "AC-
             {session?.isPreview && <><label htmlFor="diagnosis-owner">演示工单负责人</label><select id="diagnosis-owner" value={assignedOwner} disabled={workflowBusy || Boolean(confirmedOrder)} onChange={(event) => setAssignedOwner(event.target.value)}><option value="">请选择</option>{demoOwners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}</select></>}
             <div className="workflow-actions">
               {confirmedOrder && <Button onClick={() => onViewOrders?.()}>查看已生成工单 {confirmedOrder.id}</Button>}
-              <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.status !== "ok" || !riskLevel || (!session?.isPreview && (result.transport !== "api" || result.is_mock))} onClick={persistDiagnosis}>{savedDiagnosis ? "诊断已保存" : workflowBusy ? "正在处理" : session?.isPreview ? "保存演示诊断" : "保存诊断"}</Button>
-              <Button disabled={workflowBusy || !savedDiagnosis || Boolean(confirmedOrder)} onClick={confirmAndCreateOrder}>{confirmedOrder ? "工单已生成" : "人工确认并生成工单"}</Button>
+              <Button appearance="primary" disabled={workflowBusy || Boolean(savedDiagnosis) || result.status !== "ok" || !riskLevel || (!session?.isPreview && (result.transport !== "api" || result.is_mock))} onClick={persistDiagnosis}>{savedDiagnosis ? "AI 初步分析已保存" : workflowBusy ? "正在处理" : session?.isPreview ? "保存演示初步分析" : "保存 AI 初步分析"}</Button>
+              <Button disabled={workflowBusy || !savedDiagnosis || Boolean(confirmedOrder)} onClick={dispatchVerificationOrder}>{confirmedOrder ? "现场核验工单已生成" : "生成现场核验工单"}</Button>
             </div>
-            <p>{session?.isPreview ? "风险等级由人工选择；演示诊断和工单仅保留在当前会话。" : result.transport !== "api" || result.is_mock || result.status !== "ok" ? "只有真实接口返回且证据校验通过的诊断才能保存。" : "风险等级由人工选择；确认后由 B 服务幂等生成工单。"}</p>
+            <p>{session?.isPreview ? "风险等级由人工选择；演示初步分析和核验工单仅保留在当前会话。" : result.transport !== "api" || result.is_mock || result.status !== "ok" ? "只有真实接口返回且证据校验通过的 AI 初步分析才能保存。" : "风险等级由人工选择；派单只启动现场核验，不代表诊断已完成。"}</p>
             {workflowMessage && <p className="workflow-message" role="status">{workflowMessage}</p>}
-            {savedDiagnosis && <dl className="workflow-result"><dt>诊断编号</dt><dd>{savedDiagnosis.id}</dd>{confirmedOrder && <><dt>工单编号</dt><dd>{confirmedOrder.id}</dd><dt>审计记录</dt><dd>{session?.isPreview ? "本地演示未写入审计服务" : auditEvents.length ? `${auditEvents.length} 条已核对` : "待管理员权限核对"}</dd></>}</dl>}
+            {savedDiagnosis && <dl className="workflow-result"><dt>初步分析编号</dt><dd>{savedDiagnosis.id}</dd>{confirmedOrder && <><dt>现场核验工单</dt><dd>{confirmedOrder.id}</dd><dt>诊断状态</dt><dd>{savedDiagnosis.statusLabel || "待现场核验"}</dd><dt>审计记录</dt><dd>{session?.isPreview ? "本地演示未写入审计服务" : auditEvents.length ? `${auditEvents.length} 条已核对` : "待管理员权限核对"}</dd></>}</dl>}
           </section>
         </>}
       </section>

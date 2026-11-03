@@ -48,6 +48,9 @@ class ChatRequest(BaseModel):
     device_id: str = Field(min_length=1, max_length=MAX_DEVICE_ID_LENGTH)
     question: str = Field(min_length=1, max_length=MAX_QUESTION_LENGTH)
     equipment_model: str | None = Field(default=None, max_length=100)
+    sampled_at: str | None = Field(default=None, max_length=100)
+    measurement_point: str | None = Field(default=None, max_length=200)
+    operating_mode: str | None = Field(default=None, max_length=100)
 
     @field_validator("device_id", "question")
     @classmethod

@@ -457,7 +457,7 @@ paths:
     post:
       tags: [diagnoses]
       operationId: createDiagnosis
-      summary: 保存诊断结果
+      summary: 保存 AI 初步分析
       description: |
         权限：technician 及以上。
         保存设备、组织、输入问题、诊断结论、证据引用快照、模型来源和状态（draft）。
@@ -512,16 +512,16 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-  /api/v1/diagnoses/{diagnosis_id}/confirm:
+  /api/v1/diagnoses/{diagnosis_id}/dispatch:
     post:
       tags: [diagnoses]
-      operationId: confirmDiagnosis
-      summary: 人工确认并生成工单
+      operationId: dispatchDiagnosisVerification
+      summary: 派发现场诊断核验工单
       description: |
         权限：technician 及以上。
-        必须由登录用户显式确认，记录 confirmedBy / confirmedAt 和审计轨迹。
-        确认后在同一事务中创建并关联一条工单；重复确认幂等，不会重复建单。
-        任一步失败整体回滚，不会留下半条诊断或孤立工单；未确认诊断不能通过工单接口建单。
+        从 AI 初步分析派发一条待处理的现场核验工单；派单时诊断仍为 draft。
+        重复派单幂等，不会重复建单。关联工单验收完成后才写入 confirmedBy / confirmedAt 并确认诊断。
+        任一步失败整体回滚，不会留下孤立工单。
       parameters:
         - name: diagnosis_id
           in: path
@@ -535,10 +535,10 @@ paths:
             example:
               title: AC-07 驱动端轴承检查
               priority: P1 紧急
-              note: 已现场确认，同意建单
+              description: 按现场核验任务补充测量与检查记录
       responses:
         '200':
-          description: 确认后的诊断与关联工单（重复调用返回同一工单）
+          description: 仍待现场核验的初步分析与关联工单（重复调用返回同一工单）
           content:
             application/json:
               schema: { $ref: '#/components/schemas/DiagnosisConfirmation' }
@@ -546,10 +546,10 @@ paths:
                 diagnosis:
                   id: DIAG-20261017-01
                   deviceId: AC-07
-                  status: confirmed
-                  statusLabel: 已确认
-                  confirmedBy: 张工
-                  confirmedAt: '2026-10-17T10:30:00+08:00'
+                  status: draft
+                  statusLabel: 草稿
+                  confirmedBy: null
+                  confirmedAt: null
                   workOrderId: WO-20261017-01
                 workOrder:
                   id: WO-20261017-01
@@ -562,14 +562,14 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409':
-          description: 诊断已拒绝或状态不允许确认
+          description: 诊断已拒绝或状态不允许派单
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
               example:
                 error:
                   code: INVALID_STATE
-                  message: 诊断已拒绝，不能确认
+                  message: 诊断已拒绝，不能派发现场核验工单
                   details: { diagnosisId: DIAG-20261017-01, status: rejected }
                   requestId: f1a2b3c4
         '422': { $ref: '#/components/responses/ValidationError' }

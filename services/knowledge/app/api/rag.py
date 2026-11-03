@@ -231,6 +231,9 @@ def chat(
         device_id=payload.device_id,
         question=payload.question,
         equipment_model=payload.equipment_model,
+        sampled_at=payload.sampled_at,
+        measurement_point=payload.measurement_point,
+        operating_mode=payload.operating_mode,
         auth=DeviceAuth(
             token=context.token,
             organization_id=context.organization_id,

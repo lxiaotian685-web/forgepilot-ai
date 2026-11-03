@@ -28,6 +28,17 @@ def test_list_device_parameters(api):
     assert rated["unit"] == "kW"
 
 
+def test_seeded_cnc_has_recent_sensor_measurements(api):
+    client, ids, _ = api
+    response = client.get(
+        "/api/v1/devices/CNC-04/parameters?latest=true", headers=auth(ids)
+    )
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert {"spindle_vibration", "spindle_temperature", "load_rate", "coolant_temperature"} <= {item["name"] for item in items}
+    assert all(item["source"] == "sensor" for item in items)
+
+
 def test_list_latest_parameters(api):
     client, ids, _ = api
     response = client.get(

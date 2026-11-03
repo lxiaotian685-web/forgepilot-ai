@@ -33,7 +33,7 @@ async function requestBusiness(path, options, config, fetcher, session) {
   return response.json();
 }
 
-export function diagnosisEvidenceSnapshot(result) {
+export function diagnosisEvidenceSnapshot(result, diagnosisContext = {}) {
   return {
     status: result.status,
     summary: result.summary,
@@ -41,6 +41,7 @@ export function diagnosisEvidenceSnapshot(result) {
     sources: result.sources.map(({ key, reference, order, ...source }) => source),
     conflicts: result.conflicts,
     verificationSuggestions: result.verification_suggestions,
+    diagnosisContext,
     model: {
       provider: result.model_provider || "unknown",
       name: result.model_name || "unknown",
@@ -52,7 +53,7 @@ export function diagnosisEvidenceSnapshot(result) {
 }
 
 export async function saveDiagnosis(
-  { deviceId, question, result, riskLevel, alertId = null, session },
+  { deviceId, question, result, riskLevel, diagnosisContext = {}, alertId = null, session },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
@@ -71,7 +72,7 @@ export async function saveDiagnosis(
     modelSource: result.model_name && result.model_name !== "unknown"
       ? `c-rag-api:${result.model_name}`
       : "c-rag-api",
-    evidence: diagnosisEvidenceSnapshot(result),
+    evidence: diagnosisEvidenceSnapshot(result, diagnosisContext),
     alertId,
   };
   return requestBusiness("/api/v1/diagnoses", {
@@ -80,22 +81,22 @@ export async function saveDiagnosis(
   }, config, fetcher, session);
 }
 
-export async function confirmDiagnosis(
-  { diagnosisId, title, priority, note, session },
+export async function dispatchDiagnosisVerification(
+  { diagnosisId, title, description, priority, session },
   config = import.meta.env || {},
   fetcher = globalThis.fetch,
 ) {
-  if (!diagnosisId) throw new Error("请先保存诊断，再进行人工确认。");
+  if (!diagnosisId) throw new Error("请先保存 AI 初步分析，再派发现场核验工单。");
   const payload = {};
   if (title?.trim()) payload.title = title.trim();
+  if (description?.trim()) payload.description = description.trim();
   if (priority) payload.priority = priority;
-  if (note?.trim()) payload.note = note.trim();
-  const result = await requestBusiness(`/api/v1/diagnoses/${encodeURIComponent(diagnosisId)}/confirm`, {
+  const result = await requestBusiness(`/api/v1/diagnoses/${encodeURIComponent(diagnosisId)}/dispatch`, {
     method: "POST",
     body: JSON.stringify(payload),
   }, config, fetcher, session);
   if (!result?.diagnosis?.id || !result?.workOrder?.id) {
-    throw new Error("确认响应缺少诊断或工单编号，未将其视为成功。");
+    throw new Error("派单响应缺少初步分析或工单编号，未将其视为成功。");
   }
   return result;
 }

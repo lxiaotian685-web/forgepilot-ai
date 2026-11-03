@@ -32,7 +32,13 @@
 
 ### 3.1 诊断 `POST /api/v1/chat`
 
-请求 `{device_id, question, equipment_model?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, device_source, is_demo, status}`。
+请求 `{device_id, question, equipment_model?, sampled_at?, measurement_point?, operating_mode?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, device_source, is_demo, status}`。
+
+- `sampled_at`：现场采样时间，最长 100 字符；
+- `measurement_point`：测点位置与单位，最长 200 字符；
+- `operating_mode`：采样时运行工况，最长 100 字符。
+
+三个现场字段可空，缺失时不阻断诊断；提供后会加入检索词和模型问题。它们是现场上下文，不是已验证事实，模型不得据此直接确认故障。
 
 `device_source` 为 `static`/`http`，`is_demo` 表示模型或设备事实至少一方为演示模式；只有 `status=ok` 且 `is_demo=false` 才表示真实诊断成功。
 

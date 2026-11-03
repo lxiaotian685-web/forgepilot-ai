@@ -360,6 +360,29 @@ def seed_demo(db: Session) -> dict:
             ]
         )
 
+    demo_measurements = {
+        "P-102": [("outlet_pressure", 8.6, "MPa"), ("bearing_temperature", 76, "°C"), ("vibration", 5.1, "mm/s")],
+        "CNC-04": [("spindle_vibration", 8.3, "mm/s"), ("spindle_temperature", 79, "°C"), ("load_rate", 91, "%"), ("coolant_temperature", 35, "°C")],
+        "WR-09": [("motor_temperature", 54, "°C"), ("operating_current", 12.8, "A"), ("positioning_deviation", 0.04, "mm")],
+        "CV-01": [("motor_current", 18.2, "A"), ("chain_speed", 0.42, "m/s"), ("gearbox_temperature", 58, "°C")],
+        "AC-08": [("vibration", 3.0, "mm/s"), ("temperature", 70, "°C")],
+    }
+    for device_code, measurements in demo_measurements.items():
+        for name, value, unit in measurements:
+            db.add(DeviceParameter(
+                organization_id=demo_org.id,
+                device_id=devices[device_code].id,
+                name=name,
+                value=value,
+                unit=unit,
+                source="sensor",
+                source_ref=f"sensor:{device_code}:DEMO",
+                is_authoritative=True,
+                recorded_at=BASE,
+                created_by=owner.id,
+                updated_by=owner.id,
+            ))
+
     alerts: dict[str, Alert] = {}
     alert_specs = [
         (

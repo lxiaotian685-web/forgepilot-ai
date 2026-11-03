@@ -259,9 +259,11 @@ class _CapturingLLM(MockLLM):
 
     def __init__(self):
         self.last_device = None
+        self.last_query = None
 
     def answer(self, query, evidences, device=None):
         self.last_device = device
+        self.last_query = query
         return super().answer(query, evidences, device=device)
 
 
@@ -305,6 +307,21 @@ def test_device_facts_are_passed_to_llm():
     assert llm.last_device is not None
     assert llm.last_device.device_id == "AC-07"
     assert llm.last_device.model == "GX11"
+
+
+def test_structured_diagnosis_context_is_passed_to_llm():
+    llm = _CapturingLLM()
+    svc = _make_service(llm)
+
+    resp = svc.diagnose(
+        "AC-07", "排气温度过高怎么排查？", sampled_at="2026-11-03T10:30",
+        measurement_point="驱动端，振动 mm/s", operating_mode="稳定负载",
+    )
+
+    assert resp.status == "ok"
+    assert "采样时间：2026-11-03T10:30" in llm.last_query
+    assert "测点与单位：驱动端，振动 mm/s" in llm.last_query
+    assert "运行工况：稳定负载" in llm.last_query
 
 
 def test_invalid_conflict_document_ref_is_dropped():

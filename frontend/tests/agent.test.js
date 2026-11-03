@@ -24,7 +24,7 @@ test("API Agent forwards current bearer identity and validates response", async 
     assert.equal(url, "https://rag.example.test/api/v1/agent/assist");
     assert.equal(options.headers.Authorization, "Bearer current-token");
     assert.equal(options.headers["X-Organization-Id"], "org-1");
-    assert.deepEqual(JSON.parse(options.body), { device_id: "AC-07", question: "驱动端振动异常" });
+    assert.deepEqual(JSON.parse(options.body), { device_id: "AC-07", question: "驱动端振动异常", sampled_at: null, measurement_point: null, operating_mode: null });
     return { ok: true, json: async () => payload };
   });
   assert.equal(result.status, "unavailable");

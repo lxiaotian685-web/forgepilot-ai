@@ -475,6 +475,31 @@ def update_work_order(
     device = db.get(Device, order.device_id)
     try:
         if completing:
+            diagnosis = (
+                db.get(Diagnosis, order.diagnosis_id)
+                if order.diagnosis_id
+                else None
+            )
+            if diagnosis is not None and diagnosis.status == "draft":
+                before_diagnosis = {"status": diagnosis.status}
+                diagnosis.status = "confirmed"
+                diagnosis.confirmed_by = context.user_id
+                diagnosis.confirmed_at = utcnow()
+                diagnosis.updated_by = context.user_id
+                write_audit(
+                    db,
+                    organization_id=context.organization_id,
+                    actor_user_id=context.user_id,
+                    action="diagnosis.confirm",
+                    entity_type="diagnosis",
+                    entity_id=diagnosis.id,
+                    before=before_diagnosis,
+                    after={
+                        "status": diagnosis.status,
+                        "workOrderId": order.code,
+                        "reason": "field_verification_completed",
+                    },
+                )
             existing_record = db.scalar(
                 select(MaintenanceRecord).where(
                     MaintenanceRecord.organization_id

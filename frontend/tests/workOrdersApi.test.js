@@ -28,3 +28,12 @@ test("work order create and cancellation forward the business payload", async ()
   assert.equal(calls[1].options.method, "PATCH");
   assert.equal(JSON.parse(calls[1].options.body).cancelReason, "误报");
 });
+
+test("work order completion forwards the human-confirmed device state", async () => {
+  let body;
+  await patchWorkOrder("token", "WO-1", { status: "已完成", actionTaken: "复测正常", deviceState: "运行正常" }, async (_url, options) => {
+    body = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ id: "WO-1" }) };
+  }, "https://api.example.com");
+  assert.deepEqual(body, { status: "已完成", actionTaken: "复测正常", deviceState: "运行正常" });
+});

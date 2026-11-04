@@ -10,7 +10,7 @@ const labels = {
 };
 
 export function buildDeviceProfile(items = []) {
-  const sensors = items.filter((item) => item.source === "sensor").map((item) => ({
+  const sensors = items.filter((item) => ["sensor", "manual", "imported", "corrected"].includes(item.source)).map((item) => ({
     ...item, label: labels[item.name] || item.name, note: "未配置判定阈值",
   }));
   const nameplate = items.filter((item) => item.source === "nameplate").map((item) => ({

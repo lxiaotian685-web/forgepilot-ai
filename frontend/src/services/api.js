@@ -69,6 +69,24 @@ export async function loadDeviceParameters(deviceId, accessToken) {
   return result.items;
 }
 
+export async function createDeviceParameter(deviceId, payload, accessToken, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
+  if (!apiBaseUrl || !accessToken) throw new ApiRequestError(401, `/api/v1/devices/${deviceId}/parameters`);
+  const path = `/api/v1/devices/${encodeURIComponent(deviceId)}/parameters`;
+  const response = await fetchImpl(`${apiBaseUrl}${path}`, {
+    method: "POST",
+    headers: { ...buildRequestHeaders({ accessToken, dataMode: "api" }), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    let message = `巡检数据保存失败（${response.status}）`;
+    try { message = (await response.json())?.error?.message || message; } catch { /* retain status */ }
+    const error = new ApiRequestError(response.status, path);
+    error.message = message;
+    throw error;
+  }
+  return response.json();
+}
+
 function formatTimestamp(value) {
   if (!value) return "暂无更新";
   const date = new Date(value);

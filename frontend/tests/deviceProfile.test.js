@@ -17,3 +17,9 @@ test("formats valid collection time and preserves invalid source text", () => {
   assert.match(formatRecordedAt("2026-05-18T09:44:00Z"), /2026/);
   assert.equal(formatRecordedAt("legacy-time"), "legacy-time");
 });
+
+test("shows manual inspection as a recent operating reading", () => {
+  const profile = buildDeviceProfile([{ name: "vibration", value: 4.2, unit: "mm/s", source: "manual", recordedAt: "2026-11-04T02:00:00Z" }]);
+  assert.equal(profile.sensors.length, 1);
+  assert.equal(profile.sensors[0].value, 4.2);
+});

@@ -1188,6 +1188,7 @@ components:
         ownerId: { type: string, format: uuid, nullable: true }
         description: { type: string, maxLength: 2000, nullable: true }
         dueAt: { type: string, format: date-time, nullable: true }
+        deviceState: { type: string, enum: [运行正常, 需关注, 告警异常, 离线], description: 仅在验收完成时由主管填写并同步设备档案 }
     DevicePage:
       type: object
       required: [items, page, pageSize, total, totalPages]

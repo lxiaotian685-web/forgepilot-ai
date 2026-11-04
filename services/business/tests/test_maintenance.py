@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
-from app.models import AuditLog, MaintenanceRecord, WorkOrder
+from app.models import AuditLog, Device, MaintenanceRecord, WorkOrder
 
 
 def auth(
@@ -32,7 +32,7 @@ def test_completed_work_order_writes_history(api):
     assert missing_action.status_code == 422
     completed = client.patch(
         "/api/v1/work-orders/WO-20250518-01",
-        json={"status": "已完成", "rootCause": "轴承磨损", "actionTaken": "更换轴承并复测振动"},
+        json={"status": "已完成", "rootCause": "轴承磨损", "actionTaken": "更换轴承并复测振动", "deviceState": "运行正常"},
         headers=auth(ids, user="manager@example.com"),
     )
     assert completed.status_code == 200
@@ -73,6 +73,22 @@ def test_completed_work_order_writes_history(api):
             )
         )
         assert audit is not None
+        device = session.scalar(select(Device).where(Device.code == "AC-07"))
+        assert device.state == "running"
+        state_audit = session.scalar(
+            select(AuditLog).where(AuditLog.action == "device.state_update")
+        )
+        assert state_audit is not None
+
+
+def test_device_state_can_only_change_during_completion(api):
+    client, ids, _ = api
+    response = client.patch(
+        "/api/v1/work-orders/WO-20250518-01",
+        json={"deviceState": "运行正常"},
+        headers=auth(ids, user="manager@example.com"),
+    )
+    assert response.status_code == 422
 
 
 def test_repeated_completion_keeps_single_history(api):

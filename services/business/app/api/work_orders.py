@@ -11,6 +11,7 @@ from app.api.codes import next_work_order_code
 from app.api.deps import ROLE_LEVELS, RequestContext, get_context, require_role
 from app.api.errors import api_error
 from app.api.labels import (
+    DEVICE_STATE_LABELS,
     WORK_ORDER_PRIORITY_LABELS,
     WORK_ORDER_STATUS_LABELS,
     WORK_ORDER_TRANSITIONS,
@@ -394,6 +395,8 @@ def update_work_order(
         raise api_error(422, "VALIDATION_ERROR", "验收工单必须填写实际维修措施")
     if {"root_cause", "action_taken"} & fields and not completing:
         raise api_error(422, "VALIDATION_ERROR", "维修结果只能在验收完成时填写")
+    if "device_state" in fields and not completing:
+        raise api_error(422, "VALIDATION_ERROR", "设备状态只能在验收完成时更新")
 
     if "status" in fields and payload.status:
         new_status = label_to_code(
@@ -475,6 +478,23 @@ def update_work_order(
     device = db.get(Device, order.device_id)
     try:
         if completing:
+            if payload.device_state and device is not None:
+                new_device_state = label_to_code(
+                    payload.device_state, DEVICE_STATE_LABELS, "deviceState"
+                )
+                before_device_state = {"state": device.state}
+                device.state = new_device_state
+                device.updated_by = context.user_id
+                write_audit(
+                    db,
+                    organization_id=context.organization_id,
+                    actor_user_id=context.user_id,
+                    action="device.state_update",
+                    entity_type="device",
+                    entity_id=device.id,
+                    before=before_device_state,
+                    after={"state": device.state, "workOrderId": order.code},
+                )
             diagnosis = (
                 db.get(Diagnosis, order.diagnosis_id)
                 if order.diagnosis_id

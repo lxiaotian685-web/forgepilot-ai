@@ -1,10 +1,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ApiRequestError, buildRequestHeaders, importDevices } from "../src/services/api.js";
+import { ApiRequestError, buildRequestHeaders, createDeviceParameter, importDevices } from "../src/services/api.js";
 
 test("api mode requires bearer authentication and never sends demo identity headers", () => {
   assert.throws(() => buildRequestHeaders({ dataMode: "api", demoOrganizationId: "demo-org", demoUserId: "demo@example.com" }), (error) => error instanceof ApiRequestError && error.status === 401);
   assert.deepEqual(buildRequestHeaders({ dataMode: "api", accessToken: "token", demoOrganizationId: "demo-org", demoUserId: "demo@example.com" }), { Accept: "application/json", Authorization: "Bearer token" });
+});
+
+test("manual inspection writes one timestamped device parameter", async () => {
+  let sent;
+  await createDeviceParameter("AC-07", { name: "vibration", value: 4.2, unit: "mm/s", source: "manual", sourceRef: "人工巡检：驱动端", recordedAt: "2026-11-04T02:00:00.000Z" }, "token", async (url, options) => {
+    sent = { url, options };
+    return new Response(JSON.stringify({ id: "parameter-id" }), { status: 201 });
+  }, "https://api.example.test");
+  assert.equal(sent.url, "https://api.example.test/api/v1/devices/AC-07/parameters");
+  assert.equal(sent.options.method, "POST");
+  assert.equal(sent.options.headers.Authorization, "Bearer token");
+  assert.equal(JSON.parse(sent.options.body).source, "manual");
 });
 
 test("mock mode may use explicitly configured demo headers", () => {

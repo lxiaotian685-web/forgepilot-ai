@@ -43,8 +43,9 @@ import {
   YAxis,
 } from "recharts";
 import * as demoData from "./data";
-import { createDeviceParameter, importDevices, loadDeviceParameters, loadWorkspaceData } from "./services/api";
+import { createDeviceParameter, importDevices, loadDeviceParameterHistory, loadWorkspaceData } from "./services/api";
 import { buildDeviceProfile, formatRecordedAt } from "./services/deviceProfile.js";
+import { buildInspectionPayloads, defaultInspectionRows, inspectionMetrics, localDateTimeValue } from "./services/inspectionForm.js";
 import { authService, canAccessPage, getAllowedPageIds, roleLabels, selectStoredSession } from "./services/auth";
 import { alertDeviceId, countAlerts, filterAlerts, reopenAlert, transitionAlert, updateAlert } from "./services/alertCenter";
 import { createDeviceImportTemplate, filterDevices, parseDeviceImport } from "./services/deviceCenter";
@@ -276,7 +277,7 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, 
   const [profileVersion, setProfileVersion] = useState(0);
   const [inspectionOpen, setInspectionOpen] = useState(false);
   const [inspectionBusy, setInspectionBusy] = useState(false);
-  const [inspection, setInspection] = useState({ name: "vibration", value: "", unit: "mm/s", recordedAt: "", point: "" });
+  const [inspection, setInspection] = useState({ rows: defaultInspectionRows(), recordedAt: localDateTimeValue(), point: "" });
   const [localDevices, setLocalDevices] = useState(() => {
     if (!allowLocalImport) return [];
     try { return JSON.parse(localStorage.getItem("forgepilot.preview.devices") || "[]"); } catch { return []; }
@@ -289,34 +290,31 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, 
     if (allowLocalImport || !selected?.id) return;
     let active = true;
     setLiveProfile(null);
-    loadDeviceParameters(selected.id, accessToken).then((items) => {
+    loadDeviceParameterHistory(selected.id, accessToken).then((items) => {
       if (!active) return;
       const grouped = buildDeviceProfile(items);
       setLiveProfile({ id: selected.id, profile: items.length ? {
         updatedAt: grouped.latest,
         metrics: grouped.sensors.map((item) => ({ label: item.label, value: item.value, unit: item.unit || "", limit: item.note, tone: "neutral" })),
         nameplate: grouped.nameplate,
-        trend: [], series: [], alertSummary: "查看告警中心", documents: [],
+        trend: grouped.trend, series: grouped.series, sources: grouped.sources, alertSummary: "查看告警中心", documents: [],
       } : null });
     }).catch((error) => { if (active) notify(`设备测点读取失败：${error.message}`); });
     return () => { active = false; };
   }, [selected?.id, accessToken, allowLocalImport, profileVersion]);
   const saveInspection = async () => {
     if (!selected || inspectionBusy) return;
-    if (!inspection.name.trim() || inspection.value === "" || !Number.isFinite(Number(inspection.value))) return notify("请填写有效的指标名称和数值");
-    if (!inspection.point.trim()) return notify("请填写实际测点位置");
+    let payloads;
+    try { payloads = buildInspectionPayloads(inspection); }
+    catch (error) { return notify(error.message); }
     setInspectionBusy(true);
     try {
-      await createDeviceParameter(selected.id, {
-        name: inspection.name.trim(), value: Number(inspection.value), unit: inspection.unit.trim() || null,
-        source: "manual", sourceRef: `人工巡检：${inspection.point.trim()}`,
-        recordedAt: inspection.recordedAt ? new Date(inspection.recordedAt).toISOString() : new Date().toISOString(),
-      }, accessToken);
-      setInspection((current) => ({ ...current, value: "", recordedAt: "" }));
+      await Promise.all(payloads.map((payload) => createDeviceParameter(selected.id, payload, accessToken)));
+      setInspection((current) => ({ ...current, rows: defaultInspectionRows(), recordedAt: localDateTimeValue() }));
       setInspectionOpen(false);
       setProfileVersion((value) => value + 1);
       await onImported?.();
-      notify(`${selected.id} 巡检数据已保存并写入审计`);
+      notify(`${selected.id} 已保存 ${payloads.length} 项巡检数据，趋势图已刷新`);
     } catch (error) { notify(error.message); }
     finally { setInspectionBusy(false); }
   };
@@ -391,9 +389,9 @@ function DevicePage({ navigate, devices, profiles, allowLocalImport, canImport, 
           <div className="drawer-heading"><div><small>设备档案与最近测点</small><h2>{selected.id} {selected.name}</h2></div><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="关闭预览" onClick={() => setPreviewClosed(true)} /></div>
           <div className="equipment-identity"><span>{selected.type} · {selected.plant || "未分配厂区"}</span><strong>{selected.location}</strong></div>
           <div className="health-callout"><span>档案健康评分<small>演示基线，非实时计算</small></span><strong>{selected.health == null ? "待接入" : `${selected.health}/100`}</strong></div>
-          {profile ? <><div className="profile-freshness">最近采集：{formatRecordedAt(profile.updatedAt)}</div>{profile.metrics.length > 0 && <><h3>最近运行测点</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div></>}{profile.nameplate?.length > 0 && <><h3>设备铭牌参数</h3><div className="sensor-list">{profile.nameplate.map((metric) => <div key={metric.name}><span>{metric.label}</span><strong>{metric.value} <small>{metric.unit}</small></strong><small>{metric.note}</small></div>)}</div></>}<DeviceTrendChart profile={profile} /><div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、") || "暂无关联资料"}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，运行测点尚未接入</strong><span>该设备暂无已上报测点；可通过设备参数接口接入采集数据。</span></div>}
+          {profile ? <><div className="profile-freshness">最近采集：{formatRecordedAt(profile.updatedAt)}</div>{profile.metrics.length > 0 && <><h3>最近运行测点</h3><div className="sensor-list">{profile.metrics.map((metric) => <div key={metric.label}><span>{metric.label}</span><strong className={metric.tone === "danger" ? "text-danger" : ""}>{metric.value} <small>{metric.unit}</small></strong><small>{metric.limit}</small></div>)}</div></>}{profile.nameplate?.length > 0 && <><h3>设备铭牌参数</h3><div className="sensor-list">{profile.nameplate.map((metric) => <div key={metric.name}><span>{metric.label}</span><strong>{metric.value} <small>{metric.unit}</small></strong><small>{metric.note}</small></div>)}</div></>}<DeviceTrendChart profile={profile} />{profile.sources?.length > 0 && <p className="trend-source">趋势数据来源：{profile.sources.join("、")}；悬停可查看具体时间和值。</p>}<div className="device-context"><div><span>关联告警</span><strong>{profile.alertSummary}</strong></div><div><span>相关资料</span><strong>{profile.documents.join("、") || "暂无关联资料"}</strong></div></div></> : <div className="device-empty"><strong>设备档案已导入，运行测点尚未接入</strong><span>该设备暂无已上报测点；可通过设备参数接口接入采集数据。</span></div>}
           {canRecord && <Button onClick={() => setInspectionOpen((value) => !value)}>{inspectionOpen ? "收起巡检录入" : "录入巡检数据"}</Button>}
-          {inspectionOpen && <section className="inspection-form"><h3>人工巡检测点</h3><label>指标名称<input value={inspection.name} maxLength={120} onChange={(event) => setInspection((current) => ({ ...current, name: event.target.value }))} placeholder="如 vibration" /></label><div><label>数值<input type="number" step="any" value={inspection.value} onChange={(event) => setInspection((current) => ({ ...current, value: event.target.value }))} /></label><label>单位<input value={inspection.unit} maxLength={32} onChange={(event) => setInspection((current) => ({ ...current, unit: event.target.value }))} placeholder="如 mm/s" /></label></div><label>测点位置<input value={inspection.point} maxLength={200} onChange={(event) => setInspection((current) => ({ ...current, point: event.target.value }))} placeholder="如驱动端轴承位" /></label><label>采样时间<input type="datetime-local" value={inspection.recordedAt} onChange={(event) => setInspection((current) => ({ ...current, recordedAt: event.target.value }))} /></label><small>由现场人员录入；不会自动改变健康评分或设备状态。</small><Button appearance="primary" disabled={inspectionBusy} onClick={saveInspection}>{inspectionBusy ? "正在保存" : "保存巡检数据"}</Button></section>}
+          {inspectionOpen && <section className="inspection-form"><h3>人工巡检记录</h3><div className="inspection-context"><label>测点位置<input value={inspection.point} maxLength={200} onChange={(event) => setInspection((current) => ({ ...current, point: event.target.value }))} placeholder="如驱动端轴承位" /></label><label>采样时间<input type="datetime-local" value={inspection.recordedAt} onChange={(event) => setInspection((current) => ({ ...current, recordedAt: event.target.value }))} /></label></div><div className="inspection-table"><span>巡检指标</span><span>数值</span><span>单位</span>{inspection.rows.map((row, index) => <div className="inspection-row" key={index}><select value={row.name} onChange={(event) => { const metric = inspectionMetrics.find((item) => item.name === event.target.value); setInspection((current) => ({ ...current, rows: current.rows.map((item, rowIndex) => rowIndex === index ? { ...item, name: metric.name, unit: metric.unit } : item) })); }}>{inspectionMetrics.map((metric) => <option key={metric.name} value={metric.name}>{metric.label}</option>)}</select><input aria-label={`第 ${index + 1} 项数值`} type="number" step="any" value={row.value} onChange={(event) => setInspection((current) => ({ ...current, rows: current.rows.map((item, rowIndex) => rowIndex === index ? { ...item, value: event.target.value } : item) }))} placeholder="未测可留空" /><span>{row.unit}</span></div>)}</div><Button appearance="subtle" onClick={() => setInspection((current) => ({ ...current, rows: [...current.rows, { name: inspectionMetrics[0].name, unit: inspectionMetrics[0].unit, value: "" }] }))}>添加一项指标</Button><small>一次可保存多项数据；提交后最近测点和趋势图会立即刷新，不会自动改变健康评分或设备状态。</small><Button appearance="primary" disabled={inspectionBusy} onClick={saveInspection}>{inspectionBusy ? "正在保存" : "保存并更新趋势"}</Button></section>}
           <Button appearance="primary" icon={<Play24Regular />} onClick={() => navigate("diagnosis", { deviceId: selected.id })}>发起诊断</Button>
         </aside> : <aside className="panel detail-drawer"><div className="device-empty">请先选择设备</div></aside>}
       </div>

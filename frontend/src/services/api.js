@@ -69,6 +69,12 @@ export async function loadDeviceParameters(deviceId, accessToken) {
   return result.items;
 }
 
+export async function loadDeviceParameterHistory(deviceId, accessToken) {
+  const result = await request(`/api/v1/devices/${encodeURIComponent(deviceId)}/parameters?pageSize=100`, accessToken);
+  if (!Array.isArray(result.items)) throw new Error("设备历史测点响应格式不正确");
+  return result.items;
+}
+
 export async function createDeviceParameter(deviceId, payload, accessToken, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
   if (!apiBaseUrl || !accessToken) throw new ApiRequestError(401, `/api/v1/devices/${deviceId}/parameters`);
   const path = `/api/v1/devices/${encodeURIComponent(deviceId)}/parameters`;

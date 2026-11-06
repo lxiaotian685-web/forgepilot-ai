@@ -151,9 +151,9 @@ export default function ShowcasePage() {
 
     <section className="showcase-section showcase-screens" id="screens">
       <SectionHeading eyebrow="真实系统界面" title="每一步都有可操作页面" description="以下均为当前在线版本的真实页面截图。" />
-      <figure><div><small>设备档案与人工巡检</small><h3>设备中心与测点</h3><p>人工录入与传感器采集分开标注，录入后刷新历史趋势。</p></div><img src={devicesScreenshot} alt="ForgePilot 设备中心真实截图" /></figure>
-      <figure className="reverse"><div><small>RAG 有据诊断</small><h3>诊断工作台与来源引用</h3><p>文档陈述、模型推断和待验证项分区展示，证据不足时不强行下结论。</p></div><img src={diagnosisScreenshot} alt="ForgePilot 诊断工作台真实截图" /></figure>
-      <figure><div><small>现场核验与验收</small><h3>维护工单与状态流转</h3><p>现场核验结果进入工单，主管验收时选择设备状态并留下审计记录。</p></div><img src={ordersScreenshot} alt="ForgePilot 维护工单真实截图" /></figure>
+      <figure><div><small>设备档案与人工巡检</small><h3>设备中心与测点</h3><p>人工录入与传感器采集分开标注，录入后刷新历史趋势。</p><ul className="screen-points"><li>设备档案统一查看</li><li>批量录入巡检测点</li><li>历史趋势即时刷新</li></ul></div><img src={devicesScreenshot} alt="ForgePilot 设备中心真实截图" /></figure>
+      <figure className="reverse"><div><small>RAG 有据诊断</small><h3>诊断工作台与来源引用</h3><p>文档陈述、模型推断和待验证项分区展示，证据不足时不强行下结论。</p><ul className="screen-points"><li>设备上下文自动带入</li><li>来源切片可以回查</li><li>待验证项进入现场流程</li></ul></div><img src={diagnosisScreenshot} alt="ForgePilot 诊断工作台真实截图" /></figure>
+      <figure><div><small>现场核验与验收</small><h3>维护工单与状态流转</h3><p>现场核验结果进入工单，主管验收时选择设备状态并留下审计记录。</p><ul className="screen-points"><li>核验任务明确到人</li><li>处理状态全程留痕</li><li>主管验收形成闭环</li></ul></div><img src={ordersScreenshot} alt="ForgePilot 维护工单真实截图" /></figure>
     </section>
 
     <section className="showcase-section showcase-gallery" id="gallery">
@@ -175,7 +175,10 @@ export default function ShowcasePage() {
       <div className="verification-record"><strong>当前版本验证记录</strong><span>92 项前端测试</span><span>86 项业务服务测试</span><span>132 项知识服务测试</span></div>
     </section>
 
-    <section className="showcase-section showcase-faq" id="faq"><SectionHeading eyebrow="评审常见问题" title="常见问题与说明" />{faq.map(([question, answer], index) => <details key={question} open={index === 0}><summary>{question}</summary><p>{answer}</p></details>)}</section>
+    <section className="showcase-section showcase-faq" id="faq">
+      <div className="faq-intro"><SectionHeading eyebrow="评审常见问题" title="先把边界讲清楚" description="ForgePilot 不用夸张承诺换取演示效果，所有结论都保留人工确认环节。" /><div className="faq-promises"><span><b>01</b>演示数据明确标注</span><span><b>02</b>AI 建议附带来源</span><span><b>03</b>最终结论由人确认</span></div></div>
+      <div className="faq-list">{faq.map(([question, answer], index) => <details key={question} open={index === 0}><summary><span>{String(index + 1).padStart(2, "0")}</span>{question}</summary><p>{answer}</p></details>)}</div>
+    </section>
 
     <section className="showcase-cta"><div><h2>体验完整的设备诊断闭环</h2><p>从设备建档、知识检索和初步分析，一直走到现场核验与工单验收。</p><div className="showcase-actions"><a className="showcase-button light" href={appRoot}>进入在线演示</a><a className="showcase-button outline-light" href={githubUrl} target="_blank" rel="noreferrer">查看 GitHub</a><a href={videoUrl} target="_blank" rel="noreferrer">观看演示视频 <Open24Regular /></a><a href={technicalDocUrl} target="_blank" rel="noreferrer">下载技术文档 <Open24Regular /></a></div></div><div className="showcase-account"><small>演示账号</small><strong>{demoAccount}</strong><button type="button" onClick={copyAccount}><Copy24Regular />{copied ? "已复制" : "复制账号"}</button><span>演示密码请在登录页查看</span></div></section>
 

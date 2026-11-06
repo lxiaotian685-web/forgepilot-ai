@@ -168,6 +168,8 @@ A/B/C 功能分支与各轮 Pull Request 保留了细粒度开发历史；来源
 
 - 代码仓库：<https://github.com/lxiaotian685-web/forgepilot-ai>
 - 在线演示：<https://forgepilot.xiaotianworks.cn/>
+- 项目介绍：<https://forgepilot.xiaotianworks.cn/showcase/>
+- 校赛录屏脚本：[docs/DEMO_VIDEO_GUIDE.md](docs/DEMO_VIDEO_GUIDE.md)
 - 技术 PDF：[ForgePilot 技术说明（16 页）](docs/tech-report/ForgePilot_技术说明_20261031.pdf)
 - 技术 PDF 源文件：[HTML 版](docs/tech-report/ForgePilot_技术说明_20261031.html)
 - GitHub Release：[v1.0.0 竞赛提交版本](https://github.com/lxiaotian685-web/forgepilot-ai/releases/tag/v1.0.0)（附技术 PDF 下载）

@@ -76,6 +76,7 @@ const navItems = [
 const isDemoMode = (import.meta.env.VITE_DATA_MODE || "mock") !== "api";
 
 const dataMode = import.meta.env.VITE_DATA_MODE || "mock";
+const appBase = import.meta.env.BASE_URL || "/";
 
 function createDemoSession(role) {
   return {
@@ -139,6 +140,10 @@ function LoginPage({ onLogin }) {
           </form>
         )}
         <small className="login-footnote">请勿在演示环境录入真实生产秘密或个人敏感信息。</small>
+        <nav className="login-project-links" aria-label="项目相关链接">
+          <a href={`${appBase}showcase/`}>项目介绍</a>
+          <a href="https://github.com/lxiaotian685-web/forgepilot-ai" target="_blank" rel="noreferrer">GitHub</a>
+        </nav>
         <div className="compliance-line">
           <a href="https://beian.miit.gov.cn" target="_blank" rel="noreferrer">粤ICP备2026151829号-2</a>
         </div>

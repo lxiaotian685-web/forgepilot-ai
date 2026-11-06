@@ -131,7 +131,7 @@ export default function ShowcasePage() {
     <section className="showcase-hero">
       <div className="showcase-hero-copy">
         <span className="showcase-kicker"><ShieldLock24Regular />有证据的工业设备维护协作平台</span>
-        <h1>让设备诊断从经验判断，走向有证据、可复核、可追踪</h1>
+        <h1>让设备诊断从<span className="semantic-lock">经验判断</span>，走向<span className="semantic-lock">有证据、可复核、可追踪</span></h1>
         <p>连接设备数据、知识检索、AI 分析、人工核验与工单验收，构建责任闭环。</p>
         <div className="showcase-actions"><a className="showcase-button primary" href={appRoot}>进入在线演示</a><a className="showcase-button secondary" href="#workflow">查看业务闭环</a></div>
         <small className="showcase-demo-note">当前为虚构演示数据，不代表真实工厂生产数据。</small>
@@ -162,7 +162,7 @@ export default function ShowcasePage() {
     </section>
 
     <section className="showcase-section showcase-boundary" id="boundary">
-      <SectionHeading eyebrow="人机协作防线" title="明确 AI 可信边界" description="技术人员始终是判断与责任主体。" />
+      <SectionHeading eyebrow="人机协作防线" title="明确 AI 可信边界" description={<>技术人员始终是<span className="semantic-lock">判断与责任主体</span>。</>} />
       <div className="boundary-stage">
         <article className="boundary-panel allow"><header><CheckmarkCircle24Regular /><span><small>AI ASSIST</small><h3>AI 可以做</h3></span></header><div className="boundary-capabilities">{["检索设备资料和相关文档切片","展示可核对的来源引用","形成有依据的初步分析建议","生成需要现场核验的任务项目"].map((item,index)=><div key={item}><b>{String(index+1).padStart(2,"0")}</b><span>{item}</span><ArrowRight24Regular /></div>)}</div></article>
         <div className="boundary-gate" aria-label="AI 辅助与人工决策的责任边界"><span className="gate-orbit" /><span className="gate-orbit secondary" /><div className="gate-core"><ShieldLock24Regular /><strong>责任边界</strong><small>人工确认</small></div><span className="gate-label ai">AI 辅助</span><span className="gate-label human">人工决策</span></div>
@@ -175,7 +175,7 @@ export default function ShowcasePage() {
 
     <section className="showcase-section showcase-architecture" id="architecture">
       <SectionHeading eyebrow="系统技术架构" title="分层模块与版本验证记录" description="模型密钥只保留在服务端，业务数据按组织和岗位授权。" />
-      <div className="architecture-flow"><article><Database24Regular /><small>MODULE 01</small><h3>React 前端</h3><p>页面交互、工作台与趋势展示</p></article><ArrowRight24Regular /><article><ClipboardTask24Regular /><small>MODULE 02</small><h3>FastAPI 业务服务</h3><p>业务流程、令牌鉴权、岗位权限</p></article><ArrowRight24Regular /><article><BookOpen24Regular /><small>MODULE 03</small><h3>RAG 知识服务</h3><p>文档解析、切片检索、来源引用</p></article><ArrowRight24Regular /><article><ShieldLock24Regular /><small>MODULE 04</small><h3>DeepSeek</h3><p>服务端 API 调用，密钥不进浏览器</p></article></div>
+      <div className="architecture-flow"><article data-module="01"><Database24Regular /><small>MODULE 01</small><h3>React 前端</h3><p><span>页面交互</span><span>工作台</span><span>趋势展示</span></p></article><ArrowRight24Regular /><article data-module="02"><ClipboardTask24Regular /><small>MODULE 02</small><h3>FastAPI 业务服务</h3><p><span>业务流程</span><span>令牌鉴权</span><span>岗位权限</span></p></article><ArrowRight24Regular /><article data-module="03"><BookOpen24Regular /><small>MODULE 03</small><h3>RAG 知识服务</h3><p><span>文档解析</span><span>切片检索</span><span>来源引用</span></p></article><ArrowRight24Regular /><article data-module="04"><ShieldLock24Regular /><small>MODULE 04</small><h3>DeepSeek</h3><p><span>服务端调用</span><span>密钥隔离</span><span>浏览器零暴露</span></p></article></div>
       <div className="verification-record"><strong>当前版本验证记录</strong><span>92 项前端测试</span><span>86 项业务服务测试</span><span>132 项知识服务测试</span></div>
     </section>
 

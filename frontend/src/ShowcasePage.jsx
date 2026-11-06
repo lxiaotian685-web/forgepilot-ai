@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowRight24Regular,
   BookOpen24Regular,
@@ -13,6 +13,12 @@ import {
 import devicesScreenshot from "../../docs/screenshots/03-devices.png";
 import diagnosisScreenshot from "../../docs/screenshots/05-diagnosis.png";
 import ordersScreenshot from "../../docs/screenshots/07-work-orders.png";
+import loginScreenshot from "../../docs/screenshots/01-login.png";
+import overviewScreenshot from "../../docs/screenshots/02-overview.png";
+import alertsScreenshot from "../../docs/screenshots/04-alerts.png";
+import knowledgeScreenshot from "../../docs/screenshots/06-knowledge.png";
+import peopleScreenshot from "../../docs/screenshots/08-people.png";
+import auditScreenshot from "../../docs/screenshots/09-audit.png";
 
 const githubUrl = "https://github.com/lxiaotian685-web/forgepilot-ai";
 const videoUrl = "https://b23.tv/4HPzoyw";
@@ -26,6 +32,15 @@ const workflow = [
   ["AI 有据分析", "结合测点和证据形成初步分析与核验任务。"],
   ["现场核验工单", "现场人员按核验项检查并记录结果。"],
   ["主管验收与审计", "验收时更新设备状态，诊断随后确认。"],
+];
+
+const interfaceGallery = [
+  [loginScreenshot, "登录与身份", "演示账号登录和组织身份入口"],
+  [overviewScreenshot, "维护总览", "设备、告警和工单的统一概览"],
+  [alertsScreenshot, "告警中心", "告警筛选、指派和状态流转"],
+  [knowledgeScreenshot, "知识证据", "文档解析、切片和来源定位"],
+  [peopleScreenshot, "人员与权限", "岗位、班组和成员状态管理"],
+  [auditScreenshot, "审计记录", "关键业务操作的可追踪记录"],
 ];
 
 const faq = [
@@ -47,6 +62,57 @@ function SectionHeading({ eyebrow, title, description }) {
 
 export default function ShowcasePage() {
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const page = document.querySelector(".showcase-page");
+    if (!page) return undefined;
+
+    const revealItems = page.querySelectorAll(
+      ".showcase-section-heading, .showcase-problem li, .workflow-track article, .showcase-screens figure, .boundary-columns article, .architecture-flow article, .showcase-faq details",
+    );
+    revealItems.forEach((item, index) => item.style.setProperty("--reveal-index", String(index % 5)));
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        });
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -8%" },
+    );
+    revealItems.forEach((item) => observer.observe(item));
+    page.classList.add("is-motion-ready");
+
+    const screenFigures = page.querySelectorAll(".showcase-screens figure");
+    const cleanups = Array.from(screenFigures, (figure) => {
+      const onMove = (event) => {
+        const rect = figure.getBoundingClientRect();
+        const x = (event.clientX - rect.left) / rect.width - 0.5;
+        const y = (event.clientY - rect.top) / rect.height - 0.5;
+        figure.style.setProperty("--screen-x", `${x * 7}deg`);
+        figure.style.setProperty("--screen-y", `${y * -5}deg`);
+        figure.style.setProperty("--shine-x", `${(x + 0.5) * 100}%`);
+        figure.style.setProperty("--shine-y", `${(y + 0.5) * 100}%`);
+      };
+      const onLeave = () => {
+        figure.style.setProperty("--screen-x", "0deg");
+        figure.style.setProperty("--screen-y", "0deg");
+      };
+      figure.addEventListener("pointermove", onMove);
+      figure.addEventListener("pointerleave", onLeave);
+      return () => {
+        figure.removeEventListener("pointermove", onMove);
+        figure.removeEventListener("pointerleave", onLeave);
+      };
+    });
+    return () => {
+      observer.disconnect();
+      cleanups.forEach((cleanup) => cleanup());
+    };
+  }, []);
+
   const copyAccount = async () => {
     await navigator.clipboard.writeText(demoAccount);
     setCopied(true);
@@ -83,11 +149,16 @@ export default function ShowcasePage() {
       <div className="workflow-track">{workflow.map(([title, text], index) => <article className={index === 2 ? "ai-step" : ""} key={title}><small>STEP {String(index + 1).padStart(2, "0")}</small><h3>{title}</h3><p>{text}</p>{index < workflow.length - 1 && <ArrowRight24Regular className="workflow-arrow" />}</article>)}</div>
     </section>
 
-    <section className="showcase-section showcase-screens">
+    <section className="showcase-section showcase-screens" id="screens">
       <SectionHeading eyebrow="真实系统界面" title="每一步都有可操作页面" description="以下均为当前在线版本的真实页面截图。" />
       <figure><div><small>设备档案与人工巡检</small><h3>设备中心与测点</h3><p>人工录入与传感器采集分开标注，录入后刷新历史趋势。</p></div><img src={devicesScreenshot} alt="ForgePilot 设备中心真实截图" /></figure>
       <figure className="reverse"><div><small>RAG 有据诊断</small><h3>诊断工作台与来源引用</h3><p>文档陈述、模型推断和待验证项分区展示，证据不足时不强行下结论。</p></div><img src={diagnosisScreenshot} alt="ForgePilot 诊断工作台真实截图" /></figure>
       <figure><div><small>现场核验与验收</small><h3>维护工单与状态流转</h3><p>现场核验结果进入工单，主管验收时选择设备状态并留下审计记录。</p></div><img src={ordersScreenshot} alt="ForgePilot 维护工单真实截图" /></figure>
+    </section>
+
+    <section className="showcase-section showcase-gallery" id="gallery">
+      <SectionHeading eyebrow="完整界面画廊" title="其余页面一张不少" description="登录、总览、告警、知识、人员和审计页面均保留展示。" />
+      <div className="showcase-gallery-grid">{interfaceGallery.map(([image, title, text]) => <figure key={title}><img src={image} alt={`ForgePilot ${title}真实截图`} loading="lazy" /><figcaption><strong>{title}</strong><span>{text}</span></figcaption></figure>)}</div>
     </section>
 
     <section className="showcase-section showcase-boundary" id="boundary">

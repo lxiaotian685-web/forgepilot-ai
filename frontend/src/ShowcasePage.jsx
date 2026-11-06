@@ -163,7 +163,11 @@ export default function ShowcasePage() {
 
     <section className="showcase-section showcase-boundary" id="boundary">
       <SectionHeading eyebrow="人机协作防线" title="明确 AI 可信边界" description="技术人员始终是判断与责任主体。" />
-      <div className="boundary-columns"><article><h3><CheckmarkCircle24Regular />AI 可以做</h3><ul><li>检索设备资料和相关文档切片</li><li>展示可核对的来源引用</li><li>形成有依据的初步分析建议</li><li>生成需要现场核验的任务项目</li></ul></article><article className="strict"><h3><ShieldLock24Regular />AI 坚决不做</h3><ul><li>不直接下发设备控制指令</li><li>不替代工程师作最终结论</li><li>无确凿证据时不编造结论</li><li>不跳过人工核验和主管验收</li></ul></article></div>
+      <div className="boundary-stage">
+        <article className="boundary-panel allow"><header><CheckmarkCircle24Regular /><span><small>AI ASSIST</small><h3>AI 可以做</h3></span></header><div className="boundary-capabilities">{["检索设备资料和相关文档切片","展示可核对的来源引用","形成有依据的初步分析建议","生成需要现场核验的任务项目"].map((item,index)=><div key={item}><b>{String(index+1).padStart(2,"0")}</b><span>{item}</span><ArrowRight24Regular /></div>)}</div></article>
+        <div className="boundary-gate" aria-label="AI 辅助与人工决策的责任边界"><span className="gate-orbit" /><span className="gate-orbit secondary" /><div className="gate-core"><ShieldLock24Regular /><strong>责任边界</strong><small>人工确认</small></div><span className="gate-label ai">AI 辅助</span><span className="gate-label human">人工决策</span></div>
+        <article className="boundary-panel strict"><header><ShieldLock24Regular /><span><small>HUMAN CONTROL</small><h3>AI 坚决不做</h3></span></header><div className="boundary-capabilities">{["不直接下发设备控制指令","不替代工程师作最终结论","无确凿证据时不编造结论","不跳过人工核验和主管验收"].map((item,index)=><div key={item}><b>{String(index+1).padStart(2,"0")}</b><span>{item}</span><ShieldLock24Regular /></div>)}</div></article>
+      </div>
       <div className="boundary-timeline"><span>AI 初步分析</span><ArrowRight24Regular /><span>现场核验工单</span><ArrowRight24Regular /><span>人工核验</span><ArrowRight24Regular /><strong>主管工单验收</strong></div>
     </section>
 

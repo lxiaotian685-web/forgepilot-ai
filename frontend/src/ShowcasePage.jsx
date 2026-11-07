@@ -131,8 +131,8 @@ export default function ShowcasePage() {
     <section className="showcase-hero">
       <div className="showcase-hero-copy">
         <span className="showcase-kicker"><ShieldLock24Regular />有证据的工业设备维护协作平台</span>
-        <h1>让设备诊断从<span className="semantic-lock">经验判断</span>，走向<span className="semantic-lock">有证据、可复核、可追踪</span></h1>
-        <p>连接设备数据、知识检索、AI 分析、人工核验与工单验收，构建责任闭环。</p>
+        <h1><span className="hero-title-line">设备诊断，有据可查</span><span className="hero-title-line accent">关键决策，由人把关</span></h1>
+        <p>连接设备测点与知识证据，让 AI 辅助分析，让工程师核验与决策。</p>
         <div className="showcase-actions"><a className="showcase-button primary" href={appRoot}>进入在线演示</a><a className="showcase-button secondary" href="#workflow">查看业务闭环</a></div>
         <small className="showcase-demo-note">当前为虚构演示数据，不代表真实工厂生产数据。</small>
       </div>
@@ -157,7 +157,7 @@ export default function ShowcasePage() {
     </section>
 
     <section className="showcase-section showcase-gallery" id="gallery">
-      <SectionHeading eyebrow="完整界面画廊" title="其余页面一张不少" description="登录、总览、告警、知识、人员和审计页面均保留展示。" />
+      <SectionHeading eyebrow="完整界面画廊" title="看见协作的每一环" description="从登录到审计，六个页面串起日常维护协作。" />
       <div className="showcase-gallery-grid">{interfaceGallery.map(([image, title, text]) => <figure key={title}><img src={image} alt={`ForgePilot ${title}真实截图`} loading="lazy" /><figcaption><strong>{title}</strong><span>{text}</span></figcaption></figure>)}</div>
     </section>
 
@@ -180,7 +180,7 @@ export default function ShowcasePage() {
     </section>
 
     <section className="showcase-section showcase-faq" id="faq">
-      <div className="faq-intro"><SectionHeading eyebrow="评审常见问题" title="先把边界讲清楚" description="ForgePilot 不用夸张承诺换取演示效果，所有结论都保留人工确认环节。" /><div className="faq-promises"><span><b>01</b>演示数据明确标注</span><span><b>02</b>AI 建议附带来源</span><span><b>03</b>最终结论由人确认</span></div></div>
+      <div className="faq-intro"><SectionHeading eyebrow="评审常见问题" title="体验前，你可能想了解" description="了解数据来源、AI 的职责，以及现场人员如何完成核验。" /><div className="faq-promises"><span><b>01</b>演示数据明确标注</span><span><b>02</b>AI 建议附带来源</span><span><b>03</b>最终结论由人确认</span></div></div>
       <div className="faq-list">{faq.map(([question, answer], index) => <details key={question} open={index === 0}><summary><span>{String(index + 1).padStart(2, "0")}</span>{question}</summary><p>{answer}</p></details>)}</div>
     </section>
 

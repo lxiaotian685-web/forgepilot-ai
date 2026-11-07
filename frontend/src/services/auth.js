@@ -53,7 +53,7 @@ async function parseError(response) {
 }
 
 export function createAuthService({
-  baseUrl = runtimeEnv.VITE_API_BASE_URL || "",
+  baseUrl = runtimeEnv.VITE_API_BASE_URL || runtimeEnv.VITE_BUSINESS_API_BASE_URL || "",
   fetchImpl = globalThis.fetch,
   storage = globalThis.sessionStorage,
 } = {}) {

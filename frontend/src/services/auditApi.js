@@ -1,4 +1,5 @@
-const baseUrl = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const runtimeEnv = import.meta.env || {};
+const baseUrl = (runtimeEnv.VITE_API_BASE_URL || runtimeEnv.VITE_BUSINESS_API_BASE_URL || "").replace(/\/$/, "");
 
 export async function listAuditEvents(token, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl) {
   if (!token || !apiBaseUrl) throw new Error("审计服务或登录信息未配置");

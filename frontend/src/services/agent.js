@@ -18,7 +18,7 @@ export async function requestAgent({ deviceId, question, context = {}, session, 
       audit_status: "unavailable", audit_id: null,
     };
   }
-  const base = (config.VITE_DIAGNOSIS_API_BASE_URL || "").replace(/\/$/, "");
+  const base = (config.VITE_DIAGNOSIS_API_BASE_URL || config.VITE_KNOWLEDGE_API_BASE_URL || "").replace(/\/$/, "");
   if (!base) throw new Error("尚未配置 Agent 服务地址。");
   if (!session?.accessToken || !session?.organization?.id || !session?.user?.id) throw new Error("Agent 需要当前登录会话。");
   const response = await fetcher(`${base}/api/v1/agent/assist`, {

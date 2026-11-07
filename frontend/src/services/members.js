@@ -1,5 +1,5 @@
 const runtimeEnv = import.meta.env || {};
-const baseUrl = (runtimeEnv.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const baseUrl = (runtimeEnv.VITE_API_BASE_URL || runtimeEnv.VITE_BUSINESS_API_BASE_URL || "").replace(/\/$/, "");
 
 export const memberRoleLabels = {
   owner: "企业负责人",

@@ -1,5 +1,5 @@
 const runtimeEnv = import.meta.env || {};
-const baseUrl = (runtimeEnv.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const baseUrl = (runtimeEnv.VITE_API_BASE_URL || runtimeEnv.VITE_BUSINESS_API_BASE_URL || "").replace(/\/$/, "");
 
 async function request(path, token, { method = "GET", body, fetchImpl = globalThis.fetch, apiBaseUrl = baseUrl } = {}) {
   if (!apiBaseUrl || !token) throw new Error("缺少后端地址或登录令牌");

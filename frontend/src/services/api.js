@@ -2,7 +2,7 @@ import * as mockData from "../data.js";
 
 const runtimeEnv = import.meta.env || {};
 const mode = runtimeEnv.VITE_DATA_MODE || "mock";
-const baseUrl = (runtimeEnv.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const baseUrl = (runtimeEnv.VITE_API_BASE_URL || runtimeEnv.VITE_BUSINESS_API_BASE_URL || "").replace(/\/$/, "");
 const organizationId = runtimeEnv.VITE_API_ORGANIZATION_ID || "";
 const userId = runtimeEnv.VITE_API_USER_ID || "";
 

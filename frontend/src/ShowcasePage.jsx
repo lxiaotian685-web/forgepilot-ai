@@ -21,7 +21,7 @@ import peopleScreenshot from "../../docs/screenshots/08-people.png";
 import auditScreenshot from "../../docs/screenshots/09-audit.png";
 
 const githubUrl = "https://github.com/lxiaotian685-web/forgepilot-ai";
-const videoUrl = "https://b23.tv/4HPzoyw";
+const videoUrl = "https://b23.tv/7BG5CCJ";
 const technicalDocUrl = "https://github.com/lxiaotian685-web/forgepilot-ai/releases/tag/v1.0.0";
 const demoAccount = "demo@example.com";
 const appRoot = import.meta.env.BASE_URL || "/";

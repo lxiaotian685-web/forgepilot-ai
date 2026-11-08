@@ -1,6 +1,6 @@
 # 业务数据库准备与验证
 
-当前公网预览只托管静态前端，尚未部署业务 API 或 PostgreSQL。本说明用于独立准备 B 服务数据库，不代表公网数据库已经上线。
+当前公网由 CloudBase 静态托管提供前端，并由 CloudBase 云托管运行业务与知识两个 FastAPI 服务。演示业务数据仍使用容器内 SQLite，知识数据使用容器内 JSON，实例重启或重新部署可能恢复初始状态；PostgreSQL 尚未部署。本说明用于准备持久化业务数据库，不代表公网 PostgreSQL 已经上线。
 
 ## PostgreSQL 路径
 

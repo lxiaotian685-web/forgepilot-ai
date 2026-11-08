@@ -1,12 +1,12 @@
 # 制造领航 ForgePilot
 
-**面向中小制造企业的设备维护 AI 工作台**：把设备台账、测点、告警、说明书知识、AI 辅助诊断、人工确认、维修工单和审计记录串成一条可追溯的闭环。
+**面向中小制造企业的设备维护 AI 工作台**：把设备台账、测点、告警、说明书知识、AI 初步分析、现场核验工单、主管验收和审计记录串成一条可追溯的闭环。
 
 [![在线演示](https://img.shields.io/badge/在线演示-forgepilot.xiaotianworks.cn-2f6feb)](https://forgepilot.xiaotianworks.cn/)
 [![Frontend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/frontend-ci.yml)
 [![Backend CI](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/lxiaotian685-web/forgepilot-ai/actions/workflows/backend-ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![演示视频](https://img.shields.io/badge/演示视频-B站-00a1d6)](https://b23.tv/4HPzoyw)
+[![演示视频](https://img.shields.io/badge/演示视频-B站-00a1d6)](https://b23.tv/7BG5CCJ)
 
 > 第九届传智杯 AI WEB 网页开发挑战赛参赛作品。仓库使用**虚构演示数据**；在线演示接入服务端真实 DeepSeek，诊断结论仍需人工核验，不代表企业真实诊断结论。
 
@@ -21,7 +21,7 @@
 | 演示账号 | `demo@example.com` |
 | 密码 | `ForgePilot123!` |
 | 组织代码 | 选填，留空即可 |
-| 在线能力 | 真实登录、真实 DeepSeek 诊断、诊断保存、人工确认生成工单、审计查询 |
+| 在线能力 | 真实登录、真实 DeepSeek 初步分析、现场核验工单、主管验收、审计查询 |
 
 在线演示由 CloudBase 静态托管提供前端，CloudBase 云托管运行 `services/business` 与 `services/knowledge` 两个 FastAPI 服务，不依赖任何个人电脑。云端容器内的 SQLite 与知识库 JSON 属于演示数据，重新部署或实例重启后会恢复初始状态；长期保存请按 [CloudBase 部署说明](docs/CLOUDBASE_DEPLOY.md) 接入持久化数据库与存储。
 
@@ -39,7 +39,7 @@
 
 ![诊断工作台](docs/screenshots/05-diagnosis.png)
 
-界面会同时展示 **文档陈述、模型推断、待验证项**，右侧是可点击核对的证据原文；顶部显示真实模型名称和输入/输出/合计 Token 用量。只有通过证据校验且非模拟的诊断才允许保存，之后由人确认生成工单。
+界面会同时展示 **文档陈述、模型推断、待验证项**，右侧是可点击核对的证据原文；顶部显示真实模型名称和输入/输出/合计 Token 用量。通过证据校验且非模拟的结果可形成现场核验工单，由人员完成核验、记录结果，再由主管验收形成最终闭环。
 
 | 知识证据 | 审计记录 |
 |---|---|
@@ -52,7 +52,7 @@
 设备出异常时，运行信息、说明书和维修任务通常分散在三个地方：现场人员靠经验判断，查资料靠翻 PDF，处理结果靠口头或表格传递。ForgePilot 把这些环节放在一个工作台里，让每一次异常都有：
 
 ```
-发现异常 → 检索证据 → AI 辅助诊断 → 人工确认 → 生成工单 → 维修验收 → 审计追溯
+发现异常 → 检索证据 → AI 初步分析 → 现场核验工单 → 人工核验 → 主管验收 → 审计追溯
 ```
 
 首条验收路线固定为演示设备 **AC-07 螺杆空气压缩机**。
@@ -78,7 +78,7 @@
 2. **生成**：通过 OpenAI 兼容适配器调用 DeepSeek（默认 `deepseek-flash`），要求结构化输出而不是一段自由文本。
 3. **校验**：引用必须能在检索结果中找到；无效引用会整体降级，并明确标注“证据不足”，不会保留一个看似完整的答案。
 4. **分流**：结果拆为 `文档陈述 / 模型推断 / 待验证项`，分别对应“资料写了什么”“模型怎么判断”“还需要现场确认什么”。
-5. **人工确认**：模型只给建议；风险分级、保存诊断、生成工单都由人触发，重复确认返回同一张工单。
+5. **现场核验**：模型只给建议；人员生成现场核验工单并记录检查结果，主管验收后才形成最终业务结论；重复建单返回同一张工单。
 6. **可观测**：响应返回模型名、调用模式、输入/输出/合计 Token，写入诊断记录并展示在页面。
 7. **受控 Agent**：`POST /api/v1/agent/assist` 只执行白名单只读工具（设备查询、同设备历史工单、证据诊断），逐步返回状态，并把工具名/状态写入审计；不操作设备、不自动建单。
 
@@ -150,7 +150,7 @@ cd services/knowledge; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\
 - 设备、告警、工单、说明书均为**虚构演示数据**，未使用未授权的企业原始资料。
 - 组织与用户身份由登录令牌在服务端解析，不信任客户端伪造的请求头。
 - 模型密钥只存在服务端；仓库只提交 `.env.example`。
-- Agent 只使用白名单只读工具；诊断保存、人工确认、工单生成都必须由人触发。
+- Agent 只使用白名单只读工具；现场核验工单、核验记录与主管验收都必须由人触发。
 - 不具备真实企业数据时，不宣称诊断结果等同于企业现场结论。
 
 ## 团队
@@ -173,7 +173,7 @@ A/B/C 功能分支与各轮 Pull Request 保留了细粒度开发历史；来源
 - 技术 PDF：[ForgePilot 技术说明（16 页）](docs/tech-report/ForgePilot_技术说明_20261031.pdf)
 - 技术 PDF 源文件：[HTML 版](docs/tech-report/ForgePilot_技术说明_20261031.html)
 - GitHub Release：[v1.0.0 竞赛提交版本](https://github.com/lxiaotian685-web/forgepilot-ai/releases/tag/v1.0.0)（附技术 PDF 下载）
-- 5–8 分钟普通话 1080p 演示视频：[B 站 · 制造领航 ForgePilot](https://b23.tv/4HPzoyw)
+- 5–8 分钟普通话 1080p 演示视频：[B 站 · 制造领航 ForgePilot](https://b23.tv/7BG5CCJ)
 - 校赛公告：[东莞理工学院计算机学院校赛公告](https://cs.dgut.edu.cn/info/1034/19118.htm)
 - 社交预览图：[docs/social-preview.png](docs/social-preview.png)（在仓库 Settings → Social preview 上传）
 

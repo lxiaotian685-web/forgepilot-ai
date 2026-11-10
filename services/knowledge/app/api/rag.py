@@ -60,6 +60,7 @@ def search(
         equipment_model=request.equipment_model,
         top_k=request.top_k,
         organization_id=context.organization_id,
+        version=request.version,
     )
     return SearchResponse(query=request.query, count=len(results), results=results)
 
@@ -231,6 +232,7 @@ def chat(
         device_id=payload.device_id,
         question=payload.question,
         equipment_model=payload.equipment_model,
+        version=payload.version,
         sampled_at=payload.sampled_at,
         measurement_point=payload.measurement_point,
         operating_mode=payload.operating_mode,

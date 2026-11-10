@@ -90,13 +90,21 @@ class KnowledgeBase:
         equipment_model: str | None = None,
         top_k: int = 5,
         organization_id: str | None = None,
+        version: str | None = None,
     ) -> list[Evidence]:
         with self._lock:
-            candidates = self._candidates(equipment_model, organization_id)
+            candidates = self._candidates(
+                equipment_model, organization_id, version
+            )
             if not candidates:
                 return []
 
-            key = (self._version, equipment_model or "", organization_id or "")
+            key = (
+                self._version,
+                equipment_model or "",
+                organization_id or "",
+                version or "",
+            )
             index = self._index_cache.get(key)
             if index is None:
                 index = BM25Index([c.text for c in candidates])
@@ -105,12 +113,29 @@ class KnowledgeBase:
                 self._index_cache[key] = index
 
             results: list[Evidence] = []
-            for idx, score in index.search(query, top_k):
+            seen_ids: set[str] = set()
+            seen_content: set[tuple[str, str, str]] = set()
+            candidate_limit = min(max(top_k * 3, top_k), 150)
+            for idx, score in index.search(query, candidate_limit):
                 chunk = candidates[idx]
                 doc = self._documents[chunk.document_id]
+                evidence_id = (
+                    f"{doc.id}@{doc.version}#p{chunk.page}c{chunk.chunk_index}"
+                )
+                if evidence_id in seen_ids:
+                    continue
+                content_key = (
+                    doc.organization_id,
+                    doc.version,
+                    " ".join(chunk.text.split()),
+                )
+                if content_key in seen_content:
+                    continue
+                seen_ids.add(evidence_id)
+                seen_content.add(content_key)
                 results.append(
                     Evidence(
-                        id=f"{doc.id}@{doc.version}#p{chunk.page}c{chunk.chunk_index}",
+                        id=evidence_id,
                         document_id=doc.id,
                         organization_id=doc.organization_id,
                         version=doc.version,
@@ -121,6 +146,8 @@ class KnowledgeBase:
                         score=round(score, 4),
                     )
                 )
+                if len(results) >= top_k:
+                    break
             return results
 
     def list_documents(
@@ -208,12 +235,16 @@ class KnowledgeBase:
             self._index_cache.clear()
 
     def _candidates(
-        self, equipment_model: str | None, organization_id: str | None
+        self,
+        equipment_model: str | None,
+        organization_id: str | None,
+        version: str | None,
     ) -> list[Chunk]:
         allowed = {
             doc_id
             for doc_id, doc in self._documents.items()
             if (organization_id is None or doc.organization_id == organization_id)
             and (equipment_model is None or doc.equipment_model == equipment_model)
+            and (version is None or doc.version == version)
         }
         return [chunk for chunk in self._chunks if chunk.document_id in allowed]

@@ -111,6 +111,89 @@ def test_search_returns_evidence():
     assert result["score"] > 0
 
 
+def _ingest_versioned(title: str, content: str, version: str):
+    return client.post(
+        "/api/v1/documents/ingest",
+        json={
+            "title": title,
+            "equipment_model": "compressor-002",
+            "version": version,
+            "content": content,
+        },
+    )
+
+
+def test_search_filters_by_version():
+    _ingest_versioned(
+        "空压机维修规范",
+        "版本一：排气温度过高排查：冷却器。",
+        "1.0",
+    )
+    _ingest_versioned(
+        "空压机维修规范",
+        "版本二：排气温度过高排查：冷却风扇。",
+        "2.0",
+    )
+
+    v1 = client.post(
+        "/api/v1/search",
+        json={"query": "排气温度过高", "version": "1.0"},
+    ).json()
+    v2 = client.post(
+        "/api/v1/search",
+        json={"query": "排气温度过高", "version": "2.0"},
+    ).json()
+    all_versions = client.post(
+        "/api/v1/search", json={"query": "排气温度过高"}
+    ).json()
+
+    assert v1["count"] >= 1
+    assert {item["version"] for item in v1["results"]} == {"1.0"}
+    assert v2["count"] >= 1
+    assert {item["version"] for item in v2["results"]} == {"2.0"}
+    assert {item["version"] for item in all_versions["results"]} == {
+        "1.0",
+        "2.0",
+    }
+
+
+def test_chat_filters_by_version():
+    _ingest_versioned(
+        "空压机维修规范",
+        "版本一：排气温度过高排查：冷却器。",
+        "1.0",
+    )
+    _ingest_versioned(
+        "空压机维修规范",
+        "版本二：排气温度过高排查：冷却风扇。",
+        "2.0",
+    )
+
+    response = client.post(
+        "/api/v1/chat",
+        json={
+            "device_id": "AC-07",
+            "question": "排气温度过高怎么排查？",
+            "version": "1.0",
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["sources"]
+    assert {source["version"] for source in body["sources"]} == {"1.0"}
+
+
+def test_search_rejects_blank_version():
+    response = client.post(
+        "/api/v1/search",
+        json={"query": "排气温度过高", "version": "   "},
+    )
+
+    assert response.status_code == 422
+
+
 def test_chat_returns_answer_with_sources():
     _ingest_air_compressor()
     response = client.post(

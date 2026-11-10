@@ -35,7 +35,7 @@
 
 评测集：`evaluation/eval_set.json`，共 20 条问题，其中 16 条有答案、4 条无答案。
 
-演示上传与检索记录见 [demo-ac07.md](demo-ac07.md)；AC-07 与 B 服务的设备事实联调见 [integration-ac07.md](integration-ac07.md)。
+演示上传与检索记录见 [demo-ac07.md](demo-ac07.md)；AC-07 与 B 服务的设备事实联调见 [integration-ac07.md](integration-ac07.md)。版本过滤、去重和失败场景评测见 [evidence-quality-report.md](evidence-quality-report.md)。
 
 ## 3. 自动化验证结果
 
@@ -50,7 +50,7 @@
 实测结果：
 
 ```text
-pytest: 129 passed
+pytest: 140 passed
 ruff: All checks passed
 RAG 评测:
   可答问题数: 16

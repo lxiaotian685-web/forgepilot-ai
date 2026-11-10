@@ -1,0 +1,49 @@
+{
+  "retrieval_cases": [
+    {
+      "id": "ac07-temperature",
+      "device_id": "AC-07",
+      "question": "空压机排气温度过高怎么排查？",
+      "equipment_model": "compressor-002",
+      "version": "1.0",
+      "expected_title": "空压机维修规范",
+      "expected_page": 2
+    },
+    {
+      "id": "p102-cavitation",
+      "device_id": "P-102",
+      "question": "离心泵发生汽蚀应如何排查和预防？",
+      "equipment_model": "pump-004",
+      "version": "1.0",
+      "expected_title": "离心泵维护手册",
+      "expected_page": 2
+    },
+    {
+      "id": "cnc04-emergency",
+      "device_id": "CNC-04",
+      "question": "机床发生紧急情况应如何处置？",
+      "equipment_model": "cnc-003",
+      "version": "1.0",
+      "expected_title": "数控机床安全操作规范",
+      "expected_page": 4
+    }
+  ],
+  "no_match_cases": [
+    {
+      "id": "boiler",
+      "device_id": "AC-07",
+      "question": "锅炉汽包水位如何调节？",
+      "equipment_model": "compressor-002",
+      "version": "1.0"
+    }
+  ],
+  "insufficient_cases": [
+    {
+      "id": "ac07-insufficient",
+      "device_id": "AC-07",
+      "question": "空压机排气温度过高怎么排查？",
+      "equipment_model": "compressor-002",
+      "version": "1.0"
+    }
+  ]
+}

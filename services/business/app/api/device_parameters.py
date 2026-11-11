@@ -5,6 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.audit import write_audit
@@ -14,7 +15,11 @@ from app.api.labels import PARAMETER_SOURCES
 from app.api.serializers import device_parameter_to_dict, page_response
 from app.db import get_db
 from app.models import Device, DeviceParameter, utcnow
-from app.schemas.requests import DeviceParameterCreate, DeviceParameterUpdate
+from app.schemas.requests import (
+    DeviceParameterBatchCreate,
+    DeviceParameterCreate,
+    DeviceParameterUpdate,
+)
 
 router = APIRouter(prefix="/api/v1/devices", tags=["device-parameters"])
 
@@ -206,6 +211,85 @@ def create_device_parameter(
         raise
     db.refresh(parameter)
     return device_parameter_to_dict(parameter, device)
+
+
+@router.post("/{device_id}/parameters/batch", status_code=201)
+def create_inspection_batch(
+    device_id: str,
+    payload: DeviceParameterBatchCreate,
+    context: RequestContext = Depends(get_context),
+    db: Session = Depends(get_db),
+):
+    require_role(context, "technician")
+    device = _get_device(db, context.organization_id, device_id)
+    if device is None:
+        raise api_error(404, "NOT_FOUND", "设备不存在")
+
+    for item in payload.items:
+        if _duplicate_exists(
+            db, context.organization_id, device.id, item.name, payload.recorded_at
+        ):
+            raise api_error(
+                409, "CONFLICT", "同一设备、参数名和采集时间已存在，整批未保存",
+                {"name": item.name, "recordedAt": payload.recorded_at.isoformat()},
+            )
+
+    batch_id = str(uuid.uuid4())
+    parameters = []
+    try:
+        for item in payload.items:
+            parameter = DeviceParameter(
+                organization_id=context.organization_id,
+                device_id=device.id,
+                name=item.name,
+                value=item.value,
+                unit=item.unit,
+                source="manual",
+                source_ref=payload.source_ref,
+                is_authoritative=True,
+                recorded_at=payload.recorded_at,
+                created_by=context.user_id,
+                updated_by=context.user_id,
+            )
+            db.add(parameter)
+            db.flush()
+            write_audit(
+                db,
+                organization_id=context.organization_id,
+                actor_user_id=context.user_id,
+                action="device_parameter.create",
+                entity_type="device_parameter",
+                entity_id=parameter.id,
+                after={
+                    "batchId": batch_id,
+                    "deviceId": device.code,
+                    "name": parameter.name,
+                    "value": float(parameter.value),
+                    "unit": parameter.unit,
+                    "source": parameter.source,
+                    "sourceRef": parameter.source_ref,
+                    "recordedAt": payload.recorded_at.isoformat(),
+                    "isAuthoritative": True,
+                },
+            )
+            parameters.append(parameter)
+        # Prepare the response before committing so serialization failures roll back too.
+        result = {
+            "batchId": batch_id,
+            "items": [device_parameter_to_dict(p, device) for p in parameters],
+            "total": len(parameters),
+        }
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # The unique index also protects against concurrent single/batch writers.
+        raise api_error(
+            409, "CONFLICT", "巡检数据与已有记录冲突，整批未保存"
+        ) from None
+    except Exception:
+        db.rollback()
+        raise
+    return result
 
 
 @router.patch("/{device_id}/parameters/{parameter_id}")

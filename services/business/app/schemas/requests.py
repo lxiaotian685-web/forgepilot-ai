@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 def to_camel(value: str) -> str:
@@ -109,6 +117,71 @@ class DeviceParameterCreate(RequestModel):
     is_authoritative: bool | None = None
     recorded_at: datetime | None = None
 
+    @field_validator("recorded_at")
+    @classmethod
+    def _normalize_time(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc)
+        return value
+
+
+INSPECTION_UNITS = {
+    "temperature": "°C",
+    "vibration": "mm/s",
+    "pressure": "MPa",
+    "load_rate": "%",
+    "operating_current": "A",
+    "spindle_vibration": "mm/s",
+    "spindle_temperature": "°C",
+    "coolant_temperature": "°C",
+    "bearing_temperature": "°C",
+    "motor_temperature": "°C",
+    "gearbox_temperature": "°C",
+    "outlet_pressure": "MPa",
+    "motor_current": "A",
+    "positioning_deviation": "mm",
+    "chain_speed": "m/s",
+    "rated_power": "kW",
+    "rated_pressure": "MPa",
+}
+
+
+class InspectionItem(RequestModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=120)
+    value: Decimal = Field(
+        allow_inf_nan=False, max_digits=18, decimal_places=6
+    )
+    unit: str | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def _validate_metric_unit(self) -> "InspectionItem":
+        expected = INSPECTION_UNITS.get(self.name)
+        if expected is not None and self.unit != expected:
+            raise ValueError(f"指标 {self.name} 的单位必须为 {expected}")
+        return self
+
+
+class DeviceParameterBatchCreate(RequestModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    recorded_at: AwareDatetime
+    source_ref: str = Field(min_length=1, max_length=255)
+    items: list[InspectionItem] = Field(min_length=1, max_length=100)
+
+    @field_validator("recorded_at")
+    @classmethod
+    def _normalize_time(cls, value: datetime) -> datetime:
+        return value.astimezone(timezone.utc)
+
+    @model_validator(mode="after")
+    def _unique_names(self) -> "DeviceParameterBatchCreate":
+        names = [item.name for item in self.items]
+        if len(names) != len(set(names)):
+            raise ValueError("同一次巡检不能重复填写同一指标")
+        return self
+
 
 class DeviceParameterUpdate(RequestModel):
     value: float | None = None
@@ -117,6 +190,13 @@ class DeviceParameterUpdate(RequestModel):
     source_ref: str | None = Field(default=None, max_length=255)
     is_authoritative: bool | None = None
     recorded_at: datetime | None = None
+
+    @field_validator("recorded_at")
+    @classmethod
+    def _normalize_time(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc)
+        return value
 
     @model_validator(mode="after")
     def _require_one_field(self) -> "DeviceParameterUpdate":

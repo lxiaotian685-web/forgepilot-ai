@@ -806,6 +806,81 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
         '422': { $ref: '#/components/responses/ValidationError' }
         '500': { $ref: '#/components/responses/InternalError' }
+  /api/v1/devices/{device_id}/parameters/batch:
+    post:
+      tags: [device-parameters]
+      operationId: createInspectionBatch
+      summary: 原子保存人工巡检指标
+      description: |
+        technician 及以上。整批参数与逐项审计共用一个事务。
+        source 固定 manual，isAuthoritative 固定 true。
+        采样时间必填且包含时区，统一转为 UTC；同设备、指标和时间重复返回 409。
+        同一请求中指标名去除首尾空白后不得重复；不提供请求重放。
+        内置指标必须提供匹配单位，缺失或错误返回 422，整批参数与审计均不写入。
+        温度类为 °C，振动类为 mm/s，压力类为 MPa，load_rate 为 %，电流类为 A，
+        positioning_deviation 为 mm，chain_speed 为 m/s，rated_power 为 kW。
+        单位去除首尾空白后精确匹配，不自动换算；自定义指标单位可选。
+        详细重试规则见 docs/batch-inspection.md。
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema: { type: string, example: AC-07 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [recordedAt, sourceRef, items]
+              properties:
+                recordedAt: { type: string, format: date-time }
+                sourceRef: { type: string, minLength: 1, maxLength: 255 }
+                items:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [name, value]
+                    properties:
+                      name: { type: string, minLength: 1, maxLength: 120 }
+                      value:
+                        type: number
+                        description: 有限数，最多 12 位整数和 6 位小数
+                      unit:
+                        type: string
+                        nullable: true
+                        maxLength: 32
+                        description: 内置指标必须提供对应单位；仅自定义指标可省略或为 null，详见 docs/batch-inspection.md
+            example:
+              recordedAt: '2026-11-11T14:30:00+08:00'
+              sourceRef: 人工巡检：驱动端轴承
+              items:
+                - { name: vibration, value: 3.2, unit: mm/s }
+                - { name: temperature, value: 76.5, unit: '°C' }
+      responses:
+        '201':
+          description: 整批创建成功，items 按输入顺序返回
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [batchId, items, total]
+                properties:
+                  batchId: { type: string, format: uuid }
+                  total: { type: integer, minimum: 1, maximum: 100 }
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeviceParameter' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/v1/devices/{device_id}/parameters/{parameter_id}:
     patch:
       tags: [device-parameters]

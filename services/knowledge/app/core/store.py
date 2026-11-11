@@ -114,40 +114,50 @@ class KnowledgeBase:
 
             results: list[Evidence] = []
             seen_ids: set[str] = set()
-            seen_content: set[tuple[str, str, str]] = set()
-            candidate_limit = min(max(top_k * 3, top_k), 150)
-            for idx, score in index.search(query, candidate_limit):
-                chunk = candidates[idx]
-                doc = self._documents[chunk.document_id]
-                evidence_id = (
-                    f"{doc.id}@{doc.version}#p{chunk.page}c{chunk.chunk_index}"
-                )
-                if evidence_id in seen_ids:
-                    continue
-                content_key = (
-                    doc.organization_id,
-                    doc.version,
-                    " ".join(chunk.text.split()),
-                )
-                if content_key in seen_content:
-                    continue
-                seen_ids.add(evidence_id)
-                seen_content.add(content_key)
-                results.append(
-                    Evidence(
-                        id=evidence_id,
-                        document_id=doc.id,
-                        organization_id=doc.organization_id,
-                        version=doc.version,
-                        title=doc.title,
-                        page=chunk.page,
-                        chunk_index=chunk.chunk_index,
-                        snippet=chunk.text[:200],
-                        score=round(score, 4),
+            seen_content: set[tuple[str, str, str, str]] = set()
+            total = len(candidates)
+            limit = min(max(top_k, 1) * 3, total)
+            scanned = 0
+            while len(results) < top_k and scanned < total:
+                ranked = index.search(query, limit)
+                for idx, score in ranked[scanned:]:
+                    chunk = candidates[idx]
+                    doc = self._documents[chunk.document_id]
+                    evidence_id = (
+                        f"{doc.id}@{doc.version}"
+                        f"#p{chunk.page}c{chunk.chunk_index}"
                     )
-                )
-                if len(results) >= top_k:
+                    if evidence_id in seen_ids:
+                        continue
+                    content_key = (
+                        doc.organization_id,
+                        doc.version,
+                        doc.equipment_model,
+                        " ".join(chunk.text.split()),
+                    )
+                    if content_key in seen_content:
+                        continue
+                    seen_ids.add(evidence_id)
+                    seen_content.add(content_key)
+                    results.append(
+                        Evidence(
+                            id=evidence_id,
+                            document_id=doc.id,
+                            organization_id=doc.organization_id,
+                            version=doc.version,
+                            title=doc.title,
+                            page=chunk.page,
+                            chunk_index=chunk.chunk_index,
+                            snippet=chunk.text[:200],
+                            score=round(score, 4),
+                        )
+                    )
+                    if len(results) >= top_k:
+                        break
+                scanned = len(ranked)
+                if limit >= total or len(ranked) < limit:
                     break
+                limit = min(limit * 2, total)
             return results
 
     def list_documents(

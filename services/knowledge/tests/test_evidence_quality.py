@@ -99,6 +99,63 @@ def test_search_dedupes_identical_chunks_same_version():
     assert results[0].snippet == content
 
 
+def test_search_expands_candidates_until_top_k_unique():
+    kb = KnowledgeBase()
+    for index in range(20):
+        kb.ingest(
+            title=f"重复手册{index}",
+            equipment_model="compressor-002",
+            organization_id="org-a",
+            version="1.0",
+            content="排气温度过高",
+        )
+    for index in range(6):
+        kb.ingest(
+            title=f"不同证据手册{index}",
+            equipment_model="compressor-002",
+            organization_id="org-a",
+            version="1.0",
+            content=(
+                "排气温度过高时应检查冷却系统并记录运行参数，"
+                f"这是第{index}条不同证据说明。"
+            ),
+        )
+
+    results = kb.search(
+        "排气温度过高",
+        equipment_model="compressor-002",
+        organization_id="org-a",
+        version="1.0",
+        top_k=5,
+    )
+
+    assert len(results) == 5
+    snippets = [" ".join(item.snippet.split()) for item in results]
+    assert len(set(snippets)) == 5
+
+
+def test_search_keeps_same_text_across_equipment_models():
+    kb = KnowledgeBase()
+    content = "排气温度过高排查：冷却器。"
+    for model in ("compressor-002", "compressor-003"):
+        kb.ingest(
+            title=f"{model}手册",
+            equipment_model=model,
+            organization_id="org-a",
+            version="1.0",
+            content=content,
+        )
+
+    results = kb.search(
+        "排气温度过高",
+        organization_id="org-a",
+        top_k=5,
+    )
+
+    assert len(results) == 2
+    assert {item.snippet for item in results} == {content}
+
+
 def test_version_filter_applies_during_diagnosis():
     kb = _versioned_kb()
     svc = RAGService(kb, MockLLM())

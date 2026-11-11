@@ -143,7 +143,7 @@ cd services/business; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\p
 cd services/knowledge; .\.venv\Scripts\python.exe -m pytest -q; .\.venv\Scripts\python.exe -m ruff check .; cd ../..
 ```
 
-三套测试、前端生产构建和 Ruff 均在 GitHub Actions 中执行，当前 `main` 的两项 CI 均为通过状态。知识服务的虚构数据集检索、引用与失败路径评测见 [真实 RAG 验证报告](services/knowledge/docs/real-rag-report.md)。
+三套测试、前端生产构建和 Ruff 均在 GitHub Actions 中执行，当前 `main` 的两项 CI 均为通过状态。知识服务的虚构数据集检索、引用与失败路径评测见 [真实 RAG 验证报告](services/knowledge/docs/real-rag-report.md)；版本过滤、去重和证据质量评测见 [证据质量报告](services/knowledge/docs/evidence-quality-report.md)。
 
 ## 数据与安全边界
 

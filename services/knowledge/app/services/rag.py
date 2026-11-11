@@ -40,6 +40,7 @@ class RAGService:
         sampled_at: str | None = None,
         measurement_point: str | None = None,
         operating_mode: str | None = None,
+        version: str | None = None,
     ) -> ChatResponse:
         try:
             device = self.device_provider.get_device(device_id, auth=auth)
@@ -92,6 +93,7 @@ class RAGService:
             equipment_model=device.knowledge_model,
             top_k=self.top_k,
             organization_id=auth.organization_id if auth else None,
+            version=version,
         )
 
         if not evidences:
@@ -110,7 +112,7 @@ class RAGService:
             response.answer = f"本次诊断未完成：{exc}。\n" + response.answer
             return response
 
-        statements, has_ungrounded_fact = self._validate_sources(
+        statements, has_ungrounded_fact, has_grounded_fact = self._validate_sources(
             result.statements, evidences
         )
         conflicts = self._validate_conflicts(result.conflicts, evidences)
@@ -125,6 +127,21 @@ class RAGService:
                     "其余内容已标记为待人工核验。"
                 ),
                 summary="模型存在无法核实的引用，结论不可直接采用。",
+                statements=statements,
+                sources=evidences,
+                conflicts=conflicts,
+                verification_suggestions=result.verification_suggestions,
+            )
+
+        if not has_grounded_fact:
+            return self._respond(
+                device_id,
+                "no_answer",
+                answer=(
+                    "模型未给出可核实的事实证据，不能作为有依据的诊断。"
+                    "以下证据仅供人工核验。"
+                ),
+                summary="证据不足：没有可核实的事实陈述。",
                 statements=statements,
                 sources=evidences,
                 conflicts=conflicts,
@@ -210,9 +227,10 @@ class RAGService:
     @staticmethod
     def _validate_sources(
         statements: list[Statement], evidences: list[Evidence]
-    ) -> tuple[list[Statement], bool]:
+    ) -> tuple[list[Statement], bool, bool]:
         evidence_by_id = {ev.id: ev for ev in evidences}
         has_ungrounded_fact = False
+        has_grounded_fact = False
         for statement in statements:
             statement.source_ids = list(dict.fromkeys(statement.source_ids))
             statement.source_ids = [
@@ -222,12 +240,13 @@ class RAGService:
                 statement.type = "pending"
                 has_ungrounded_fact = True
             if statement.type == "fact":
+                has_grounded_fact = True
                 statement.source = RAGService._ref(
                     evidence_by_id[statement.source_ids[0]]
                 )
             else:
                 statement.source = None
-        return statements, has_ungrounded_fact
+        return statements, has_ungrounded_fact, has_grounded_fact
 
     @staticmethod
     def _validate_conflicts(

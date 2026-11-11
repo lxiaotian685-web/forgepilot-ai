@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.document import Evidence
+from app.schemas.document import MAX_VERSION_LENGTH, Evidence
 
 DiagnosisStatus = Literal[
     "ok",
@@ -48,6 +48,7 @@ class ChatRequest(BaseModel):
     device_id: str = Field(min_length=1, max_length=MAX_DEVICE_ID_LENGTH)
     question: str = Field(min_length=1, max_length=MAX_QUESTION_LENGTH)
     equipment_model: str | None = Field(default=None, max_length=100)
+    version: str | None = Field(default=None, max_length=MAX_VERSION_LENGTH)
     sampled_at: str | None = Field(default=None, max_length=100)
     measurement_point: str | None = Field(default=None, max_length=200)
     operating_mode: str | None = Field(default=None, max_length=100)
@@ -57,6 +58,13 @@ class ChatRequest(BaseModel):
     def _not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("不能为空白字符")
+        return value
+
+    @field_validator("version")
+    @classmethod
+    def _version_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("版本号不能为空白字符")
         return value
 
 

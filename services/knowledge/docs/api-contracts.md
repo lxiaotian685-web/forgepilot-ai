@@ -32,8 +32,9 @@
 
 ### 3.1 诊断 `POST /api/v1/chat`
 
-请求 `{device_id, question, equipment_model?, sampled_at?, measurement_point?, operating_mode?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, device_source, is_demo, status}`。
+请求 `{device_id, question, equipment_model?, version?, sampled_at?, measurement_point?, operating_mode?}`；响应 `{device_id, answer, summary, statements, sources, conflicts, verification_suggestions, is_mock, device_source, is_demo, status}`。
 
+- `version`：可选文档版本过滤；不传时跨版本检索；
 - `sampled_at`：现场采样时间，最长 100 字符；
 - `measurement_point`：测点位置与单位，最长 200 字符；
 - `operating_mode`：采样时运行工况，最长 100 字符。
@@ -45,7 +46,7 @@
 `status`：
 
 - `ok`：模型返回了可核实引用的结构化诊断；
-- `no_answer`：检索无证据，或事实引用全部无法核实；
+- `no_answer`：检索无证据、事实引用全部无法核实，或模型没有给出任何可核实事实；
 - `model_unavailable`：模型未配置、超时、限流或返回格式异常，降级返回检索证据；
 - `device_not_found`：B 返回 404 或设备不存在；
 - `device_unauthorized`：B 返回 401/403，不泄漏跨组织设备存在性；
@@ -68,7 +69,9 @@ HTTP 状态映射：
 
 ### 3.2 检索与文档
 
-- `POST /api/v1/search`：检索当前组织文档，需要 `X-Organization-Id`。
+- `POST /api/v1/search`：检索当前组织文档，需要 `X-Organization-Id`；请求可选
+  `equipment_model` 和 `version`。同一组织、同一版本内，规范化文本相同的切片
+  只保留分数最高的一条。
 - `GET /api/v1/documents`：列出当前组织文档，支持 `limit`（1–500）和 `offset`。
 - `GET /api/v1/documents/{document_id}`：读取当前组织文档及解析切片，供上传后核对；原始 PDF 字节未保存，不提供原文件下载。
 - `DELETE /api/v1/documents/{document_id}`：管理岗位及以上删除文档和所有切片；写接口关闭时返回 403，跨组织对象返回 404。

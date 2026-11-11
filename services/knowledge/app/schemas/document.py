@@ -76,6 +76,7 @@ class SearchRequest(BaseModel):
     equipment_model: str | None = Field(
         default=None, max_length=MAX_EQUIPMENT_MODEL_LENGTH
     )
+    version: str | None = Field(default=None, max_length=MAX_VERSION_LENGTH)
     top_k: int = Field(default=5, ge=1, le=50)
 
     @field_validator("query")
@@ -83,6 +84,13 @@ class SearchRequest(BaseModel):
     def _query_not_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("不能为空白字符")
+        return value
+
+    @field_validator("version")
+    @classmethod
+    def _version_not_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("版本号不能为空白字符")
         return value
 
 

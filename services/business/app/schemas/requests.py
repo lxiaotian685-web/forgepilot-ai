@@ -125,6 +125,27 @@ class DeviceParameterCreate(RequestModel):
         return value
 
 
+INSPECTION_UNITS = {
+    "temperature": "°C",
+    "vibration": "mm/s",
+    "pressure": "MPa",
+    "load_rate": "%",
+    "operating_current": "A",
+    "spindle_vibration": "mm/s",
+    "spindle_temperature": "°C",
+    "coolant_temperature": "°C",
+    "bearing_temperature": "°C",
+    "motor_temperature": "°C",
+    "gearbox_temperature": "°C",
+    "outlet_pressure": "MPa",
+    "motor_current": "A",
+    "positioning_deviation": "mm",
+    "chain_speed": "m/s",
+    "rated_power": "kW",
+    "rated_pressure": "MPa",
+}
+
+
 class InspectionItem(RequestModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -133,6 +154,13 @@ class InspectionItem(RequestModel):
         allow_inf_nan=False, max_digits=18, decimal_places=6
     )
     unit: str | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def _validate_metric_unit(self) -> "InspectionItem":
+        expected = INSPECTION_UNITS.get(self.name)
+        if expected is not None and self.unit != expected:
+            raise ValueError(f"指标 {self.name} 的单位必须为 {expected}")
+        return self
 
 
 class DeviceParameterBatchCreate(RequestModel):

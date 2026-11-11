@@ -186,3 +186,63 @@ def test_batch_accepts_maximum_size_and_decimal_boundaries(api):
     assert response.status_code == 201, response.text
     assert response.json()["total"] == 100
     assert counts(factory) == (before[0] + 100, before[1] + 100)
+
+
+@pytest.mark.parametrize("invalid_item", [
+    {"name": "temperature", "value": 76.5, "unit": "mm/s"},
+    {"name": "vibration", "value": 3.2, "unit": "°C"},
+    {"name": "pressure", "value": 0.8, "unit": "°C"},
+    {"name": "load_rate", "value": 80, "unit": "A"},
+    {"name": "operating_current", "value": 12, "unit": "%"},
+    {"name": "spindle_temperature", "value": 70, "unit": "mm/s"},
+    {"name": "outlet_pressure", "value": 0.8, "unit": "bar"},
+    {"name": "temperature", "value": 76.5},
+    {"name": "temperature", "value": 76.5, "unit": None},
+    {"name": "vibration", "value": 3.2, "unit": "  "},
+])
+def test_invalid_unit_rejects_entire_batch_without_audit(api, invalid_item):
+    client, ids, factory = api
+    before = counts(factory)
+    # A valid item appears first: no part of this request may be persisted.
+    request = payload() | {"items": [
+        {"name": "new_valid_metric", "value": 1, "unit": "mm"},
+        invalid_item,
+    ]}
+    response = client.post(PATH, json=request, headers=auth(ids, user="tech@example.com"))
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert counts(factory) == before
+
+
+def test_builtin_units_are_accepted_and_trimmed(api):
+    client, ids, factory = api
+    before = counts(factory)
+    metrics = [
+        ("temperature", "°C"), ("vibration", "mm/s"),
+        ("pressure", "MPa"), ("load_rate", "%"), ("operating_current", "A"),
+        ("spindle_vibration", "mm/s"), ("spindle_temperature", "°C"),
+        ("coolant_temperature", "°C"), ("bearing_temperature", "°C"),
+        ("motor_temperature", "°C"), ("gearbox_temperature", "°C"),
+        ("outlet_pressure", "MPa"), ("motor_current", "A"),
+        ("positioning_deviation", "mm"), ("chain_speed", "m/s"),
+        ("rated_power", "kW"), ("rated_pressure", "MPa"),
+    ]
+    request = payload() | {"items": [
+        {"name": f" {name} ", "value": 1, "unit": f" {unit} "}
+        for name, unit in metrics
+    ]}
+    response = client.post(PATH, json=request, headers=auth(ids))
+    assert response.status_code == 201, response.text
+    assert [(item["name"], item["unit"]) for item in response.json()["items"]] == metrics
+    assert counts(factory) == (before[0] + len(metrics), before[1] + len(metrics))
+
+
+def test_custom_metric_keeps_optional_unit_compatibility(api):
+    client, ids, _ = api
+    request = payload() | {"items": [
+        {"name": "custom_dimensionless", "value": 1},
+        {"name": "custom_metric", "value": 2, "unit": "custom_unit"},
+    ]}
+    response = client.post(PATH, json=request, headers=auth(ids))
+    assert response.status_code == 201, response.text
+    assert [item["unit"] for item in response.json()["items"]] == [None, "custom_unit"]

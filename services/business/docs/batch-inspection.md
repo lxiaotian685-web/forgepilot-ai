@@ -23,8 +23,21 @@
 - `sourceRef` 必填，去除首尾空白后为 1–255 个字符，记录实际测点位置或人工巡检来源。
 - `items` 为 1–100 项，按输入顺序返回。`name` 去除首尾空白后为 1–120 个字符，同一请求内不能重复；名称区分大小写，与旧接口一致。
 - `value` 必须为有限数，最多 18 位有效数字、小数部分最多 6 位、整数部分最多 12 位，与数据库 `Numeric(18, 6)` 一致。允许负数，不在接口中猜测各指标的工程范围。
-- `unit` 可选，最多 32 个字符。每项只接受 name、value、unit；顶层只接受 recordedAt、sourceRef、items，不接受客户端指定组织、操作人、source 或权威标记。
+- `unit` 最多 32 个字符。内置指标必须提供下表对应单位，缺省、null、空白或不匹配均返回 422，整批参数与审计均不写入；去除首尾空白后精确匹配，不自动换算。自定义指标继续允许单位可选，不推测其量纲。每项只接受 name、value、unit；顶层只接受 recordedAt、sourceRef、items，不接受客户端指定组织、操作人、source 或权威标记。
 - 所有记录固定为 `source=manual`、`isAuthoritative=true`，表示人工采集来源，并不代表设备无故障或最终诊断结论。
+
+| 内置指标 | 必须使用的单位 |
+|---|---|
+| temperature、spindle_temperature、coolant_temperature、bearing_temperature、motor_temperature、gearbox_temperature | °C |
+| vibration、spindle_vibration | mm/s |
+| pressure、outlet_pressure、rated_pressure | MPa |
+| load_rate | % |
+| operating_current、motor_current | A |
+| positioning_deviation | mm |
+| chain_speed | m/s |
+| rated_power | kW |
+
+例如 `temperature + mm/s`、`vibration + °C` 或 `outlet_pressure + bar` 会被拒绝。错误在请求校验阶段拦截，不先保存前面的合法指标。单位规则仅用于新批量接口，旧单项接口保持原有兼容行为。
 
 ## 成功响应
 
@@ -39,7 +52,7 @@
 | 401 | 现有认证规则拒绝身份 | 无写入 |
 | 403 | 当前角色低于 technician | 无写入 |
 | 404 | 当前组织查不到设备 | 无写入 |
-| 422 | 空批次、超量、重复指标、非法数值、无时区时间、空测点等 | 无写入 |
+| 422 | 空批次、超量、重复指标、非法数值、内置指标单位缺失或不匹配、无时区时间、空测点等 | 无写入 |
 | 409 | 同设备、同指标、同采样时间已有有效记录，或并发写入触发唯一约束 | 整批回滚 |
 | 500 | 非预期数据库或审计写入故障 | 整批回滚，不返回部分成功 |
 
@@ -55,6 +68,6 @@
 
 在 `services/business` 运行 `python -m pytest -q` 和 `python -m ruff check .`。
 
-`tests/test_batch_inspection.py` 覆盖全成功、非法项全失败、权限与组织隔离、UTC 时区归一、重复请求、已有记录冲突、唯一约束竞争、写入中途审计故障及新采样时间。唯一约束测试跳过预检查以触发真实数据库冲突；回滚检查均从新 Session 查询参数与审计数量。
+`tests/test_batch_inspection.py` 覆盖全成功、非法项全失败、错误或缺失单位导致整批无写入、全部内置单位合法匹配、自定义指标兼容、权限与组织隔离、UTC 时区归一、重复请求、已有记录冲突、唯一约束竞争、写入中途审计故障及新采样时间。唯一约束测试跳过预检查以触发真实数据库冲突；回滚检查均从新 Session 查询参数与审计数量。
 
 本改动仅供候选分支审查，不包含线上部署、数据库迁移、main 合并或前端修改。

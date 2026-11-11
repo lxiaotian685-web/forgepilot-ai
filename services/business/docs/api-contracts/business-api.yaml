@@ -816,6 +816,10 @@ paths:
         source 固定 manual，isAuthoritative 固定 true。
         采样时间必填且包含时区，统一转为 UTC；同设备、指标和时间重复返回 409。
         同一请求中指标名去除首尾空白后不得重复；不提供请求重放。
+        内置指标必须提供匹配单位，缺失或错误返回 422，整批参数与审计均不写入。
+        温度类为 °C，振动类为 mm/s，压力类为 MPa，load_rate 为 %，电流类为 A，
+        positioning_deviation 为 mm，chain_speed 为 m/s，rated_power 为 kW。
+        单位去除首尾空白后精确匹配，不自动换算；自定义指标单位可选。
         详细重试规则见 docs/batch-inspection.md。
       parameters:
         - name: device_id
@@ -846,7 +850,11 @@ paths:
                       value:
                         type: number
                         description: 有限数，最多 12 位整数和 6 位小数
-                      unit: { type: string, nullable: true, maxLength: 32 }
+                      unit:
+                        type: string
+                        nullable: true
+                        maxLength: 32
+                        description: 内置指标必须提供对应单位；仅自定义指标可省略或为 null，详见 docs/batch-inspection.md
             example:
               recordedAt: '2026-11-11T14:30:00+08:00'
               sourceRef: 人工巡检：驱动端轴承

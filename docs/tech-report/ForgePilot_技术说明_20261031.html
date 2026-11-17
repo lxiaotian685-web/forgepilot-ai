@@ -72,8 +72,8 @@
   <div>
     <img src="../screenshots/02-overview.png" alt="维护总览" />
     <div class="meta">
-      团队：梁晓添（产品 / 前端 / 集成 / 部署）· 林同学（业务后端 / 视频）· 龚同学（知识检索与诊断）<br />
-      指导教师：丁老师　|　版本：v1.0　|　日期：2026-10-31<br />
+      团队：梁晓添（产品 / 前端 / 集成 / 部署）· 林靖康（业务后端 / 视频）· 龚俊绮（知识检索与诊断）<br />
+      指导教师：朱老师、丁老师　|　版本：v1.2 省赛版　|　日期：2026-11-17<br />
       在线演示：https://forgepilot.xiaotianworks.cn/　|　代码仓库：https://github.com/lxiaotian685-web/forgepilot-ai
     </div>
   </div>
@@ -81,7 +81,7 @@
 
 <section class="page">
   <h2>摘要</h2>
-  <p class="lead">ForgePilot 把制造企业设备维护中分散的“设备档案、说明书知识、现场现象、维修任务、操作记录”收敛到一个 Web 工作台，用检索增强生成（RAG）与真实大模型给出**有证据、可核对、需人工确认**的诊断建议，再把建议转化为可跟踪的维修工单和审计记录。</p>
+  <p class="lead">ForgePilot 把制造企业设备维护中分散的“设备档案、说明书知识、现场现象、维修任务、操作记录”收敛到一个 Web 工作台，用检索增强生成（RAG）与真实大模型给出<strong>有证据、可核对、需人工确认</strong>的诊断建议，再把建议转化为可跟踪的维修工单和审计记录。</p>
   <div class="kpi">
     <div><b>6</b><span>演示设备</span></div>
     <div><b>3</b><span>诊断证据来源</span></div>
@@ -309,7 +309,9 @@
   <p>业务服务用随机 <code>AUTH_SECRET</code> 签发 Token，解析后得到组织、用户、角色；知识服务通过 <code>C_IDENTITY_API_BASE_URL</code> 回查 <code>/api/v1/auth/me</code>，逐请求透传身份。生产环境缺少身份服务配置时拒绝启动，避免“裸奔”。</p>
   <h3>9.3 诊断保存与建单</h3>
   <p>只有 <code>is_mock=false</code> 且证据校验通过、状态为 <code>ok</code> 的诊断才允许保存；确认接口以诊断 ID 幂等，重复请求返回同一工单；建单与诊断状态更新在同一事务内，异常回滚。</p>
-  <h3>9.4 云端部署</h3>
+  <h3>9.4 批量巡检原子写入</h3>
+  <p>人工巡检支持一次提交多个设备指标。业务服务在写入前统一校验指标名、数值、单位和内置指标的单位组合；任意一项失败则整批回滚，审计记录也保持一致，避免页面显示部分成功而设备趋势缺少其余数据。</p>
+  <h3>9.5 云端部署</h3>
   <table>
     <tr><th>层</th><th>实现</th><th>说明</th></tr>
     <tr><td>前端</td><td>CloudBase 静态托管 + 自定义域名</td><td>Vite 构建为 api 模式，API 地址只含公开地址</td></tr>
@@ -317,7 +319,7 @@
     <tr><td>知识</td><td>CloudBase 云托管 forgepilot-knowledge</td><td>演示说明书随镜像打包；DeepSeek 密钥仅服务端环境变量</td></tr>
     <tr><td>域名</td><td>forgepilot.xiaotianworks.cn</td><td>HTTPS + ICP 备案号页脚</td></tr>
   </table>
-  <h3>9.5 关键取舍</h3>
+  <h3>9.6 关键取舍</h3>
   <ul>
     <li>选择 BM25 而非向量库：演示资料规模小、可解释、零额外基础设施；接口预留替换空间。</li>
     <li>选择单进程 JSON 知识库：先保证可运行与可复现，明确标注多实例前必须迁移。</li>
@@ -330,8 +332,8 @@
   <h3>10.1 自动化测试</h3>
   <ul>
     <li>前端：纯函数、筛选、状态流转、权限导航、API 契约与空数据/401/403 场景。</li>
-    <li>业务服务：登录、组织隔离、设备、告警、工单状态机、诊断保存、幂等建单、事务回滚、审计。</li>
-    <li>知识服务：解析、检索、引用校验、无答案、无效引用降级、模型失败、Agent 工具状态。</li>
+    <li>业务服务：登录、组织隔离、设备、告警、工单状态机、诊断保存、幂等建单、批量巡检原子回滚与审计。</li>
+    <li>知识服务：解析、检索、引用校验、无答案、无效引用降级、模型失败、Agent 工具状态与证据版本隔离。</li>
     <li>GitHub Actions：Frontend CI 与 Backend CI 在 <code>main</code> 上均为通过状态。</li>
   </ul>
   <h3>10.2 RAG 离线评测</h3>
@@ -343,7 +345,13 @@
   </table>
   <h3>10.3 真实模型验收</h3>
   <p>线上演示使用 <code>deepseek-flash</code> 完成 AC-07 诊断：返回 3 条证据、1,904 Token，页面显示模型名与用量；诊断保存、人工确认、幂等建单和审计查询均在同一环境实测通过。</p>
-  <h3>10.4 仍需补强的测试</h3>
+  <h3>10.4 省赛前可靠性增强</h3>
+  <ul>
+    <li>检索候选按需扩容，直到取得目标数量的唯一证据或候选耗尽，避免重复片段挤掉不同来源。</li>
+    <li>证据去重键加入设备型号与文档版本，覆盖跨型号同文、版本隔离、无匹配、证据不足、模型超时和鉴权失败。</li>
+    <li>批量巡检对内置指标和单位组合做整批校验，错误或缺失单位不会产生部分写入。</li>
+  </ul>
+  <h3>10.5 仍需补强的测试</h3>
   <ul>
     <li>真实企业数据下的阈值与工况规则（当前只有演示测点，不自动断言超限）。</li>
     <li>多实例知识库一致性、持久化存储故障恢复。</li>
@@ -384,6 +392,8 @@
     <div class="card"><strong>引用校验与整体降级</strong>无效引用不是悄悄删掉，而是整体降级并禁止保存，避免“看起来完整”的错误诊断。</div>
     <div class="card"><strong>人工在环的建单闭环</strong>模型建议不直接变成任务，风险分级与建单由人确认，并用幂等键保证重复操作安全。</div>
     <div class="card"><strong>可观测与可追溯</strong>模型名、Token 用量、证据数量进入诊断记录与审计，能回答“这条建议怎么来的”。</div>
+    <div class="card"><strong>版本与型号隔离的证据检索</strong>检索、去重与评测同时考虑组织、型号和文档版本，降低旧手册或相似设备资料混入当前诊断的风险。</div>
+    <div class="card"><strong>面向现场录入的原子巡检</strong>多指标一次校验、一次写入、一次审计；任一输入不合法即整批回滚，保证趋势图与巡检记录一致。</div>
   </div>
   <h3>12.2 展望</h3>
   <ul>
@@ -422,6 +432,7 @@ $env:DEEPSEEK_API_KEY = "..."
     <li>Linux 运行：docs/RUN_LINUX.md</li>
     <li>RAG 评测：services/knowledge/docs/real-rag-report.md</li>
     <li>界面截图：docs/screenshots</li>
+    <li>演示视频：https://www.bilibili.com/video/BV1QfsN6eEvk</li>
   </ul>
   <h3>D. 目录结构</h3>
   <pre>frontend/                 React + Vite + Fluent UI
